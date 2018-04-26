@@ -65,11 +65,6 @@ void T3SPI::enablePins_SLAVE(uint8_t sck, uint8_t mosi, uint8_t miso, uint8_t cs
         CORE_PIN2_CONFIG  = PORT_PCR_MUX(2);}
 }
 
-void T3SPI::setCS_ActiveLOW(uint32_t pin){
-    stop();
-    SPI0_MCR |= (pin);
-    start();
-}
 
 void T3SPI::setFrameSize(uint8_t CTARn, uint8_t size) {
     stop();
@@ -94,18 +89,6 @@ void T3SPI::setMode(uint8_t CTARn, uint8_t dataMode) {
     start();
 }
 
-void T3SPI::start() {
-    SPI0_MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
-}
-
-void T3SPI::stop() {
-    SPI0_MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
-}
-
-void T3SPI::end() {
-    SPI0_SR &= ~SPI_SR_TXRXS;
-    stop();
-}
 
 void T3SPI::rxtx8(volatile uint8_t *dataIN, volatile uint8_t *dataOUT, int length){
     dataIN[dataPointer] = SPI0_POPR;
@@ -116,5 +99,4 @@ void T3SPI::rxtx8(volatile uint8_t *dataIN, volatile uint8_t *dataOUT, int lengt
     SPI0_PUSHR_SLAVE = dataOUT[dataPointer];  
     SPI0_SR |= SPI_SR_RFDF;
 }
-
 

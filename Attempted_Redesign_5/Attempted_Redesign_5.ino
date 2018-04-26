@@ -34,11 +34,22 @@
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* SPI memory map setup definitions */
-#define SPI_MODE0     0x00
+#define SPI_MODE0     0x00//00 mode0, 01 mode1
 #define CS0           0x0A//0x0A //Should be 0x0A pin 10. changed from 0x01
 
-/*SPI registers preparation*/
-volatile uint8_t *spi_register_array[256];//An array of pointers to the spi register arrays (example is the initial array below)
+/* Create a rgister map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr */
+typedef struct reg_struct {
+
+  volatile uint8_t init_steering_throttle;
+  
+} reg_struct_t ;
+
+typedef union reg_union {
+
+  volatile uint8_t bytes[128];//Allocates 128 bytes of memory pointed to by 
+  reg_struct_t map; //Map of the registers
+  
+} reg_union_t;
 
 /*Spi Task Flags */
 bool servo_radio_on = false; //Used by SPI task to know if the servo and radio are initialized yet
@@ -104,28 +115,9 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Hello user. I am your debugging assistant. You make call me TeensyTron5000.");
   
-/*Configure SPI Memory Map*/
-//This clears the entire SPI0_MCR register. This will clear the MSTR bit (turn off master mode), clear the 
-  SPI0_MCR=0x00000000;
-//THIS CLEARS THE ENTIRE SPI0_CTAR0 REGISTER (effectively clearing the deffault frame size which is 8 --> Not necessary as we want an 8 bit frame size)
-  SPI0_CTAR0=0
-//This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) and the data is captured on the leading edge of SCK (phase)
-  SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
-//THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
-  SPI0_CTAR0 |= SPI_CTAR_FMSZ(7);
-//Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
-//the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded. 
-  SPI0_RSER = 0x00020000;
-//Enable the SCK, MISO, MOSI, and CS0 Pins (connections to the master device)
-  CORE_PIN13_CONFIG = PORT_PCR_MUX(2);
-  CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-  CORE_PIN12_CONFIG = PORT_PCR_MUX(2);
-  CORE_PIN10_CONFIG = PORT_PCR_MUX(2);
-//Enable the SPI0 Interrupt
-  NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
-//Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
-  attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_ISR,RISING);
-
+/*Initialize the SPI_slave device,register map, and interrupt service routines*/
+  spi_slave_init();
+  
 
 /*Startup CAN network*/
   CANbus.begin();
@@ -160,10 +152,10 @@ void loop() {
 /* COMMANDS Master sends a 1 if it wants the peripheral to be initialized or data collection to start*/
 
 /*INIT_STEERING_THROTTLE register*/
-  //grab spi_register_array data for use by Teensy
-  spi_register_array[INIT_STEERING_THROTTLE][1] = register_data_low_byte;
-  spi_register_array[INIT_STEERING_THROTTLE][2] = register_data_high_byte;
-  register_data = (register_data_low_byte << 8 | register_data_high_byte);
+//  //grab spi_register_array data for use by Teensy
+//  spi_register_array[INIT_STEERING_THROTTLE][1] = register_data_low_byte;
+//  spi_register_array[INIT_STEERING_THROTTLE][2] = register_data_high_byte;
+//  register_data = (register_data_low_byte << 8 | register_data_high_byte);
   
 //    //Initialize the servo and radio if asked to do so by Master and the on flag is false    
 //      if (register_data == 1 && servo_radio_on == false ) {
@@ -176,9 +168,7 @@ void loop() {
 
 /*INIT_MOTOR_CONTROLLERS register*/   
   //grab spi_register_array data for use by Teensy
-  spi_register_array[INIT_MOTOR_CONTROLLERS][1] = register_data_low_byte;
-  spi_register_array[INIT_MOTOR_CONTROLLERS][2] = register_data_high_byte;
-  register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
 
 //      //Initialize the motor controllers if asked to do so by Master and the on flag is false  
 //      if (register_data == 1 && motor_controllers_on == false) {
@@ -247,24 +237,18 @@ void loop() {
 
 /*BEGIN_DATA_COLLECTION register*/   
   //grab spi_register_array data for use by Teensy
-  spi_register_array[BEGIN_DATA_COLLECTION][1] = register_data_low_byte;
-  spi_register_array[BEGIN_DATA_COLLECTION][2] = register_data_high_byte;
-  register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
   
   if (collecting_data == false){
     
     collecting_data = true;
     
-    //return_array [0] = BEGIN_DATA_COLLECTION; //Can alter the return array element-wise before updating the spi register with it. For the controllers, the return message could be a confirmation
-    spi_register_array[INIT_MOTOR_CONTROLLERS] = return_array ;//Can let Master Know they have been initialized (this is what will be returned during the next spi message)  
-    
+
   }
   
 /*SERIAL_PRINT_REGISTERS register (for debugging)*/   
   //grab spi_register_array data for use by Teensy
-  spi_register_array[SERIAL_PRINT_REGISTERS][1] = register_data_low_byte;
-  spi_register_array[SERIAL_PRINT_REGISTERS][2] = register_data_high_byte;
-  register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
 
   //If Master wants Teensy to print it will write a 1 to the register data bytes and the Teensy will print all the registers via serial 
   if (register_data == 1){
@@ -328,9 +312,7 @@ void loop() {
 
 /*THROTTLE_ALL_WRITE register*/
     //grab spi_register_array data for use by Teensy
-    spi_register_array[THROTTLE_ALL_WRITE][1] = register_data_low_byte;
-    spi_register_array[THROTTLE_ALL_WRITE][2] = register_data_high_byte;
-    register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
     
     //Send CAN message to update all motors with a the same torque setpoint
     //return_array [0] = THROTTLE_ALL_WRITE; //Something will be done here
@@ -338,9 +320,7 @@ void loop() {
 
 /*THROTTLE_RIGHT_FRONT_WRITE register*/
     //grab spi_register_array data for use by Teensy
-    spi_register_array[THROTTLE_RIGHT_FRONT_WRITE][1] = register_data_low_byte;
-    spi_register_array[THROTTLE_RIGHT_FRONT_WRITE][2] = register_data_high_byte;
-    register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
 
     //Send CAN message to update right front motor torque setpoint
     //return_array [0] = THROTTLE_RIGHT_FRONT_WRITE; //Something will be done here
@@ -348,9 +328,7 @@ void loop() {
 
 /*THROTTLE_LEFT_FRONT_WRITE register*/
     //grab spi_register_array data for use by Teensy
-    spi_register_array[THROTTLE_LEFT_FRONT_WRITE][1] = register_data_low_byte;
-    spi_register_array[THROTTLE_LEFT_FRONT_WRITE][2] = register_data_high_byte;
-    register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
    
     //Send CAN message to update left front motor torque setpoint
     //return_array [0] = THROTTLE_LEFT_FRONT_WRITE; //Something will be done here
@@ -358,9 +336,7 @@ void loop() {
 
 /*THROTTLE_RIGHT_REAR_WRITE register*/
     //grab spi_register_array data for use by Teensy
-    spi_register_array[THROTTLE_RIGHT_REAR_WRITE][1] = register_data_low_byte;
-    spi_register_array[THROTTLE_RIGHT_REAR_WRITE][2] = register_data_high_byte;
-    register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
 
     //Send CAN message to update right rear motor torque setpoint
     //return_array [0] = THROTTLE_RIGHT_REAR_WRITE; //Something will be done here
@@ -368,9 +344,7 @@ void loop() {
 
 /*THROTTLE_LEFT_REAR_WRITE register*/
     //grab spi_register_array data for use by Teensy
-    spi_register_array[THROTTLE_LEFT_REAR_WRITE][1] = register_data_low_byte;
-    spi_register_array[THROTTLE_LEFT_REAR_WRITE][2] = register_data_high_byte;
-    register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
 
     //Send CAN message to update left rear motor torque setpoint
     //return_array [0] = THROTTLE_LEFT_REAR_WRITE; //Something will be done here
@@ -378,9 +352,7 @@ void loop() {
 
 /*STEERING_WRITE register*/
     //grab spi_register_array data for use by Teensy
-    spi_register_array[THROTTLE_LEFT_REAR_WRITE][1] = register_data_low_byte;
-    spi_register_array[THROTTLE_LEFT_REAR_WRITE][2] = register_data_high_byte;
-    register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
 
     //Send CAN message to update left rear motor torque setpoint
     writeServo(register_data);
@@ -405,17 +377,36 @@ void loop() {
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 //Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
 void spi0_isr(void) {
-  spi_data_index++;
-  current_register = data[1];
-  SPI_SLAVE.rxtx8(data, spi_register_array[current_register], dataLength);
 
-  if (spi_data_index == 4) {
-    /*data[] array contains the most recent SPI message from Master when the index is at 4*/
-    spi_register_array[current_register] = data;//Moving recently recieved message into the appropriate register
-    spi_data_index = 0; // reset the spi data index to zero
+//    dataIN[dataPointer] = SPI0_POPR;
+//    SPI0_PUSHR_SLAVE = dataOUT[dataPointer];  
+//    SPI0_SR |= SPI_SR_RFDF;
+}
 
-  }
 
+void spi_slave_init(void){
+  /*Configure SPI Memory Map*/
+//This clears the entire SPI0_MCR register. This will clear the MSTR bit (turn off master mode), clear the 
+  SPI0_MCR=0x00000000;
+//THIS CLEARS THE ENTIRE SPI0_CTAR0 REGISTER (effectively clearing the deffault frame size which is 8 --> Not necessary as we want an 8 bit frame size)
+  SPI0_CTAR0=0
+//This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) and the data is captured on the leading edge of SCK (phase)
+  SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
+//THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
+  SPI0_CTAR0 |= SPI_CTAR_FMSZ(7);
+//Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
+//the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded. 
+  SPI0_RSER = 0x00020000;
+//Enable the SCK, MISO, MOSI, and CS0 Pins (connections to the master device)
+  CORE_PIN13_CONFIG = PORT_PCR_MUX(2);//Serial Clock (SCK) pin
+  CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);//Master Output Slave Input (MOSI) pin
+  CORE_PIN12_CONFIG = PORT_PCR_MUX(2);//Master Input Slave Output (MISO) pin
+  CORE_PIN10_CONFIG = PORT_PCR_MUX(2);//Chip Select 0 (CS0) or Enable  pin
+  
+//Enable the SPI0 Interrupt
+  NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
+//Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
+  attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_ISR,RISING);
 }
 
 
