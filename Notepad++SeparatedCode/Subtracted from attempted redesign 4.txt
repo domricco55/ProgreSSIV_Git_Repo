@@ -67,3 +67,52 @@ int16_t register_data = 0;
 
 /*SPI registers preparation*/
 volatile uint8_t *spi_register_array[256];//An array of pointers to the spi register arrays (example is the initial array below)
+
+//"Out" and "In" from perspective of the Teensy
+///*Write (actuation) variables (where SPI data from Master is stored. These variables are for the most part immediately used in a CAN message to the motor controllers)*/
+//int16_t throttle_out_RF = 0;
+//int16_t throttle_out_LF = 0;
+//int16_t throttle_out_RR = 0;
+//int16_t throttle_out_LR = 0;
+//int16_t steer_angle_out = 0;
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*Local Teensy Variables (Where Teensy temporarily stores data recieved via peripherals, SPI, I2C, Analog, etc.)*/
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/*Read (sensor/measurement) variables (where messages recieved via function calls to sensor objects is stored)*/
+int16_t radio_steering_in = 0;
+int16_t radio_throttle_in = 0;
+int16_t velocity_in_RF = 0;
+int16_t velocity_in_LF = 0;
+int16_t velocity_in_RR = 0;
+int16_t velocity_in_LR = 0;
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
+
+/* SPI Task Stuff*/
+  //grab spi_register_array data for use by Teensy
+  spi_register_array[INIT_MOTOR_CONTROLLERS][1] = register_data_low_byte;
+  spi_register_array[INIT_MOTOR_CONTROLLERS][2] = register_data_high_byte;
+  register_data = (register_data_low_byte << 8 | register_data_high_byte);
+
+    //return_array [0] = BEGIN_DATA_COLLECTION; //Can alter the return array element-wise before updating the spi register with it. For the controllers, the return message could be a confirmation
+    spi_register_array[INIT_MOTOR_CONTROLLERS] = return_array ;//Can let Master Know they have been initialized (this is what will be returned during the next spi message)  
+    
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
+
+
+//Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
+void spi0_isr(void) {
+  spi_data_index++;
+  current_register = data[1];
+  SPI_SLAVE.rxtx8(data, spi_register_array[current_register], dataLength);
+
+  if (spi_data_index == 4) {
+    /*data[] array contains the most recent SPI message from Master when the index is at 4*/
+    spi_register_array[current_register] = data;//Moving recently recieved message into the appropriate register
+    spi_data_index = 0; // reset the spi data index to zero
+
+  }
+}

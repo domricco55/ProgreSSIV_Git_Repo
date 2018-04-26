@@ -40,21 +40,39 @@
 /* Create a rgister map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr */
 typedef struct reg_struct {
 
-  volatile uint8_t init_steering_throttle;
+  volatile bool init_servo_radio;
+  volatile bool begin_data_collection;
+  volatile bool print_registers;
   
 } reg_struct_t ;
 
+// union type definition linking the above reg_struct type to a 128 byte array that will be instantiated in loop below. This will be the memory accessed by both the struct and 
+//the array 
 typedef union reg_union {
 
   volatile uint8_t bytes[128];//Allocates 128 bytes of memory pointed to by 
-  reg_struct_t map; //Map of the registers
+  reg_struct_t reg_map; //Map of the registers
   
 } reg_union_t;
 
-/*Spi Task Flags */
-bool servo_radio_on = false; //Used by SPI task to know if the servo and radio are initialized yet
+//Initialize the register map union (all zeroes by default)
+reg_union_t registers = {0}; 
+//can access data like:
+//                      registers.bytes[1]
+//                      registers.init_servo_radio
+
+/* spi0_isr buffer related */
+//The address byte sent at the beginning of every spi message contains a 7 bit address and a single read/write bit, the MSB.
+int8_t spi_address_buff;//stores the address byte for use in the isr
+int8_t spi_rw_bit;//stores wether the master is sending a read or write message
+#define RW_MASK 0b10000000; 
+#define ADDRESS_MASK 0b01111111;
+
+/*Spi Task/isr Flags */
+bool servo_radio_on = false; //Used by SPI task to know if the servo and radio are initialized yet. Initilize commands from master will be ignored if initialization has already occured
 bool motor_controllers_on = false; //Used by SPI task to know if motor controllers have already been initialized
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
+bool spi_address_flag = true; //Used by spi_transfer_complete_isr to let spi0_isr know that the first byte (the address byte) of a message has arrived
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus preparation*/
@@ -82,24 +100,6 @@ volatile int16_t THR_in;
 volatile int16_t ST_in;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*Local Teensy Variables (Where Teensy temporarily stores data recieved via peripherals, SPI, I2C, Analog, etc.)*/
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-//"Out" and "In" from perspective of the Teensy
-///*Write (actuation) variables (where SPI data from Master is stored. These variables are for the most part immediately used in a CAN message to the motor controllers)*/
-//int16_t throttle_out_RF = 0;
-//int16_t throttle_out_LF = 0;
-//int16_t throttle_out_RR = 0;
-//int16_t throttle_out_LR = 0;
-//int16_t steer_angle_out = 0;
-/*Read (sensor/measurement) variables (where messages recieved via function calls to sensor objects is stored)*/
-int16_t radio_steering_in = 0;
-int16_t radio_throttle_in = 0;
-int16_t velocity_in_RF = 0;
-int16_t velocity_in_LF = 0;
-int16_t velocity_in_RR = 0;
-int16_t velocity_in_LR = 0;
-
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Debugging setup*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -117,8 +117,11 @@ void setup() {
   
 /*Initialize the SPI_slave device,register map, and interrupt service routines*/
   spi_slave_init();
+//Enable the SPI0 Interrupt
+  NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
+//Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
+  attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
   
-
 /*Startup CAN network*/
   CANbus.begin();
 
@@ -152,19 +155,12 @@ void loop() {
 /* COMMANDS Master sends a 1 if it wants the peripheral to be initialized or data collection to start*/
 
 /*INIT_STEERING_THROTTLE register*/
-//  //grab spi_register_array data for use by Teensy
-//  spi_register_array[INIT_STEERING_THROTTLE][1] = register_data_low_byte;
-//  spi_register_array[INIT_STEERING_THROTTLE][2] = register_data_high_byte;
-//  register_data = (register_data_low_byte << 8 | register_data_high_byte);
-  
-//    //Initialize the servo and radio if asked to do so by Master and the on flag is false    
-//      if (register_data == 1 && servo_radio_on == false ) {
-//        initPWMin();
-//        initServo();
-//        servo_radio_on = true;
-//        //return_array [0] = INIT_STEERING_THROTTLE; //Can alter the return array element-wise before updating the spi register with (not doing this now) 
-//        spi_register_array[INIT_STEERING_THROTTLE] = return_array ;//Can let Master Know they have been initialized (this is what will be returned during the next spi message)
-//      }
+    //Initialize the servo and radio if asked to do so by Master and the on flag is false    
+  if (registers.reg_map.init_servo_radio == true && servo_radio_on == false ) {
+    initPWMin();
+    initServo();
+    servo_radio_on = true;
+  }
 
 /*INIT_MOTOR_CONTROLLERS register*/   
   //grab spi_register_array data for use by Teensy
@@ -236,73 +232,20 @@ void loop() {
 //      }
 
 /*BEGIN_DATA_COLLECTION register*/   
-  //grab spi_register_array data for use by Teensy
-
+  if (registers.reg_map.begin_data_collection == true && collecting_data == false ) { 
+    if (collecting_data == false){
   
-  if (collecting_data == false){
-    
-    collecting_data = true;
-    
-
+      collecting_data = true;
+  
+    }
   }
+
   
 /*SERIAL_PRINT_REGISTERS register (for debugging)*/   
-  //grab spi_register_array data for use by Teensy
+  //If Master wants Teensy to print it will send a true to address of print_registers and this code will run
+  if (registers.reg_map.print_registers == true ){
 
-
-  //If Master wants Teensy to print it will write a 1 to the register data bytes and the Teensy will print all the registers via serial 
-  if (register_data == 1){
-    //WOULD BE NICE TO FIND A WAY TO MAKE THIS INTO A FOR LOOP. NEED TO MAKE REGISTER ADDRESSES MORE SCALABLE...BUT STRING IN BEGINNING MAKES IT QUITE A BIT TRICKY
-    Serial << "INIT_STEERING_THROTTLE Register" << " " <<  spi_register_array[SERIAL_PRINT_REGISTERS][0] << " " << spi_register_array[SERIAL_PRINT_REGISTERS][1]
-    << " " << spi_register_array[INIT_STEERING_THROTTLE][2] << " " << spi_register_array[INIT_STEERING_THROTTLE][3];
-    Serial.println();
-    Serial << "INIT_MOTOR_CONTROLLERS" << " " <<  spi_register_array[INIT_MOTOR_CONTROLLERS][0] << " " << spi_register_array[INIT_MOTOR_CONTROLLERS][1]
-    << " " << spi_register_array[INIT_MOTOR_CONTROLLERS][2] << " " << spi_register_array[INIT_MOTOR_CONTROLLERS][3];
-    Serial.println();
-    Serial << "BEGIN_DATA_COLLECTION" << " " <<  spi_register_array[BEGIN_DATA_COLLECTION][0] << " " << spi_register_array[BEGIN_DATA_COLLECTION][1]
-    << " " << spi_register_array[BEGIN_DATA_COLLECTION][2] << " " << spi_register_array[BEGIN_DATA_COLLECTION][3];
-    Serial.println();
-    Serial << "SERIAL_PRINT_REGISTERS" << " " <<  spi_register_array[SERIAL_PRINT_REGISTERS][0] << " " << spi_register_array[SERIAL_PRINT_REGISTERS][1]
-    << " " << spi_register_array[SERIAL_PRINT_REGISTERS][2] << " " << spi_register_array[SERIAL_PRINT_REGISTERS][3];
-    Serial.println();
-    Serial << "RADIO_STEERING_READ" << " " <<  spi_register_array[RADIO_STEERING_READ][0] << " " << spi_register_array[RADIO_STEERING_READ][1]
-    << " " << spi_register_array[RADIO_STEERING_READ][2] << " " << spi_register_array[RADIO_STEERING_READ][3];
-    Serial.println();
-    Serial << "RADIO_THROTTLE_READ" << " " <<  spi_register_array[RADIO_THROTTLE_READ][0] << " " << spi_register_array[RADIO_THROTTLE_READ][1]
-    << " " << spi_register_array[RADIO_THROTTLE_READ][2] << " " << spi_register_array[RADIO_THROTTLE_READ][3];
-    Serial.println();
-    Serial << "RIGHT_FRONT_VELOCITY_READ" << " " <<  spi_register_array[RIGHT_FRONT_VELOCITY_READ][0] << " " << spi_register_array[RIGHT_FRONT_VELOCITY_READ][1]
-    << " " << spi_register_array[RIGHT_FRONT_VELOCITY_READ][2] << " " << spi_register_array[RIGHT_FRONT_VELOCITY_READ][3];
-    Serial.println();      
-    Serial << "LEFT_FRONT_VELOCITY_READ" << " " <<  spi_register_array[LEFT_FRONT_VELOCITY_READ][0] << " " << spi_register_array[LEFT_FRONT_VELOCITY_READ][1]
-    << " " << spi_register_array[LEFT_FRONT_VELOCITY_READ][2] << " " << spi_register_array[LEFT_FRONT_VELOCITY_READ][3];
-    Serial.println();    
-    Serial << "RIGHT_REAR_VELOCITY_READ" << " " <<  spi_register_array[RIGHT_REAR_VELOCITY_READ][0] << " " << spi_register_array[RIGHT_REAR_VELOCITY_READ][1]
-    << " " << spi_register_array[RIGHT_REAR_VELOCITY_READ][2] << " " << spi_register_array[RIGHT_REAR_VELOCITY_READ][3];
-    Serial.println();    
-    Serial << "THROTTLE_ALL_WRITE" << " " <<  spi_register_array[THROTTLE_ALL_WRITE][0] << " " << spi_register_array[THROTTLE_ALL_WRITE][1]
-    << " " << spi_register_array[THROTTLE_ALL_WRITE][2] << " " << spi_register_array[THROTTLE_ALL_WRITE][3];
-    Serial.println();    
-     Serial << "THROTTLE_RIGHT_FRONT_WRITE" << " " <<  spi_register_array[THROTTLE_RIGHT_FRONT_WRITE][0] << " " << spi_register_array[THROTTLE_RIGHT_FRONT_WRITE][1]
-    << " " << spi_register_array[THROTTLE_RIGHT_FRONT_WRITE][2] << " " << spi_register_array[THROTTLE_RIGHT_FRONT_WRITE][3];
-    Serial.println();    
-    Serial << "THROTTLE_LEFT_FRONT_WRITE" << " " <<  spi_register_array[THROTTLE_LEFT_FRONT_WRITE][0] << " " << spi_register_array[THROTTLE_LEFT_FRONT_WRITE][1]
-    << " " << spi_register_array[THROTTLE_LEFT_FRONT_WRITE][2] << " " << spi_register_array[THROTTLE_LEFT_FRONT_WRITE][3];
-    Serial.println();    
-    Serial << "THROTTLE_RIGHT_REAR_WRITE" << " " <<  spi_register_array[THROTTLE_RIGHT_REAR_WRITE][0] << " " << spi_register_array[THROTTLE_RIGHT_REAR_WRITE][1]
-    << " " << spi_register_array[THROTTLE_RIGHT_REAR_WRITE][2] << " " << spi_register_array[THROTTLE_RIGHT_REAR_WRITE][3];
-    Serial.println();    
-    Serial << "THROTTLE_LEFT_REAR_WRITE" << " " <<  spi_register_array[THROTTLE_LEFT_REAR_WRITE][0] << " " << spi_register_array[THROTTLE_LEFT_REAR_WRITE][1]
-    << " " << spi_register_array[THROTTLE_LEFT_REAR_WRITE][2] << " " << spi_register_array[THROTTLE_LEFT_REAR_WRITE][3];
-    Serial.println();    
-    Serial << "STEERING_WRITE" << " " <<  spi_register_array[STEERING_WRITE][0] << " " << spi_register_array[STEERING_WRITE][1]
-    << " " << spi_register_array[STEERING_WRITE][2] << " " << spi_register_array[STEERING_WRITE][3];
-    Serial.println();    
-
-    //Resets the register_data to zero so that this code only prints the registers once
-    return_array [2] = 0; //Low byte zero
-    return_array [3] = 0; //High byte zero
-    spi_register_array[SERIAL_PRINT_REGISTERS] = return_array;
+      print_register_map();
       
     }
 
@@ -315,49 +258,37 @@ void loop() {
 
     
     //Send CAN message to update all motors with a the same torque setpoint
-    //return_array [0] = THROTTLE_ALL_WRITE; //Something will be done here
-    spi_register_array[THROTTLE_ALL_WRITE] = return_array ;//Can let Master know they have been initialized (this is what will be returned during the next spi message)
 
 /*THROTTLE_RIGHT_FRONT_WRITE register*/
     //grab spi_register_array data for use by Teensy
 
 
     //Send CAN message to update right front motor torque setpoint
-    //return_array [0] = THROTTLE_RIGHT_FRONT_WRITE; //Something will be done here
-    spi_register_array[THROTTLE_RIGHT_FRONT_WRITE] = return_array ;//Can let Master know they have been initialized (this is what will be returned during the next spi message)
 
 /*THROTTLE_LEFT_FRONT_WRITE register*/
     //grab spi_register_array data for use by Teensy
 
    
     //Send CAN message to update left front motor torque setpoint
-    //return_array [0] = THROTTLE_LEFT_FRONT_WRITE; //Something will be done here
-    spi_register_array[THROTTLE_LEFT_FRONT_WRITE] = return_array ;//Can let Master know they have been initialized (this is what will be returned during the next spi message)
 
 /*THROTTLE_RIGHT_REAR_WRITE register*/
     //grab spi_register_array data for use by Teensy
 
 
     //Send CAN message to update right rear motor torque setpoint
-    //return_array [0] = THROTTLE_RIGHT_REAR_WRITE; //Something will be done here
-    spi_register_array[THROTTLE_RIGHT_REAR_WRITE] = return_array ;//Can let Master know they have been initialized (this is what will be returned during the next spi message)
 
 /*THROTTLE_LEFT_REAR_WRITE register*/
     //grab spi_register_array data for use by Teensy
 
 
     //Send CAN message to update left rear motor torque setpoint
-    //return_array [0] = THROTTLE_LEFT_REAR_WRITE; //Something will be done here
-    spi_register_array[THROTTLE_LEFT_REAR_WRITE] = return_array ;//Can let Master know they have been initialized (this is what will be returned during the next spi message)
 
 /*STEERING_WRITE register*/
     //grab spi_register_array data for use by Teensy
 
 
-    //Send CAN message to update left rear motor torque setpoint
-    writeServo(register_data);
-    //return_array [0] = THROTTLE_LEFT_REAR_WRITE; //Something will be done here
-    spi_register_array[THROTTLE_LEFT_REAR_WRITE] = return_array ;//Can let Master know they have been initialized (this is what will be returned during the next spi message)
+    //Update the servo pwm value
+    //writeServo(registers.steering);
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
@@ -373,23 +304,46 @@ void loop() {
 /* END OF MAIN LOOP*/
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*INTERRUPT SERVICE ROUTINE*/
+/*INTERRUPT SERVICE ROUTINES*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 //Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
 void spi0_isr(void) {
 
+  if (spi_address_flag) {
+
+    spi_address_buff = ADDRESS_MASK & SPI0_POPR; //Ands the shift register 
+    spi_rw_bit = RW_MASK & SPI0_POPR;
+    spi_address_flag = false;
+
+    if (spi_rw_bit){//if the read/write bit is 1, it is a read message and spi_rw_buff will be true
+
+      SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
+      spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register
+      
+    }
+    
+  }
 //    dataIN[dataPointer] = SPI0_POPR;
 //    SPI0_PUSHR_SLAVE = dataOUT[dataPointer];  
 //    SPI0_SR |= SPI_SR_RFDF;
 }
 
+void spi_transfer_complete_isr(void) {
+
+  spi_address_flag = true;//Raises the address flag so that the in the next message, spi0_isr knows it is recieving the address byte
+  
+}
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*FUNCTIONS*/
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void spi_slave_init(void){
   /*Configure SPI Memory Map*/
 //This clears the entire SPI0_MCR register. This will clear the MSTR bit (turn off master mode), clear the 
   SPI0_MCR=0x00000000;
 //THIS CLEARS THE ENTIRE SPI0_CTAR0 REGISTER (effectively clearing the deffault frame size which is 8 --> Not necessary as we want an 8 bit frame size)
-  SPI0_CTAR0=0
+  SPI0_CTAR0=0;
 //This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) and the data is captured on the leading edge of SCK (phase)
   SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
 //THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
@@ -402,11 +356,18 @@ void spi_slave_init(void){
   CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);//Master Output Slave Input (MOSI) pin
   CORE_PIN12_CONFIG = PORT_PCR_MUX(2);//Master Input Slave Output (MISO) pin
   CORE_PIN10_CONFIG = PORT_PCR_MUX(2);//Chip Select 0 (CS0) or Enable  pin
-  
-//Enable the SPI0 Interrupt
-  NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
-//Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
-  attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_ISR,RISING);
+
+}
+
+void print_register_map(void){
+    Serial << "Register Map of Teensy
+      int i;
+    for (i = 0; i < 256; i++) {
+      
+      Serial << i <<" " << registers.bytes[i];
+      Serial.println();
+      
+    }
 }
 
 
