@@ -1,0 +1,69 @@
+
+
+/*Register addresses (or more accurately, the index of the address of the register) for SPI Communication (Agreed Upon by Master and Slave to refer to a specific sensor reading, actuation, or command) */
+/* Commands from Master*/
+#define INIT_STEERING_THROTTLE 1
+#define INIT_MOTOR_CONTROLLERS 2
+#define BEGIN_DATA_COLLECTION 3
+#define SERIAL_PRINT_REGISTERS 4
+/* Master Requests These Readings*/
+#define RADIO_STEERING_READ 101 //Radio steering input from user
+#define RADIO_THROTTLE_READ 102 //Radio throttle input from user
+#define RIGHT_FRONT_VELOCITY_READ 103 //Rotational velocity of right front wheel
+#define LEFT_FRONT_VELOCITY_READ 104 //Rotational velocity of left front wheel
+#define RIGHT_REAR_VELOCITY_READ 105 //Rotational velocity of right rear wheel
+#define LEFT_REAR_VELOCITY_READ 106 //Rotational velocity of left rear wheel
+/* Master Sends These Actuations (none but the actuators should be addressed over 200)*/
+#define THROTTLE_ALL_WRITE 201
+#define THROTTLE_RIGHT_FRONT_WRITE 202
+#define THROTTLE_LEFT_FRONT_WRITE  203
+#define THROTTLE_RIGHT_REAR_WRITE  204
+#define THROTTLE_LEFT_REAR_WRITE   205
+#define STEERING_WRITE 206
+
+  //Populate status array so that there is no segmentation fault later on when an index that hasn't been populated is called. 
+  //This code allocates 256 four byte memory arrays and makes sure that *spi_register[i] is a pointer to the ith array */
+  int i;
+  for (i = 0; i < 256; i++) {
+    spi_register_array[i] = return_array;
+  }
+  //This code initializes the command arrays so that the deffault data (high and low byte concatinated) is zero. It needs to be zero so that the peripherals are guaranteed
+  //to not initialize upon powering up of the Teensy. 
+  return_array [2] = 0; //Low byte zero
+  return_array [3] = 0; //High byte zero
+  spi_register_array[INIT_STEERING_THROTTLE] = return_array;
+  spi_register_array[INIT_MOTOR_CONTROLLERS] = return_array;
+  spi_register_array[BEGIN_DATA_COLLECTION] = return_array;
+  
+  
+/*Initialize SPI communication*/
+  //Initialize spi slave object
+  SPI_SLAVE.begin_SLAVE(SCK, MOSI, MISO, CS0);
+  //Set the CTAR0_SLAVE0 (Frame Size, SPI Mode)
+  SPI_SLAVE.setCTAR_SLAVE(8, SPI_MODE0);
+  
+  
+/* Volatiles used by spi0_isr interrupt service routine*/
+volatile uint8_t current_register = 0; //this is set in interrupt.  The current register is the register address that the latest spi message from the Master (well, once the second byte has sent this is true).
+volatile uint8_t spi_data_index = 0; //this allows the isr to know when the full message (4 bytes) has been recieved
+
+/*This sets the amount of bytes in an SPI message (agreed upon by Master and Slave).*/
+#define dataLength  4
+
+/*SPI INCOMING Data Array Buffer. An incoming Master SPI Message will trigger an interrupt service routine that grabs the message.
+  An incoming SPI message will have dataLength many bytes and be stored in the data[] array buffer. Only the Master can trigger an SPI interrupt.*/
+volatile uint8_t data[dataLength] = {}; //<--- SPI INCOMING Data is stored here in the interrupt service routine
+/*SPI Default Outgoing Data Array. This is the data array that will be sent as the data from the Master is coming in. Sending and recieving happen simultaneously.*/
+volatile uint8_t default_data_read[dataLength] = {};
+
+/* Defines a placeholder return data array that will be written to by code in spi task and then loaded into its corresponding spi_register_array register.
+The next time the Master sends a message to that register address, the master will recieve the return message*/
+uint8_t return_array[dataLength] = {255,255,255,255};
+
+/* Used to grab data from spi_register_array and concatinate it into one 16 bit integer*/
+uint8_t register_data_low_byte = 0;
+uint8_t register_data_high_byte = 0;
+int16_t register_data = 0;
+
+/*SPI registers preparation*/
+volatile uint8_t *spi_register_array[256];//An array of pointers to the spi register arrays (example is the initial array below)
