@@ -113,8 +113,6 @@ void setup() {
   SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
 //THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
   SPI0_CTAR0 |= SPI_CTAR_FMSZ(7);
-//Set the bit order. Slave is ALWAYS Least Significant Bit First (LSBF)
-  SPI0_CTAR0 |= SPI_CTAR_LSBFE;
 //Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
 //the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded. 
   SPI0_RSER = 0x00020000;
