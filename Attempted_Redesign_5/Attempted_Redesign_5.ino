@@ -377,7 +377,6 @@ void print_register_map(void){//This prints the name and address of each of the 
     next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
       Serial << "print_registers " << registers.reg_map.print_registers;
       Serial.println();            
-    }
 }
 
 
