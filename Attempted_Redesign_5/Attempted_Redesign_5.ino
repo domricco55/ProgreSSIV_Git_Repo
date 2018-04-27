@@ -74,6 +74,9 @@ bool motor_controllers_on = false; //Used by SPI task to know if motor controlle
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
 bool spi_address_flag = true; //Used by spi_transfer_complete_isr to let spi0_isr know that the first byte (the address byte) of a message has arrived
 
+/* Print spi registers function related */
+uint32_t first_pointer;
+uint32_t next_pointer;
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -359,14 +362,21 @@ void spi_slave_init(void){
 
 }
 
-void print_register_map(void){
-    Serial << "Register Map of Teensy
-      int i;
-    for (i = 0; i < 256; i++) {
-      
-      Serial << i <<" " << registers.bytes[i];
+void print_register_map(void){//This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
+    Serial << "Register Map of Teensy";
+    Serial.println();
+
+    first_pointer = (uint32_t)&registers.reg_map.init_servo_radio;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
+    
+    next_pointer = (uint32_t)&registers.reg_map.init_servo_radio - first_pointer;
+      Serial << "init_servo_radio " << registers.reg_map.init_servo_radio;
       Serial.println();
-      
+    next_pointer = (uint32_t)&registers.reg_map.begin_data_collection - first_pointer;
+      Serial << "begin_data_collection " << registers.reg_map.begin_data_collection;
+      Serial.println();
+    next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
+      Serial << "print_registers " << registers.reg_map.print_registers;
+      Serial.println();            
     }
 }
 
