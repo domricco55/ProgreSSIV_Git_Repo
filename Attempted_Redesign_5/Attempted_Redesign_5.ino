@@ -5,11 +5,15 @@
 
    Description: This file is the firmware on the TEENSY for the CALPOLY SSIV
 
-   Date:                      April 20 2018
+   Date:                      April 26 2018
    Last Edit by:              Dominic Riccoboni
 
    Version Description:
-                              -This Version is the fourth attempted restructure of the code to fit new design with Raspberry Pi firmware
+                              -This Version is the fifth attempted restructure of the code to fit new design with Raspberry Pi firmware. Implemented complete restructure since
+                              attempted restructure 4. Now there is a register map union whos memory can be accessed wither by a struct type or an array of bytes. The interrupt 
+                              service routine has also been completely rethought. It now accepts an address byte on the first byte of a message, knows wether it is a read or 
+                              write request, and has a logical structure that allows the master to write to as many addresses as desired in a single message (so long as they
+                              are adjacent)
 
    Errors:                    -Probably a lot at the moment
 
@@ -64,7 +68,7 @@ reg_union_t registers = {0};
 /* spi0_isr buffer related */
 //The address byte sent at the beginning of every spi message contains a 7 bit address and a single read/write bit, the MSB.
 int8_t spi_address_buff;//stores the address byte for use in the isr
-int8_t spi_rw_bit;//stores wether the master is sending a read or write message
+bool spi_rw_bit;//stores wether the master is sending a read or write message
 #define RW_MASK 0b10000000; 
 #define ADDRESS_MASK 0b01111111;
 
@@ -77,6 +81,7 @@ bool spi_address_flag = true; //Used by spi_transfer_complete_isr to let spi0_is
 /* Print spi registers function related */
 uint32_t first_pointer;
 uint32_t next_pointer;
+
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -166,9 +171,9 @@ void loop() {
   }
 
 /*INIT_MOTOR_CONTROLLERS register*/   
-  //grab spi_register_array data for use by Teensy
-
-
+//  //grab spi_register_array data for use by Teensy
+//
+//
 //      //Initialize the motor controllers if asked to do so by Master and the on flag is false  
 //      if (register_data == 1 && motor_controllers_on == false) {
 //        //Run Initialize motor code if the register data is 1
@@ -228,13 +233,11 @@ void loop() {
 //        else
 //        {
 //          motor_controllers_on = true;
-//          //return_array [0] = INIT_MOTOR_CONTROLLERS; //Can alter the return array element-wise before updating the spi register with it. For the controllers, the return message could be a confirmation
-//          spi_register_array[INIT_MOTOR_CONTROLLERS] = return_array ;//Can let Master Know they have been initialized (this is what will be returned during the next spi message)
 //        }
 //
 //      }
 
-/*BEGIN_DATA_COLLECTION register*/   
+/*begin_data_collection register*/   
   if (registers.reg_map.begin_data_collection == true && collecting_data == false ) { 
     if (collecting_data == false){
   
@@ -244,11 +247,11 @@ void loop() {
   }
 
   
-/*SERIAL_PRINT_REGISTERS register (for debugging)*/   
+/*print_registers register (for debugging)*/   
   //If Master wants Teensy to print it will send a true to address of print_registers and this code will run
   if (registers.reg_map.print_registers == true ){
 
-      print_register_map();
+      spi_print();
       
     }
 
@@ -256,40 +259,22 @@ void loop() {
 
 /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array*/
 
-/*THROTTLE_ALL_WRITE register*/
-    //grab spi_register_array data for use by Teensy
-
-    
+/*throttle_all_write register*/
     //Send CAN message to update all motors with a the same torque setpoint
 
-/*THROTTLE_RIGHT_FRONT_WRITE register*/
-    //grab spi_register_array data for use by Teensy
-
-
+/*throttle_right_front_write register*/
     //Send CAN message to update right front motor torque setpoint
 
-/*THROTTLE_LEFT_FRONT_WRITE register*/
-    //grab spi_register_array data for use by Teensy
-
-   
+/*throttle_left_front_write register*/
     //Send CAN message to update left front motor torque setpoint
 
-/*THROTTLE_RIGHT_REAR_WRITE register*/
-    //grab spi_register_array data for use by Teensy
-
-
+/*throttle_right_rear_write register*/
     //Send CAN message to update right rear motor torque setpoint
 
-/*THROTTLE_LEFT_REAR_WRITE register*/
-    //grab spi_register_array data for use by Teensy
-
-
+/*throttle_left_rear_write register*/
     //Send CAN message to update left rear motor torque setpoint
 
 /*STEERING_WRITE register*/
-    //grab spi_register_array data for use by Teensy
-
-
     //Update the servo pwm value
     //writeServo(registers.steering);
 
@@ -309,9 +294,11 @@ void loop() {
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*INTERRUPT SERVICE ROUTINES*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
 //Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
 void spi0_isr(void) {
-
+  
+  //This if statement asks if the first interrupt of a message is occuring and runs its code if true
   if (spi_address_flag) {
 
     spi_address_buff = ADDRESS_MASK & SPI0_POPR; //Ands the shift register 
@@ -322,14 +309,33 @@ void spi0_isr(void) {
 
       SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
       spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register
-      
+      SPI0_SR |= SPI_SR_RFDF;//Lower the interrupt flag
     }
     
   }
+  
+  //Now not on the first interrupt anymore. This is the code that will run for all subsequent interrupts of a single message.
+  else{
+
+    switch(spi_rw_bit){
+      case (true):// spi read
+        registers.bytes[spi_address_buff] = SPI0_POPR;
+        spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register 
+
+      case (false)://spi write
+        SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
+        spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register      
+      }
+    SPI0_SR |= SPI_SR_RFDF;//Lower the interrupt fla   
+  }
+
+//From t3spi  
 //    dataIN[dataPointer] = SPI0_POPR;
 //    SPI0_PUSHR_SLAVE = dataOUT[dataPointer];  
 //    SPI0_SR |= SPI_SR_RFDF;
 }
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void spi_transfer_complete_isr(void) {
 
@@ -362,7 +368,7 @@ void spi_slave_init(void){
 
 }
 
-void print_register_map(void){//This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
+void spi_print(void){//This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
     Serial << "Register Map of Teensy";
     Serial.println();
 
