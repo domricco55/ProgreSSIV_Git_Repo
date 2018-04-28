@@ -43,10 +43,10 @@
 
 /* Create a rgister map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr */
 typedef struct reg_struct {
-
+  
+  volatile bool print_registers;
   volatile bool init_servo_radio;
   volatile bool begin_data_collection;
-  volatile bool print_registers;
   
 } reg_struct_t ;
 
@@ -131,13 +131,13 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
   
 /*Startup CAN network*/
-  CANbus.begin();
+  //CANbus.begin();
 
 }
 
 void loop() {
 
-  CAN_message_t msg;//Dont know why this has to be at the beginning of void loop() but here it is
+  //CAN_message_t msg;//Dont know why this has to be at the beginning of void loop() but here it is
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*SPI Task*/
@@ -374,15 +374,16 @@ void spi_print(void){//This prints the name and address of each of the items in 
 
     first_pointer = (uint32_t)&registers.reg_map.init_servo_radio;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
     
+    next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
+      Serial << "print_registers " << registers.reg_map.print_registers;
+      Serial.println();    
     next_pointer = (uint32_t)&registers.reg_map.init_servo_radio - first_pointer;
       Serial << "init_servo_radio " << registers.reg_map.init_servo_radio;
       Serial.println();
     next_pointer = (uint32_t)&registers.reg_map.begin_data_collection - first_pointer;
       Serial << "begin_data_collection " << registers.reg_map.begin_data_collection;
       Serial.println();
-    next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
-      Serial << "print_registers " << registers.reg_map.print_registers;
-      Serial.println();            
+         
 }
 
 
