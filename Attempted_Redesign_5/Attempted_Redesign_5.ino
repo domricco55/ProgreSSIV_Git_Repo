@@ -47,9 +47,9 @@ T3SPI SPI_SLAVE;
 /* Create a rgister map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr */
 typedef struct reg_struct {
   
-  volatile bool print_registers;
-  volatile bool init_servo_radio;
-  volatile bool begin_data_collection;
+  volatile uint8_t print_registers;
+  volatile uint8_t init_servo_radio;
+  volatile uint8_t begin_data_collection;
   volatile uint8_t test_num;
   
 } reg_struct_t ;
@@ -64,7 +64,7 @@ typedef union reg_union {
 } reg_union_t;
 
 //Initialize the register map union (making it all zeroes by default)
-reg_union_t registers = {true,true,true,69};
+reg_union_t registers = {1,2,3,69};
 //can access data like:
 //                      registers.bytes[1]
 //                      registers.init_servo_radio
@@ -73,8 +73,8 @@ reg_union_t registers = {true,true,true,69};
 //The address byte sent at the beginning of every spi message contains a 7 bit address and a single read/write bit, the MSB.
 volatile uint8_t spi_address_buff;//stores the address byte for use in the isr
 volatile uint8_t spi_rw_bit;//stores wether the master is sending a read or write message
-#define RW_MASK 0b10000000; 
-#define ADDRESS_MASK 0b01111111;
+#define RW_MASK 0b10000000 
+#define ADDRESS_MASK 0b01111111
 
 /*Spi Task/isr Flags */
 bool servo_radio_on = false; //Used by SPI task to know if the servo and radio are initialized yet. Initilize commands from master will be ignored if initialization has already occured
@@ -137,7 +137,10 @@ void setup() {
   NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
 //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
+//Print dem regis up bro
+  spi_print();
 
+  
 /*Startup CAN network*/
   //CANbus.begin();
 
@@ -145,6 +148,17 @@ void setup() {
 
 void loop() {
 
+        Serial.print("CTR: ");
+        Serial.print((SPI0_SR&(0b1111<<12))>>12);
+        Serial.print(" Next: ");
+        Serial.println((SPI0_SR&(0b1111<<8))>>8);
+        Serial.println(SPI0_TXFR0);
+        Serial.println(SPI0_TXFR1);
+        Serial.println(SPI0_TXFR2);
+        Serial.println(SPI0_TXFR3);
+        Serial.println();
+        //SPI0_PUSHR_SLAVE = 0x00;
+        delay(100);
   //CAN_message_t msg;//Dont know why this has to be at the beginning of void loop() but here it is
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -324,7 +338,10 @@ void spi0_isr(void) {
     Serial.println(spi_address_buff);
  
     if (spi_rw_bit){//if the read/write bit is 1, it is a read message and spi_rw_buff will be true
+      //SPI0_MCR |= (1<<11);
       SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
+      //SPI0_PUSHR_SLAVE = 0x2F;
+      //SPI0_TXFR0 = registers.bytes[spi_address_buff];
       spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register
     }
     
@@ -333,34 +350,42 @@ void spi0_isr(void) {
   //Now not on the first interrupt anymore. This is the code that will run for all subsequent interrupts of a single message.
   else{
     
-    switch(spi_rw_bit){
-      case (true):// spi read
+    if (spi_rw_bit & RW_MASK){
         Serial.print("2: ");
+        Serial.println(spi_address_buff);
+        Serial.println(registers.bytes[spi_address_buff]);
+        //SPI0_MCR |= (1<<11);
+        SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
+        //SPI0_TXFR0 = registers.bytes[spi_address_buff];
+        spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register 
+
+    }
+    else {
+        Serial.print("3: ");
         Serial.println(spi_address_buff);
         registers.bytes[spi_address_buff] = SPI0_POPR_buf;
         spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register 
-
-      case (false)://spi write
-        Serial.print("3: ");
-        Serial.println(spi_address_buff);
-        SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
-        uint8_t spi_junk = SPI0_POPR_buf;
-        spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register      
-      }
+    }    
+  }
   SPI0_SR |= SPI_SR_RFDF;//Allow for another interrupt to occur.  
-  } 
+} 
 //From t3spi  
 //    dataIN[dataPointer] = SPI0_POPR;
 //    SPI0_PUSHR_SLAVE = dataOUT[dataPointer];  
 //    SPI0_SR |= SPI_SR_RFDF;
-}
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void spi_transfer_complete_isr(void) {
+  static uint8_t packet_cnt = 0x3F;
   CS0_interrupt_test_flag = !CS0_interrupt_test_flag;//Will print the status of this flag in the spi task to test wether a chip select interrupt has occured
   spi_address_flag = true;//Raises the address flag so that the in the next message, spi0_isr knows it is recieving the address byte
-
+  SPI0_MCR |= (1<<11);
+  SPI0_PUSHR_SLAVE = packet_cnt++;
+//  SPI0_MCR |= (1<<11);
+//  SPI0_PUSHR_SLAVE = packet_cnt++;
+  //SPI0_TXFR0 = packet_cnt++;
+  Serial.println("Schmeensy Can SCHKUCK MA AABAALZ");
 }
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -374,7 +399,18 @@ void spi_slave_init(void){
   SPI_SLAVE.begin_SLAVE(SCK, MOSI, MISO, CS0);
   //Set the CTAR0_SLAVE0 (Frame Size, SPI Mode)
   SPI_SLAVE.setCTAR_SLAVE(8, SPI_MODE0);
-  
+  SPI0_MCR |= 1<<13;
+  Serial.println(SPI0_MCR,BIN);
+//  SPI0_PUSHR_SLAVE = 0x0F;
+//  SPI0_PUSHR_SLAVE = 0x0F;
+//  SPI0_TXFR0 = 0x0F;
+//  Serial.println(SPI0_TXFR0);
+//  SPI0_TXFR1 = 0x1F;
+//  Serial.println(SPI0_TXFR1);
+//  SPI0_TXFR2 = 0x2F;
+//  Serial.println(SPI0_TXFR2);
+//  SPI0_TXFR3 = 0x3F;
+//  Serial.println(SPI0_TXFR3);
 //  /*Configure SPI Memory Map*/
 //  SIM_SCGC6 |= SIM_SCGC6_SPI0;    // enable clock to SPI. THIS WAS MISSING PRIOR AND WOULD CAUSE CODE TO GET STUCK IN THIS FUNCTION
 //  delay(1000);
@@ -402,20 +438,33 @@ void spi_slave_init(void){
 }
 
 void spi_print(void){//This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
+    Serial.println();
     Serial << "Register Map of Teensy";
     Serial.println();
-
-    first_pointer = (uint32_t)&registers.reg_map.init_servo_radio;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
+    Serial.println();
+    
+    first_pointer = (uint32_t)&registers.reg_map;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
     
     next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
       Serial << "print_registers " << registers.reg_map.print_registers;
-      Serial.println();    
+      Serial << " ptr = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
     next_pointer = (uint32_t)&registers.reg_map.init_servo_radio - first_pointer;
       Serial << "init_servo_radio " << registers.reg_map.init_servo_radio;
-      Serial.println();
+      Serial << " ptr = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
     next_pointer = (uint32_t)&registers.reg_map.begin_data_collection - first_pointer;
       Serial << "begin_data_collection " << registers.reg_map.begin_data_collection;
-      Serial.println();
+      Serial << " ptr= " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+    next_pointer = (uint32_t)&registers.reg_map.test_num - first_pointer;
+      Serial << "test_num " << registers.reg_map.test_num;
+      Serial << " ptr= " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
       Serial.println();
 
 }
