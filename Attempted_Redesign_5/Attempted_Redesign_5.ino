@@ -39,7 +39,7 @@
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 ///*Instantiate T3SPI class as SPI_SLAVE*/ WHEN AN SPI OBJECT WAS BEING CREATED BY T3SPI
-//T3SPI SPI_SLAVE;
+T3SPI SPI_SLAVE;
 /* SPI memory map setup definitions */
 #define SPI_MODE0     0x00//00 mode0, 01 mode1
 #define CS0           0x0A//0x0A //Should be 0x0A pin 10. changed from 0x01
@@ -57,21 +57,21 @@ typedef struct reg_struct {
 //the array 
 typedef union reg_union {
 
-  volatile uint8_t bytes[128];//Allocates 128 bytes of memory pointed to by 
+  volatile uint8_t bytes[128];//Allocates 128 bytes of memory to use for the register map 
   reg_struct_t reg_map; //Map of the registers
   
 } reg_union_t;
 
-//Initialize the register map union (all zeroes by default)
-reg_union_t registers = {1}; 
+//Initialize the register map union (making it all zeroes by default)
+reg_union_t registers = {true,true,true};
 //can access data like:
 //                      registers.bytes[1]
 //                      registers.init_servo_radio
 
 /* spi0_isr buffer related */
 //The address byte sent at the beginning of every spi message contains a 7 bit address and a single read/write bit, the MSB.
-int8_t spi_address_buff;//stores the address byte for use in the isr
-bool spi_rw_bit;//stores wether the master is sending a read or write message
+volatile uint8_t spi_address_buff;//stores the address byte for use in the isr
+volatile uint8_t spi_rw_bit;//stores wether the master is sending a read or write message
 #define RW_MASK 0b10000000; 
 #define ADDRESS_MASK 0b01111111;
 
@@ -80,11 +80,12 @@ bool servo_radio_on = false; //Used by SPI task to know if the servo and radio a
 bool motor_controllers_on = false; //Used by SPI task to know if motor controllers have already been initialized
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
 bool spi_address_flag = true; //Used by spi_transfer_complete_isr to let spi0_isr know that the first byte (the address byte) of a message has arrived
-bool interrupt_test_flag = false;//Used to test if an IRQ_SPI0 interrupt occured
-
+bool CS0_interrupt_test_flag = false;//Testing wether the chip select line interrupt is working
+bool spi0_isr_test_flag = false;//Testing wether an spi0_isr interrupt has occured 
 /* Print spi registers function related */
 uint32_t first_pointer;
 uint32_t next_pointer;
+
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus preparation*/
@@ -135,7 +136,9 @@ void setup() {
   NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
 //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
-  
+// Interrupt Pin toggle setup (debugging)
+  pinMode(33,OUTPUT);
+  digitalWrite(33,0);
 /*Startup CAN network*/
   //CANbus.begin();
 
@@ -257,8 +260,12 @@ void loop() {
   //if (registers.reg_map.print_registers == true ){
 
       spi_print();
-      delay(10000);
-      
+      Serial << "CS0_interrupt_test_flag " << CS0_interrupt_test_flag;
+      Serial.println();
+      Serial << "spi0_isr_test_flag " << spi0_isr_test_flag;
+      Serial.println();
+      delay(2000);
+
   //  }
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
@@ -303,37 +310,51 @@ void loop() {
 
 //Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
 void spi0_isr(void) {  
-  //This if statement asks if the first interrupt of a message is occuring and runs its code if true
-  if (spi_address_flag) {
 
-    spi_address_buff = ADDRESS_MASK & SPI0_POPR; //Ands the shift register 
-    spi_rw_bit = RW_MASK & SPI0_POPR;
+  spi0_isr_test_flag = !spi0_isr_test_flag;//Will print the status of this flag in the spi task to test wether an spi frame transferred interrupt has occured
+  //This if statement asks if the first interrupt of a message is occuring and runs its code if true
+  volatile uint8_t SPI0_POPR_buf = SPI0_POPR;
+//    digitalWrite(33,!digitalRead(33));
+
+//  digitalWrite(33,0);//Toggle a pin whenever an interrupt occurs to view on the scope for debugging purposes
+//  digitalWrite(33,1);//Toggle a pin whenever an interrupt occurs to view on the scope for debugging purposes  
+//  digitalWrite(33,0);//Toggle a pin whenever an interrupt occurs to view on the scope for debugging purposes
+//  digitalWrite(33,1);//Toggle a pin whenever an interrupt occurs to view on the scope for debugging purposes  
+   
+  if (spi_address_flag) {
+    Serial.println(5);
+    Serial.println(SPI0_POPR_buf);
+    spi_address_buff = ADDRESS_MASK & SPI0_POPR_buf; //Ands the shift register 
+    spi_rw_bit = RW_MASK & SPI0_POPR_buf;
     spi_address_flag = false;
 
     if (spi_rw_bit){//if the read/write bit is 1, it is a read message and spi_rw_buff will be true
-
+      Serial.println(6);
       SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
       spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register
-      SPI0_SR |= SPI_SR_RFDF;//Lower the interrupt flag
     }
     
   }
   
   //Now not on the first interrupt anymore. This is the code that will run for all subsequent interrupts of a single message.
   else{
-
+    
     switch(spi_rw_bit){
       case (true):// spi read
-        registers.bytes[spi_address_buff] = SPI0_POPR;
+        Serial.println(7);
+        registers.bytes[spi_address_buff] = SPI0_POPR_buf;
         spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register 
 
       case (false)://spi write
+        Serial.println(8);
         SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
+        uint8_t spi_junk = SPI0_POPR_buf;
         spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register      
       }
-    SPI0_SR |= SPI_SR_RFDF;//Lower the interrupt fla   
-  }
 
+  }
+  Serial.println(9);
+  SPI0_SR |= SPI_SR_RFDF;//Lower the interrupt flag   
 //From t3spi  
 //    dataIN[dataPointer] = SPI0_POPR;
 //    SPI0_PUSHR_SLAVE = dataOUT[dataPointer];  
@@ -343,8 +364,7 @@ void spi0_isr(void) {
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void spi_transfer_complete_isr(void) {
-  Serial.println(spi_address_flag);
-  delay(1000);
+  CS0_interrupt_test_flag = !CS0_interrupt_test_flag;//Will print the status of this flag in the spi task to test wether a chip select interrupt has occured
   spi_address_flag = true;//Raises the address flag so that the in the next message, spi0_isr knows it is recieving the address byte
 
 }
@@ -356,32 +376,35 @@ void spi_transfer_complete_isr(void) {
 void spi_slave_init(void){
   Serial.println("Made it to spi_slave_init");
   delay(500);
-//    //Initialize spi slave object THE OLD WAY, USING T3SPI
-//  SPI_SLAVE.begin_SLAVE(SCK, MOSI, MISO, CS0);
-//  //Set the CTAR0_SLAVE0 (Frame Size, SPI Mode)
-//  SPI_SLAVE.setCTAR_SLAVE(8, SPI_MODE0);
+    //Initialize spi slave object THE OLD WAY, USING T3SPI
+  SPI_SLAVE.begin_SLAVE(SCK, MOSI, MISO, CS0);
+  //Set the CTAR0_SLAVE0 (Frame Size, SPI Mode)
+  SPI_SLAVE.setCTAR_SLAVE(8, SPI_MODE0);
   
-  /*Configure SPI Memory Map*/
-  SIM_SCGC6 |= SIM_SCGC6_SPI0;    // enable clock to SPI. THIS WAS MISSING PRIOR AND WOULD CAUSE CODE TO GET STUCK IN THIS FUNCTION
-  delay(1000);
-//This clears the entire SPI0_MCR register. This will clear the MSTR bit (turn off master mode), clear the 
-  SPI0_MCR=0x00000000;
-//THIS CLEARS THE ENTIRE SPI0_CTAR0 REGISTER (effectively clearing the default frame size which is 8 --> Not necessary as we want an 8 bit frame size)
-  SPI0_CTAR0=0;
-//This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) and the data is captured on the leading edge of SCK (phase)
-  SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
-//THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
-  SPI0_CTAR0 |= SPI_CTAR_FMSZ(7);
-//Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
-//the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded. 
-  SPI0_RSER = 0x00020000;
-//Enable the SCK, MISO, MOSI, and CS0 Pins (connections to the master device)
-  CORE_PIN13_CONFIG = PORT_PCR_MUX(2);//Serial Clock (SCK) pin
-  CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);//Master Output Slave Input (MOSI) pin
-  CORE_PIN12_CONFIG = PORT_PCR_MUX(2);//Master Input Slave Output (MISO) pin
-  CORE_PIN10_CONFIG = PORT_PCR_MUX(2);//Chip Select 0 (CS0) or Enable  pin
+//  /*Configure SPI Memory Map*/
+//  SIM_SCGC6 |= SIM_SCGC6_SPI0;    // enable clock to SPI. THIS WAS MISSING PRIOR AND WOULD CAUSE CODE TO GET STUCK IN THIS FUNCTION
+//  delay(1000);
+////This clears the entire SPI0_MCR register. This will clear the MSTR bit (turn off master mode), clear the 
+//  SPI0_MCR=0x00000000;
+////THIS CLEARS THE ENTIRE SPI0_CTAR0 REGISTER (effectively clearing the default frame size which is 8 --> Not necessary as we want an 8 bit frame size)
+//  SPI0_CTAR0=0;
+////NEED TO FIGURE OUT WHAT THIS ONE IS DOING AND WHAT THE DIFFERENCE IS BETWEEN THIS AND THE ONE ABOVE IT
+//  SPI0_CTAR0_SLAVE=0;
+////This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) and the data is captured on the leading edge of SCK (phase)
+//  SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
+////THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
+//  SPI0_CTAR0 |= SPI_CTAR_FMSZ(7);
+////Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
+////the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded. 
+//  SPI0_RSER = 0x00020000;
+////Enable the SCK, MISO, MOSI, and CS0 Pins (connections to the master device)
+//  CORE_PIN13_CONFIG = PORT_PCR_MUX(2);//Serial Clock (SCK) pin
+//  CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);//Master Output Slave Input (MOSI) pin
+//  CORE_PIN12_CONFIG = PORT_PCR_MUX(2);//Master Input Slave Output (MISO) pin
+//  CORE_PIN10_CONFIG = PORT_PCR_MUX(2);//Chip Select 0 (CS0) or Enable  pin
   Serial.println("Made it to end of spi_slave_init");//Code is currently not making it to this print statement
   delay(500);
+
 }
 
 void spi_print(void){//This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
