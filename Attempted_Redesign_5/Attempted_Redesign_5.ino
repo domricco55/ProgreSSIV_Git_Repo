@@ -50,6 +50,7 @@ typedef struct reg_struct {
   volatile bool print_registers;
   volatile bool init_servo_radio;
   volatile bool begin_data_collection;
+  volatile uint8_t test_num;
   
 } reg_struct_t ;
 
@@ -63,7 +64,7 @@ typedef union reg_union {
 } reg_union_t;
 
 //Initialize the register map union (making it all zeroes by default)
-reg_union_t registers = {true,true,true};
+reg_union_t registers = {true,true,true,69};
 //can access data like:
 //                      registers.bytes[1]
 //                      registers.init_servo_radio
@@ -136,9 +137,7 @@ void setup() {
   NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
 //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
-// Interrupt Pin toggle setup (debugging)
-  pinMode(33,OUTPUT);
-  digitalWrite(33,0);
+
 /*Startup CAN network*/
   //CANbus.begin();
 
@@ -259,12 +258,12 @@ void loop() {
   //If Master wants Teensy to print it will send a true to address of print_registers and this code will run
   //if (registers.reg_map.print_registers == true ){
 
-      spi_print();
-      Serial << "CS0_interrupt_test_flag " << CS0_interrupt_test_flag;
-      Serial.println();
-      Serial << "spi0_isr_test_flag " << spi0_isr_test_flag;
-      Serial.println();
-      delay(2000);
+      //spi_print();
+      //Serial << "CS0_interrupt_test_flag " << CS0_interrupt_test_flag;
+      //Serial.println();
+      //Serial << "spi0_isr_test_flag " << spi0_isr_test_flag;
+      //Serial.println();
+      //delay(2000);
 
   //  }
 
@@ -310,26 +309,21 @@ void loop() {
 
 //Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
 void spi0_isr(void) {  
-
   spi0_isr_test_flag = !spi0_isr_test_flag;//Will print the status of this flag in the spi task to test wether an spi frame transferred interrupt has occured
   //This if statement asks if the first interrupt of a message is occuring and runs its code if true
-  volatile uint8_t SPI0_POPR_buf = SPI0_POPR;
-//    digitalWrite(33,!digitalRead(33));
+  volatile uint8_t SPI0_POPR_buf = SPI0_POPR;//Grab the SPI shift register value (most recently recieved byte)
 
-//  digitalWrite(33,0);//Toggle a pin whenever an interrupt occurs to view on the scope for debugging purposes
-//  digitalWrite(33,1);//Toggle a pin whenever an interrupt occurs to view on the scope for debugging purposes  
-//  digitalWrite(33,0);//Toggle a pin whenever an interrupt occurs to view on the scope for debugging purposes
-//  digitalWrite(33,1);//Toggle a pin whenever an interrupt occurs to view on the scope for debugging purposes  
-   
+  
   if (spi_address_flag) {
-    Serial.println(5);
-    Serial.println(SPI0_POPR_buf);
-    spi_address_buff = ADDRESS_MASK & SPI0_POPR_buf; //Ands the shift register 
-    spi_rw_bit = RW_MASK & SPI0_POPR_buf;
+    Serial.println(); 
+    spi_address_buff = SPI0_POPR_buf & ADDRESS_MASK; //Ands the shift register    
+    spi_rw_bit = SPI0_POPR_buf & RW_MASK;
     spi_address_flag = false;
-
+    //Serial.println(spi_rw_bit);
+    Serial.print("1: ");
+    Serial.println(spi_address_buff);
+ 
     if (spi_rw_bit){//if the read/write bit is 1, it is a read message and spi_rw_buff will be true
-      Serial.println(6);
       SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
       spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register
     }
@@ -341,20 +335,20 @@ void spi0_isr(void) {
     
     switch(spi_rw_bit){
       case (true):// spi read
-        Serial.println(7);
+        Serial.print("2: ");
+        Serial.println(spi_address_buff);
         registers.bytes[spi_address_buff] = SPI0_POPR_buf;
         spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register 
 
       case (false)://spi write
-        Serial.println(8);
+        Serial.print("3: ");
+        Serial.println(spi_address_buff);
         SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
         uint8_t spi_junk = SPI0_POPR_buf;
         spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register      
       }
-
-  }
-  Serial.println(9);
-  SPI0_SR |= SPI_SR_RFDF;//Lower the interrupt flag   
+  SPI0_SR |= SPI_SR_RFDF;//Allow for another interrupt to occur.  
+  } 
 //From t3spi  
 //    dataIN[dataPointer] = SPI0_POPR;
 //    SPI0_PUSHR_SLAVE = dataOUT[dataPointer];  
