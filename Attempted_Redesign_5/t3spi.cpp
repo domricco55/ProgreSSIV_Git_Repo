@@ -45,7 +45,8 @@ void T3SPI::setMCR(bool mode){
     if (mode==1){
         SPI0_MCR=0x80000000;}
     else{
-        SPI0_MCR=0x00000000;}
+        SPI0_MCR=0x00000001;
+        SPI0_MCR= 1<<13;}
     start();
 }
 
