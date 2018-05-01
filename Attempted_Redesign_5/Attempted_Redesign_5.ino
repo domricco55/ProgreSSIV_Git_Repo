@@ -80,7 +80,7 @@ volatile uint8_t spi_rw_bit;//stores wether the master is sending a read or writ
 bool servo_radio_on = false; //Used by SPI task to know if the servo and radio are initialized yet. Initilize commands from master will be ignored if initialization has already occured
 bool motor_controllers_on = false; //Used by SPI task to know if motor controllers have already been initialized
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
-bool spi_address_flag = true; //Used by spi_transfer_complete_isr to let spi0_isr know that the first byte (the address byte) of a message has arrived
+bool spi_address_flag = true; //Used by spi_transfer_complete_isr to let spi0_isr know that current spi0_isr message is on the address byte
 
 /* Print spi registers function related */
 uint32_t first_pointer;
@@ -147,29 +147,18 @@ void setup() {
 
 void loop() {
 
-//        Serial.print("CTR: ");
-//        Serial.print((SPI0_SR&(0b1111<<12))>>12);
-//        Serial.print(" Next: ");
-//        Serial.println((SPI0_SR&(0b1111<<8))>>8);
-//        Serial.println(SPI0_TXFR0);
-//        Serial.println(SPI0_TXFR1);
-//        Serial.println(SPI0_TXFR2);
-//        Serial.println(SPI0_TXFR3);
-//        Serial.println();
-        //SPI0_PUSHR_SLAVE = 0x00;
-//        delay(100);
   //CAN_message_t msg;//Dont know why this has to be at the beginning of void loop() but here it is
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*SPI Task*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
   /*
-  * Each element in spi_register_array is 1 byte.  Therefore 4 bytes per packet.  The array shows up on Simulink end as one message packet.  
+  * Each element an spi message is 1 byte.  The master can send as many bytes per message as it wants. If the read bit is set high, the 
   * structure if spi arrays for outgoing data:
-  * spi_register_array[0] -> register address of that data
-  * spi_register_array[1] -> low byte of data (only relevant for READS)
-  * spi_register_array[2] -> high byt of data (only relevant for READS)
-  * spi_register_array[3] -> status of teensy (slave)
+  * spi_register_array[0] -> register address of data_0 (Interrupt 1)
+  * spi_register_array[1] -> data_0 (Interrupt 2)
+  * spi_register_array[2] -> data_1
+  * spi_register_array[3] -> data_3 -> Teensy_Status (th
   */
 
   /* 
@@ -270,9 +259,9 @@ void loop() {
 /*print_registers register (for debugging)*/   
   //If Master wants Teensy to print it will send a true to address of print_registers and this code will run
   if (registers.reg_map.print_registers){
-
+    
+      delay(100);//Wait for all of the registers to be written to before printing them (in case the print command is being sent along with write data)
       spi_print();
-      delay(10000);
       registers.reg_map.print_registers = 0;//Clear the print_registers register so that a print_registers command from master prints the registers only once.
 
     }
@@ -320,7 +309,7 @@ void loop() {
 //Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
 void spi0_isr(void) {  
   
-  volatile uint8_t SPI0_POPR_buf = SPI0_POPR;//Grab the SPI shift register value (most recently recieved byte)
+  volatile uint8_t SPI0_POPR_buf = SPI0_POPR;//Grab the SPI0_RXFR1 buffer value. This is the value that was in the push register during the TRANSFER PRIOR TO THAT WHICH CAUSED THIS INTERRUPT
   
   if (spi_address_flag) {
     Serial.println(); 
@@ -336,7 +325,7 @@ void spi0_isr(void) {
     Serial.println(spi_address_buff);
     Serial.print("\tReg: ");
     Serial.println(registers.bytes[spi_address_buff]);
-    spi_debug();
+//    spi_debug();
  
     if (spi_rw_bit){//if the read/write bit is 1, it is a read message and spi_rw_buff will be true
       Serial.println("State 2:");
@@ -359,7 +348,7 @@ void spi0_isr(void) {
         Serial.println(spi_address_buff);
         Serial.print("\tReg: ");
         Serial.println(registers.bytes[spi_address_buff]);
-        spi_debug();
+//        spi_debug();
         SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buff];
         spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register 
 
@@ -371,26 +360,28 @@ void spi0_isr(void) {
         Serial.println(spi_address_buff);
         Serial.print("\tReg: ");
         Serial.println(registers.bytes[spi_address_buff]);
-        spi_debug();
+//        spi_debug();
         spi_address_buff++; //Increment the address so the next byte sent will be the next byte in the spi register 
     }    
   }
+
   SPI0_SR |= SPI_SR_RFDF;//Allow for another interrupt to occur.  
 } 
 
 void spi_debug(void){
-//  Serial.print("\tCTR: ");
-//  Serial.println((SPI0_SR&(0b1111<<12))>>12);
-//  Serial.print("\tPTR: ");
-//  Serial.println((SPI0_SR&(0b1111<<8))>>8);
-//  Serial.print("\tTX0: ");
-//  Serial.println(SPI0_TXFR0);
-//  Serial.print("\tTX1: ");
-//  Serial.println(SPI0_TXFR1);
-//  Serial.print("\tTX2: ");
-//  Serial.println(SPI0_TXFR2);
-//  Serial.print("\tTX3: ");
-//  Serial.println(SPI0_TXFR3);
+  Serial.print("\tCTR: ");
+  Serial.println((SPI0_SR&(0b1111<<12))>>12);
+  Serial.print("\tPTR: ");
+  Serial.println((SPI0_SR&(0b1111<<8))>>8);
+  Serial.print("\tTX0: ");
+  //These are glimpses into data that is to be shifted out.What is in the  
+  Serial.println(SPI0_TXFR0);
+  Serial.print("\tTX1: ");
+  Serial.println(SPI0_TXFR1);
+  Serial.print("\tTX2: ");
+  Serial.println(SPI0_TXFR2);
+  Serial.print("\tTX3: ");
+  Serial.println(SPI0_TXFR3);
 }
 
 
@@ -398,14 +389,15 @@ void spi_debug(void){
 
 void spi_transfer_complete_isr(void) {
 
-  spi_address_flag = true;//Raises the address flag so that the in the next message, spi0_isr knows it is recieving the address byte
+  spi_address_flag = true;//Raises the address flag so spi0_isr knows that the spi message is currently on the address byte
     Serial.println("State 4a:");
     Serial.print("\tAddr: ");
     Serial.println(spi_address_buff);
     Serial.print("\tReg: ");
     Serial.println(registers.bytes[spi_address_buff]);
     spi_debug();
-  SPI0_MCR |= (1<<11);//Allows for this interrupt to load the status byte for the next spi message
+  SPI0_MCR |= (1<<11);//Clear the TX FIFO counter so that the buffer does not attempt to keep track of multiple spi messges. We are getting around the double buffer behavior 
+                      //by only using the first byte of the buffer throughout the entire message.  
   SPI0_PUSHR_SLAVE = packet_cnt++;//This loads the push register with the status byte (well, it WILL be a Teensy status byte once implemented)
 //    //Print the state of spi_address_buff at a transfer complete condition. For debugging purposes
 //    Serial.println("State 4b:");
