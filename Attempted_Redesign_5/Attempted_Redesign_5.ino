@@ -48,16 +48,16 @@ T3SPI SPI_SLAVE;
 /* Spi Register Setup*/
 //Create a register map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr 
 typedef struct reg_struct {
-  volatile uint8_t test_num_1;
-  volatile uint8_t test_num_2;
-  volatile uint8_t test_num_3;
-  volatile uint8_t test_num_4;
-  volatile uint8_t test_num_5;
-  volatile uint8_t test_num_6;
-  volatile uint8_t test_num_7;
-  volatile uint8_t test_num_8;
-  volatile uint8_t test_num_9;
-  volatile uint8_t test_num_10;
+  volatile uint8_t test_reg_0;  
+  volatile uint8_t test_reg_1;
+  volatile uint8_t test_reg_2;
+  volatile uint8_t test_reg_3;
+  volatile uint8_t test_reg_4;
+  volatile uint8_t test_reg_5;
+  volatile uint8_t test_reg_6;
+  volatile uint8_t test_reg_7;
+  volatile uint8_t test_reg_8;
+  volatile uint8_t test_reg_9;
 //  volatile uint8_t init_servo_radio;
 //  volatile uint8_t begin_data_collection;
   volatile uint8_t print_registers;
@@ -70,7 +70,7 @@ typedef union reg_union {
 } reg_union_t;
 
 //Initialize the register union (making it all zeroes by default)
-reg_union_t registers = {0,0,0,0,0,0,0,0,0,0};
+reg_union_t registers = {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 //Initializes a register buffer of the same union type as registers. Now registers and registers_buf can copy themselves into each other. Used in spi0_isr to prevent writing 
 //data to registers while they are being accessed by spi task.
@@ -96,7 +96,8 @@ volatile uint8_t spi_rw_bit;//stores wether the master is sending a read or writ
 bool servo_radio_on = false; //Used by SPI task to know if the servo and radio are initialized yet. Initilize commands from master will be ignored if initialization has already occured
 bool motor_controllers_on = false; //Used by SPI task to know if motor controllers have already been initialized
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
-bool new_spi_message_flag = true;//Flag so spi0_isr knows to load the register buffer and to decode the address/rw byte 
+bool reg_buf_flag = true;
+bool address_flag = true;
 
 /* Teensy Status Byte */
 volatile uint8_t Teensy_Status_Byte = 69;
@@ -143,12 +144,11 @@ uint32_t next_pointer;
 uint8_t packet_cnt = 0x01;
 #define DEBUG_PRINT 0
 //These are used to tell how much time the isr is taking to run
-long isrStartTime;
-long isrEndTime;
+volatile long isrStartTime;
+volatile long isrEndTime;
 //These are used to tell how much time is elapsing between messages
-long messageTime1;
-long messageTime2;
-long message_delta_t;
+volatile long messageTime1;
+volatile long message_delta_t;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -168,8 +168,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
 //Print dem regis up bro
   spi_print();
-//SPI frequency timing debugging preparation
-  messageTime2 = millis();
+
 
 /*Startup CAN network*/
   //CANbus.begin();
@@ -286,15 +285,15 @@ void loop() {
 //  }
 
   
-///*print_registers register (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, THERE IS A DELAY)*/   
+/*print_registers register (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, THERE IS A DELAY)*/   
   //If Master wants Teensy to print it will send a true to address of print_registers and this code will run
-  if (registers.reg_map.print_registers){
+   if (registers.reg_map.print_registers){
     
-      delay(100);//Wait for all of the registers to be written to before printing them (in case the print command is being sent along with write data)
+      delay(1);//Wait for all of the registers to be written to before printing them (in case the print command is being sent along with write data)
       spi_print();
       registers.reg_map.print_registers = 0;//Clear the print_registers register so that a print_registers command from master prints the registers only once.
 
-    }
+   }
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
@@ -342,23 +341,24 @@ void spi0_isr(void) {
   volatile uint8_t SPI0_POPR_buf = SPI0_POPR;//Grab the SPI0_RXFR1 buffer value. This is the value that was in the push register during the TRANSFER PRIOR TO THAT WHICH CAUSED THIS INTERRUPT
 
   //If this is a new message, copy the registers into the register buffer for temporary use in the isr
-  if (new_spi_message_flag){
-    new_spi_message_flag = false;
-    isrStartTime = micros();
+  if (reg_buf_flag){
+    reg_buf_flag = false;
+//    isrStartTime = micros();
+//    messageTime1 = micros();
     registers_buf = registers; //Grab the registers current values
-    
+  }
+  if (address_flag){
     if(DEBUG_PRINT){
       Serial.println(); 
       Serial.print("--------");
       Serial.print(packet_cnt);
       Serial.println("---------"); 
     }
-
+    address_flag = false;
     spi_address_buf = SPI0_POPR_buf & ADDRESS_MASK; //ANDs the shift register buffer value and the address mask (extract the 7 bit address from the first byte of the message)   
     spi_rw_bit = SPI0_POPR_buf & RW_MASK;//ANDs the shift register buffer value and the read/write bit mask (extract the MSB that tells wether this is a read or write message)
     
     if (DEBUG_PRINT){
-    //Serial.println(spi_rw_bit);
       Serial.println("State 1:");
       Serial.print("\tAddr: ");
       Serial.println(spi_address_buf);
@@ -381,7 +381,6 @@ void spi0_isr(void) {
       
     } 
   }
-  
   //Now not on the first interrupt anymore. This is the code that will run for all subsequent interrupts of a single message.
   else{
     
@@ -415,6 +414,12 @@ void spi0_isr(void) {
         
     }    
   }
+//  isrEndTime = micros();
+//  if(DEBUG_PRINT){
+//    Serial <<"\tInterrupt Time: " << (isrEndTime-isrStartTime) << " Microseconds";
+//    Serial.println();  
+//    Serial.println();  
+//  }
 
   SPI0_SR |= SPI_SR_RFDF;//Allow for another interrupt to occur.
     
@@ -445,7 +450,9 @@ void spi_debug(void){
 //Interrupt service routine for the rising edge of the chip enable pin. The end of every SPI message.
 void spi_transfer_complete_isr(void) {
 
-  new_spi_message_flag = true;//Raises the new message flag so spi0_isr knows to load the register buffer and to decode the address/rw byte
+  reg_buf_flag = true;//Raises the new message flag so spi0_isr knows to load the register buffer
+  address_flag = true;//Let spi0_isr know the address/rw byte was just sent
+  
   if (DEBUG_PRINT){
     Serial.println("State 4a:");
     Serial.print("\tAddr: ");
@@ -463,13 +470,14 @@ void spi_transfer_complete_isr(void) {
 
   packet_cnt++;//For Debugging Purposes, print how many messages have been sent 
 
-/* Timing Calculations */
-  //Calculate and Print the end of the 
-  messageTime2 = micros();
-  message_delta_t = messageTime2-messageTime1;
-  messageTime1 = messageTime2;
-    Serial.print("Message Time ");
-    Serial.println(message_delta_t);
+///* Timing Calculations */
+//  //Calculate and Print the end of the 
+//  message_delta_t = micros()- messageTime1;
+//  
+//  if (DEBUG_PRINT){
+//    Serial.print("Message Time: ");
+//    Serial.println(message_delta_t);    
+//  }
 
 }
 /* End spi_transfer_complete_isr */
@@ -522,66 +530,66 @@ void spi_print(void){//This prints the name and address of each of the items in 
     
     first_pointer = (uint32_t)&registers.reg_map;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
     
-
-    next_pointer = (uint32_t)&registers.reg_map.test_num_1 - first_pointer;
-      Serial << "test_num_1 " << registers.reg_map.test_num_1;
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_0 - first_pointer;
+      Serial << "test_reg_0 " << registers.reg_map.test_reg_0;
+//      Serial << " ptr= " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+      
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_1 - first_pointer;
+      Serial << "test_reg_1 " << registers.reg_map.test_reg_1;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.test_num_2 - first_pointer;
-      Serial << "test_num_2 " << registers.reg_map.test_num_2;
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_2 - first_pointer;
+      Serial << "test_reg_2 " << registers.reg_map.test_reg_2;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.test_num_3 - first_pointer;
-      Serial << "test_num_3 " << registers.reg_map.test_num_3;
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_3 - first_pointer;
+      Serial << "test_reg_3 " << registers.reg_map.test_reg_3;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.test_num_4 - first_pointer;
-      Serial << "test_num_4 " << registers.reg_map.test_num_4;
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_4 - first_pointer;
+      Serial << "test_reg_4 " << registers.reg_map.test_reg_4;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.test_num_5 - first_pointer;
-      Serial << "test_num_5 " << registers.reg_map.test_num_5;
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_5 - first_pointer;
+      Serial << "test_reg_5 " << registers.reg_map.test_reg_5;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.test_num_6 - first_pointer;
-      Serial << "test_num_6 " << registers.reg_map.test_num_6;
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_6 - first_pointer;
+      Serial << "test_reg_6 " << registers.reg_map.test_reg_6;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-     next_pointer = (uint32_t)&registers.reg_map.test_num_7 - first_pointer;
-      Serial << "test_num_7 " << registers.reg_map.test_num_7;
+     next_pointer = (uint32_t)&registers.reg_map.test_reg_7 - first_pointer;
+      Serial << "test_reg_7 " << registers.reg_map.test_reg_7;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.test_num_8 - first_pointer;
-      Serial << "test_num_8 " << registers.reg_map.test_num_8;
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_8 - first_pointer;
+      Serial << "test_reg_8 " << registers.reg_map.test_reg_8;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.test_num_9 - first_pointer;
-      Serial << "test_num_9 " << registers.reg_map.test_num_9;
+    next_pointer = (uint32_t)&registers.reg_map.test_reg_9 - first_pointer;
+      Serial << "test_reg_9 " << registers.reg_map.test_reg_9;
 //      Serial << " ptr= " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.test_num_10 - first_pointer;
-      Serial << "test_num_10 " << registers.reg_map.test_num_10;
-//      Serial << " ptr= " << next_pointer;
-      Serial.println();  
-      Serial.println(); 
                                              
     next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
       Serial << "print_registers " << registers.reg_map.print_registers;
