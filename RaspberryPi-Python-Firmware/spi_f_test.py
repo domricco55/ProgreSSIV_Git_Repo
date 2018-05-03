@@ -24,11 +24,11 @@ data = 0
 def send_packets_read(num_packets=1):
 
     for n in range(num_packets):
-        buf = struct.pack('BBBBBBBBBBB', address | read_bit, 1,2,3,4,5,6,7,8,9,10)
+        buf = struct.pack('BBBBBBBBBBBB', address | read_bit, 0,0,1,2,3,4,5,6,7,8,9)
     
         retlen, retdata = wiringpi.wiringPiSPIDataRW(SPIChannel,buf)
 
-        return_tuple = struct.unpack('BBBBBBBBBB',retdata)
+        return_tuple = struct.unpack('BBBBBBBBBBBB',retdata)
         print (return_tuple)
 
         #time.sleep(1)
@@ -36,19 +36,25 @@ def send_packets_read(num_packets=1):
 def send_packets_write(num_packets=1):
 
     for n in range(num_packets):
-        buf = struct.pack('BBBBBBBBB', address | write_bit, 1,2,3,4,5,6,7,8)
+        buf = struct.pack('BBBBBBBBBBB', address | write_bit, 0,1,2,3,4,5,6,7,8,9)
     
         retlen, retdata = wiringpi.wiringPiSPIDataRW(SPIChannel,buf)
         
-        return_tuple = struct.unpack('BBBBBBBBB',retdata)
+        return_tuple = struct.unpack('BBBBBBBBBBB',retdata)
         print (return_tuple)
+#        buf = struct.pack('BBBBBBBBB', address | write_bit, 0,1,2,3,4,5,6,7)
+#    
+#        retlen, retdata = wiringpi.wiringPiSPIDataRW(SPIChannel,buf)
+#        
+#        return_tuple = struct.unpack('BBBBBBBBB',retdata)
+#        print (return_tuple)
   
         time.sleep(2/SPIFrequency) #Testing how little I can wait between write packets      
 
 def send_read_write(num_packets=1):
 #This function will send as many consecutive read write exchanges as requested
     for n in range(num_packets):
-        buf = struct.pack('BBBBBBBBBBB', address | write_bit, 1,2,3,4,5,6,7,8,9,10)
+        buf = struct.pack('BBBBBBBBBBB', address | write_bit, 0,1,2,3,4,5,6,7,8,9)
     
         retlen, retdata = wiringpi.wiringPiSPIDataRW(SPIChannel,buf)
         
@@ -57,7 +63,7 @@ def send_read_write(num_packets=1):
   
         time.sleep(2/SPIFrequency) #Testing how little I can wait between write packets   
         
-        buf = struct.pack('BBBBBBBBBBBB', address | read_bit, 1,2,3,4,5,6,7,8,9,10,11)
+        buf = struct.pack('BBBBBBBBBBBB', address | read_bit, 0,0,1,2,3,4,5,6,7,8,9)
     
         retlen, retdata = wiringpi.wiringPiSPIDataRW(SPIChannel,buf)
         
@@ -68,9 +74,9 @@ def send_read_write(num_packets=1):
         
         
 def send_print_command():
-    buf = struct.pack('BB', address | read_bit, print_address)
+    buf = struct.pack('BB', print_address | write_bit, 1)
 
     retlen, retdata = wiringpi.wiringPiSPIDataRW(SPIChannel,buf)
-    #print(buf)
     
-    print (struct.unpack('B',retdata))
+    return_tuple = struct.unpack('BB',retdata)
+    print (return_tuple)
