@@ -89,11 +89,18 @@ bool collecting_data = false; //Used by SPI task to start and stop data collecti
 bool spi_address_flag = true; //Used by spi_transfer_complete_isr to let spi0_isr know that current spi0_isr message is on the address byte
 bool reg_buf_flag = true;//Used by chip select interrupt to let spi0_isr know to load the register buffer with the registers
 
+/* Teensy Status Byte */
+volatile uint8_t Teensy_Status_Byte = 69;
+
 /* Print spi registers function related */
 uint32_t first_pointer;
 uint32_t next_pointer;
 uint8_t packet_cnt = 0x01;
 
+/*Debug Variables*/
+//These are used to tell how much time it takes to load and unload the register buffer (Literally reads zero each time)
+long startTime;
+long endTime;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus preparation*/
@@ -262,15 +269,15 @@ void loop() {
   }
 
   
-/*print_registers register (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, THERE IS A DELAY)*/   
-  //If Master wants Teensy to print it will send a true to address of print_registers and this code will run
-  if (registers.reg_map.print_registers){
-    
-      delay(100);//Wait for all of the registers to be written to before printing them (in case the print command is being sent along with write data)
-      spi_print();
-      registers.reg_map.print_registers = 0;//Clear the print_registers register so that a print_registers command from master prints the registers only once.
-
-    }
+///*print_registers register (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, THERE IS A DELAY)*/   
+//  //If Master wants Teensy to print it will send a true to address of print_registers and this code will run
+//  if (registers.reg_map.print_registers){
+//    
+//      delay(100);//Wait for all of the registers to be written to before printing them (in case the print command is being sent along with write data)
+//      spi_print();
+//      registers.reg_map.print_registers = 0;//Clear the print_registers register so that a print_registers command from master prints the registers only once.
+//
+//    }
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
@@ -318,7 +325,9 @@ void spi0_isr(void) {
   volatile uint8_t SPI0_POPR_buf = SPI0_POPR;//Grab the SPI0_RXFR1 buffer value. This is the value that was in the push register during the TRANSFER PRIOR TO THAT WHICH CAUSED THIS INTERRUPT
   
   if (reg_buf_flag){
+    startTime = micros();
     registers_buf = registers; //Grab the registers current values
+    endTime = micros();
     reg_buf_flag = false;//Lower the flag so this doesnt happen again  
   }
 
@@ -395,7 +404,6 @@ void spi_debug(void){
   Serial.println(SPI0_TXFR3);
 }
 
-
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void spi_transfer_complete_isr(void) {
@@ -406,13 +414,17 @@ void spi_transfer_complete_isr(void) {
     Serial.println(spi_address_buf);
     Serial.print("\tReg: ");
     Serial.println(registers_buf.bytes[spi_address_buf]);
+    Serial.println(startTime);
+    Serial.println(endTime);
     spi_debug();
   SPI0_MCR |= (1<<11);//Clear the TX FIFO counter so that the buffer does not attempt to keep track of multiple spi messges. We are getting around the double buffer behavior 
                       //by only using the first byte of the buffer throughout the entire message.  
-  SPI0_PUSHR_SLAVE = packet_cnt++;//This loads the push register with the status byte (well, it WILL be a Teensy status byte once implemented)
+  SPI0_PUSHR_SLAVE = Teensy_Status_Byte;//This loads the push register with the status byte (well, it WILL be a Teensy status byte once implemented)
 
   registers = registers_buf;//Replace the registers with the updated values at the end of the message
   reg_buf_flag = true;
+
+  packet_cnt++;//For Debugging Purposes, print how many messages have been sent 
   
 //    //Print the state of spi_address_buf at a transfer complete condition. For debugging purposes
 //    Serial.println("State 4b:");

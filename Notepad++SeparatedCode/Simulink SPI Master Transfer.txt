@@ -1,0 +1,30 @@
+/* MATLABSystem: '<Root>/SPI Master Transfer' incorporates:
+192	   *  Outport: '<Root>/Returned'
+193	   */
+194	  memcpy((void *)&wrDataRaw[0], (void *)&rtb_TmpSignalConversionAtSPIMas[0],
+195	         (uint32_T)((size_t)4 * sizeof(uint8_T)));
+
+196	  PinNameLoc = SPI0_CE0;
+
+197	  MW_SPI_SetSlaveSelect(Single_Message_Tester_DW.obj.MW_SPI_HANDLE, PinNameLoc,
+198	                        true);
+
+199	  ClockModeValue = MW_SPI_MODE_0;
+
+200	  MsbFirstTransferLoc = MW_SPI_MOST_SIGNIFICANT_BIT_FIRST;
+
+201	  status = MW_SPI_SetFormat(Single_Message_Tester_DW.obj.MW_SPI_HANDLE, 8,
+202	    ClockModeValue, MsbFirstTransferLoc);
+
+203	  if (!(status != 0)) {
+204	    MW_SPI_MasterWriteRead_8bits(Single_Message_Tester_DW.obj.MW_SPI_HANDLE,
+205	      wrDataRaw, rdDataRaw, 4U);
+206	  }
+207	
+208	  memcpy((void *)&Single_Message_Tester_Y.Returned[0], (void *)&rdDataRaw[0],
+209	         (uint32_T)((size_t)4 * sizeof(int8_T)));
+210	
+211	  /* End of MATLABSystem: '<Root>/SPI Master Transfer' */
+212	  /* Update for UnitDelay: '<Root>/Unit Delay' */
+213	  Single_Message_Tester_DW.UnitDelay_DSTATE = rtb_Gain;
+214	}
