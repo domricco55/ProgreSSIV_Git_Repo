@@ -32,7 +32,7 @@
 #include "input_handler.h"
 #include "output_handler.h"
 #include "t3spi.h"
-
+#include "Adafruit_BNO055.h"
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*SPI Communication/SPI Task Preparation*/
@@ -129,6 +129,15 @@ volatile int16_t THR_in;
 volatile int16_t ST_in;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*BNO055 Inertial Measurement Unit Preparation*/
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/* Set the delay between fresh samples */
+#define BNO055_SAMPLERATE_DELAY_MS (100)//NEED TO IMPLEMENT THIS
+Adafruit_BNO055 bno = Adafruit_BNO055();
+/*End of IMU changes*/
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Debugging setup*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -169,6 +178,23 @@ void setup() {
 //Print dem regis up bro
   spi_print();
 
+/* Start Up the BNO055 IMU*/
+Serial.println("Orientation Sensor Raw Data Test"); Serial.println("");
+//Initialize the sensor
+if(!bno.begin())
+{
+  //There was a problem detecting the BNO055 ... check your connections
+  Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+  //while(1);
+}
+//Display the current IMU temperature
+int8_t temp = bno.getTemp();
+Serial.print("Current Temperature: ");
+Serial.print(temp);
+Serial.println(" C");
+Serial.println("");
+bno.setExtCrystalUse(true);
+Serial.println("Calibration status values: 0=uncalibrated, 3=fully calibrated");
 
 /*Startup CAN network*/
   //CANbus.begin();
@@ -324,7 +350,37 @@ void loop() {
 
   if (collecting_data == true) {
     //collect and store every sensor value
-    //The CAN messages for wheel velocity readings will be here. Data will be recieved and loaded into the corresponding spi_register
+    //The CAN messages for wheel velocity readings will be here. Data will be recieved and loaded into the corresponding spi_register.
+
+    // Grab the IMU vector using I2C communication to the sensor
+    /*
+    //IMU gravity - m/s^2 
+    imu::Vector<3> gravity = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);  
+    //IMU linear acceleration - m/s^2 
+    imu::Vector<3> lin_accl = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);             
+    //IMU magnetometer - uT
+    imu::Vector<3> mag = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);  
+    */
+    //IMU gyroscope - rad/s
+    imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);  
+    //IMU euler - degrees
+    imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);  
+    //IMU accelration - m/s^2 
+    imu::Vector<3> accl = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+    //quaternion
+    imu::Quaternion quat = bno.getQuat();
+
+    //Gather the sensor data. These functions are from Adafruit_BNO055.cpp
+    euler.x() = registers.reg_map.euler_x; //i2C call to IMU BNO to return x direction euler angle and place in the euler_x register
+    euler.y() = registers.reg_map.euler_y; //i2C call to IMU BNO to return y direction euler angle and place in the euler_y register
+    euler.z() = registers.reg_map.euler_z; //i2C call to IMU BNO to return z direction euler angle and place in the euler_z register
+    accl.x() = registers.reg_map.accl_x; //i2C call to IMU BNO to return x direction acceleration and place in the euler_x register
+    accl.y() = registers.reg_map.accl_y; //i2C call to IMU BNO to return y direction acceleration and place in the euler_y register
+    accl.z() = registers.reg_map.accl_z; //i2C call to IMU BNO to return z direction acceleration and place in the euler_z register
+    gyro.x() = registers.reg_map.gyro_x; //i2C call to IMU BNO to return x direction angular velocity and place in the gyro_x register
+    gyro.y() = registers.reg_map.gyro_y; //i2C call to IMU BNO to return y direction angular velocity and place in the gyro_y register
+    gyro.z() = registers.reg_map.gyro_z; //i2C call to IMU BNO to return z direction angular velocity and place in the gyro_z register
+    
   }
 
 }
