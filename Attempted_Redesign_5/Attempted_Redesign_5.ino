@@ -32,7 +32,12 @@
 #include "input_handler.h"
 #include "output_handler.h"
 #include "t3spi.h"
+//libraries for imu
+#include <Wire.h>
+#include "Adafruit_Sensor.h"
 #include "Adafruit_BNO055.h"
+#include "imumaths.h"
+
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*SPI Communication/SPI Task Preparation*/
@@ -48,6 +53,7 @@ T3SPI SPI_SLAVE;
 /* Spi Register Setup*/
 //Create a register map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr 
 typedef struct reg_struct {
+  //Test Registers
   volatile uint8_t test_reg_0;  
   volatile uint8_t test_reg_1;
   volatile uint8_t test_reg_2;
@@ -58,9 +64,23 @@ typedef struct reg_struct {
   volatile uint8_t test_reg_7;
   volatile uint8_t test_reg_8;
   volatile uint8_t test_reg_9;
-//  volatile uint8_t init_servo_radio;
-//  volatile uint8_t begin_data_collection;
+//Commmand Registers
+  //volatile uint8_t init_servo_radio;
+  //volatile uint8_t begin_data_collection;
   volatile uint8_t print_registers;
+  volatile uint8_t begin_data_collection;
+  volatile uint8_t print_imu;
+//IMU Registers
+  volatile uint16_t euler_x;
+  volatile uint16_t euler_y;
+  volatile uint16_t euler_z;
+  volatile uint16_t accl_x;
+  volatile uint16_t accl_y;
+  volatile uint16_t accl_z;
+  volatile uint16_t gyro_x;
+  volatile uint16_t gyro_y;
+  volatile uint16_t gyro_z;
+    
 } reg_struct_t ;
 
 //union type definition linking the above reg_struct type to a 128 byte array that will be instantiated in loop below. This will be the memory accessed by both the struct and the array
@@ -70,7 +90,7 @@ typedef union reg_union {
 } reg_union_t;
 
 //Initialize the register union (making it all zeroes by default)
-reg_union_t registers = {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+reg_union_t registers = {0,0,0,0,0,0,0,0,0,0,0,1,1};
 
 //Initializes a register buffer of the same union type as registers. Now registers and registers_buf can copy themselves into each other. Used in spi0_isr to prevent writing 
 //data to registers while they are being accessed by spi task.
@@ -133,9 +153,9 @@ volatile int16_t ST_in;
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Set the delay between fresh samples */
-#define BNO055_SAMPLERATE_DELAY_MS (100)//NEED TO IMPLEMENT THIS
+#define BNO055_SAMPLERATE_DELAY_MS (100)
 Adafruit_BNO055 bno = Adafruit_BNO055();
-/*End of IMU changes*/
+
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Debugging setup*/
@@ -301,14 +321,14 @@ void loop() {
 //
 //      }
 
-///*begin_data_collection register*/   
-//  if (registers.reg_map.begin_data_collection == true && collecting_data == false ) { 
-//    if (collecting_data == false){
-//  
-//      collecting_data = true;
-//  
-//    }
-//  }
+/*begin_data_collection register*/   
+  if (registers.reg_map.begin_data_collection ) { 
+    if (!collecting_data){
+  
+      collecting_data = true;
+  
+    }
+  }
 
   
 /*print_registers register (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, THERE IS A DELAY)*/   
@@ -320,6 +340,12 @@ void loop() {
       registers.reg_map.print_registers = 0;//Clear the print_registers register so that a print_registers command from master prints the registers only once.
 
    }
+/* print_sensors register*/
+  //Print live time IMU values
+  if (registers.reg_map.print_imu){
+      delay(3);
+      print_imu();  
+  }
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
@@ -348,11 +374,11 @@ void loop() {
 
 /* UPDATE SENSOR spi_register ARRAYS with the latest readings if collecting_data flag is true (set true via command from Master)*/
 
-  if (collecting_data == true) {
+  if (collecting_data) {
     //collect and store every sensor value
     //The CAN messages for wheel velocity readings will be here. Data will be recieved and loaded into the corresponding spi_register.
 
-    // Grab the IMU vector using I2C communication to the sensor
+    // Grab the IMU vector using I2C communication
     /*
     //IMU gravity - m/s^2 
     imu::Vector<3> gravity = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);  
@@ -371,15 +397,15 @@ void loop() {
     imu::Quaternion quat = bno.getQuat();
 
     //Gather the sensor data. These functions are from Adafruit_BNO055.cpp
-    euler.x() = registers.reg_map.euler_x; //i2C call to IMU BNO to return x direction euler angle and place in the euler_x register
-    euler.y() = registers.reg_map.euler_y; //i2C call to IMU BNO to return y direction euler angle and place in the euler_y register
-    euler.z() = registers.reg_map.euler_z; //i2C call to IMU BNO to return z direction euler angle and place in the euler_z register
-    accl.x() = registers.reg_map.accl_x; //i2C call to IMU BNO to return x direction acceleration and place in the euler_x register
-    accl.y() = registers.reg_map.accl_y; //i2C call to IMU BNO to return y direction acceleration and place in the euler_y register
-    accl.z() = registers.reg_map.accl_z; //i2C call to IMU BNO to return z direction acceleration and place in the euler_z register
-    gyro.x() = registers.reg_map.gyro_x; //i2C call to IMU BNO to return x direction angular velocity and place in the gyro_x register
-    gyro.y() = registers.reg_map.gyro_y; //i2C call to IMU BNO to return y direction angular velocity and place in the gyro_y register
-    gyro.z() = registers.reg_map.gyro_z; //i2C call to IMU BNO to return z direction angular velocity and place in the gyro_z register
+    registers.reg_map.euler_x = euler.x(); //i2C call to IMU BNO to return x direction euler angle and place in the euler_x register
+    registers.reg_map.euler_y = euler.y(); //i2C call to IMU BNO to return y direction euler angle and place in the euler_y register
+    registers.reg_map.euler_z = euler.z(); //i2C call to IMU BNO to return z direction euler angle and place in the euler_z register
+    registers.reg_map.accl_x = accl.x(); //i2C call to IMU BNO to return x direction acceleration and place in the euler_x register
+    registers.reg_map.accl_y = accl.y(); //i2C call to IMU BNO to return y direction acceleration and place in the euler_y register
+    registers.reg_map.accl_z = accl.z(); //i2C call to IMU BNO to return z direction acceleration and place in the euler_z register
+    registers.reg_map.gyro_x = gyro.x(); //i2C call to IMU BNO to return x direction angular velocity and place in the gyro_x register
+    registers.reg_map.gyro_y = gyro.y(); //i2C call to IMU BNO to return y direction angular velocity and place in the gyro_y register
+    registers.reg_map.gyro_z = gyro.z(); //i2C call to IMU BNO to return z direction angular velocity and place in the gyro_z register
     
   }
 
@@ -587,79 +613,213 @@ void spi_print(void){//This prints the name and address of each of the items in 
     first_pointer = (uint32_t)&registers.reg_map;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
     
     next_pointer = (uint32_t)&registers.reg_map.test_reg_0 - first_pointer;
-      Serial << "test_reg_0 " << registers.reg_map.test_reg_0;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_0: ";       
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_0;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
       
     next_pointer = (uint32_t)&registers.reg_map.test_reg_1 - first_pointer;
-      Serial << "test_reg_1 " << registers.reg_map.test_reg_1;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_1: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_1;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.test_reg_2 - first_pointer;
-      Serial << "test_reg_2 " << registers.reg_map.test_reg_2;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_2: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_2;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.test_reg_3 - first_pointer;
-      Serial << "test_reg_3 " << registers.reg_map.test_reg_3;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_3: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_3;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.test_reg_4 - first_pointer;
-      Serial << "test_reg_4 " << registers.reg_map.test_reg_4;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_4: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_4;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.test_reg_5 - first_pointer;
-      Serial << "test_reg_5 " << registers.reg_map.test_reg_5;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_5: ";
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_5;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.test_reg_6 - first_pointer;
-      Serial << "test_reg_6 " << registers.reg_map.test_reg_6;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_6: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_6;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
      next_pointer = (uint32_t)&registers.reg_map.test_reg_7 - first_pointer;
-      Serial << "test_reg_7 " << registers.reg_map.test_reg_7;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_7: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_7;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.test_reg_8 - first_pointer;
-      Serial << "test_reg_8 " << registers.reg_map.test_reg_8;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_8: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_8;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.test_reg_9 - first_pointer;
-      Serial << "test_reg_9 " << registers.reg_map.test_reg_9;
-//      Serial << " ptr= " << next_pointer;
+      Serial << "test_reg_9: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.test_reg_9;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
                                              
     next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
-      Serial << "print_registers " << registers.reg_map.print_registers;
-//      Serial << " ptr = " << next_pointer;
+      Serial << "print_registers: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.print_registers;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.begin_data_collection - first_pointer;
+      Serial << "begin_data_collection: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.begin_data_collection;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.print_imu - first_pointer;
+      Serial << "print IMU: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.print_imu;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.euler_x - first_pointer;
+      Serial << "euler_x: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.euler_x;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.euler_y - first_pointer;
+      Serial << "euler_y: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.euler_y;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.euler_z - first_pointer;
+      Serial << "euler_z: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.euler_z;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+      
+    next_pointer = (uint32_t)&registers.reg_map.accl_x - first_pointer;
+      Serial << "accl_x: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.accl_x;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.accl_y - first_pointer;
+      Serial << "accl_y: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.accl_y;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.accl_z - first_pointer;
+      Serial << "accl_z: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.accl_z;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+      
+    next_pointer = (uint32_t)&registers.reg_map.gyro_x - first_pointer;
+      Serial << "gyro_x: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.gyro_x;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.gyro_y - first_pointer;
+      Serial << "gyro_y: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.gyro_y;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.gyro_z - first_pointer;
+      Serial << "gyro_z: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.gyro_z;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+      
 //    next_pointer = (uint32_t)&registers.reg_map.init_servo_radio - first_pointer;
 //      Serial << "init_servo_radio " << registers.reg_map.init_servo_radio;
-////      Serial << " ptr = " << next_pointer;
+////      Serial << " \t index = " << next_pointer;
 //      Serial.println();  
 //      Serial.println(); 
 //    next_pointer = (uint32_t)&registers.reg_map.begin_data_collection - first_pointer;
 //      Serial << "begin_data_collection " << registers.reg_map.begin_data_collection;
-////      Serial << " ptr= " << next_pointer;
+////      Serial << " \t index= " << next_pointer;
 //      Serial.println();  
 //      Serial.println(); 
 
@@ -670,4 +830,43 @@ void spi_print(void){//This prints the name and address of each of the items in 
 
 }
 
+void print_imu(void){
+  
+      Serial << "euler_x: " << registers.reg_map.euler_x;
+      Serial.println(); 
+      Serial.println(); 
+
+      Serial << "euler_y: " << registers.reg_map.euler_y;
+      Serial.println();  
+      Serial.println(); 
+
+      Serial << "euler_z: " << registers.reg_map.euler_z;
+      Serial.println();  
+      Serial.println(); 
+      
+      Serial << "accl_x: " << registers.reg_map.accl_x;
+      Serial.println();  
+      Serial.println(); 
+
+      Serial << "accl_y: " << registers.reg_map.accl_y;
+      Serial.println();  
+      Serial.println(); 
+
+      Serial << "accl_z: " << registers.reg_map.accl_z;
+      Serial.println();  
+      Serial.println(); 
+      
+      Serial << "gyro_x: " << registers.reg_map.gyro_x;
+      Serial.println();  
+      Serial.println(); 
+
+      Serial << "gyro_y: " << registers.reg_map.gyro_y;
+      Serial.println();  
+      Serial.println(); 
+
+
+      Serial << "gyro_z: " << registers.reg_map.gyro_z;
+      Serial.println();  
+      Serial.println(); 
+}
 
