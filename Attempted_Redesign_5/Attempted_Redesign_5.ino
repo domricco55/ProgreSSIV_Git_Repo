@@ -66,7 +66,6 @@ typedef struct reg_struct {
   volatile int8_t test_reg_9;
 //Commmand Registers
   //volatile uint8_t init_servo_radio;
-  //volatile uint8_t begin_data_collection;
   volatile uint8_t print_registers;
   volatile uint8_t begin_data_collection;
   volatile uint8_t print_imu;
@@ -80,7 +79,13 @@ typedef struct reg_struct {
   volatile int16_t gyro_x;
   volatile int16_t gyro_y;
   volatile int16_t gyro_z;
-    
+//Servo and Radio Registers (will rearrange everything into Read, Write, and Command registers)
+  volatile uint8_t init_servo_radio;
+  volatile int16_t radio_steering_read;
+  volatile int16_t radio_throttle_read;  
+  volatile int16_t servo_write;
+//Motor Write Registers
+  volatile int16_t throttle_all_write;    
 } reg_struct_t ;
 
 //union type definition linking the above reg_struct type to a 128 byte array that will be instantiated in loop below. This will be the memory accessed by both the struct and the array
@@ -197,7 +202,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
 //Initialize some of the starting conditions of the registers
   registers.reg_map.begin_data_collection = 1;//Set Begin Data Collection flag high
-  registers.reg_map.print_imu = 0;//Control wether IMU data is printing or not
+  registers.reg_map.print_imu = 1;//Control wether IMU data is printing or not
+  registers.reg_map.init_servo_radio = 0;//Control wether IMU data is printing or not
 //Print the registers at initialization
   spi_print();
 
@@ -217,7 +223,7 @@ Serial.print(temp);
 Serial.println(" C");
 Serial.println("");
 bno.setExtCrystalUse(true);
-Serial.println("Calibration status values: 0=uncalibrated, 3=fully calibrated");
+Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
 
 /*Startup CAN network*/
   //CANbus.begin();
@@ -251,12 +257,12 @@ void loop() {
 /* COMMANDS Master sends a 1 if it wants the peripheral to be initialized, data collection to start, or some other command to run*/
 
 /*INIT_STEERING_THROTTLE register*/
-//    //Initialize the servo and radio if asked to do so by Master and the on flag is false    
-//  if (registers.reg_map.init_servo_radio == true && servo_radio_on == false ) {
-//    initPWMin();
-//    initServo();
-//    servo_radio_on = true;
-//  }
+    //Initialize the servo and radio if asked to do so by Master and the on flag is false    
+  if (registers.reg_map.init_servo_radio && !servo_radio_on) {
+    initPWMin();
+    initServo();
+    servo_radio_on = true;
+  }
 /*INIT_MOTOR_CONTROLLERS register*/   
 //  //grab spi_register_array data for use by Teensy
 //
@@ -409,7 +415,10 @@ void loop() {
     registers.reg_map.gyro_x = gyro.x(); //i2C call to IMU BNO to return x direction angular velocity and place in the gyro_x register
     registers.reg_map.gyro_y = gyro.y(); //i2C call to IMU BNO to return y direction angular velocity and place in the gyro_y register
     registers.reg_map.gyro_z = gyro.z(); //i2C call to IMU BNO to return z direction angular velocity and place in the gyro_z register
-    
+
+    //Gather the steering and throttle inputs from the RADIO
+    registers.reg_map.radio_steering_read = ST_in; //This value is an extern declared in input_handler.h
+    registers.reg_map.radio_throttle_read = THR_in; //This value is an extern declared in input_handler.h
   }
 
 }
