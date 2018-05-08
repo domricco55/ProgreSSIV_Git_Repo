@@ -54,16 +54,16 @@ T3SPI SPI_SLAVE;
 //Create a register map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr 
 typedef struct reg_struct {
   //Test Registers
-  volatile uint8_t test_reg_0;  
-  volatile uint8_t test_reg_1;
-  volatile uint8_t test_reg_2;
-  volatile uint8_t test_reg_3;
-  volatile uint8_t test_reg_4;
-  volatile uint8_t test_reg_5;
-  volatile uint8_t test_reg_6;
-  volatile uint8_t test_reg_7;
-  volatile uint8_t test_reg_8;
-  volatile uint8_t test_reg_9;
+  volatile int8_t test_reg_0;  
+  volatile int8_t test_reg_1;
+  volatile int8_t test_reg_2;
+  volatile int8_t test_reg_3;
+  volatile int8_t test_reg_4;
+  volatile int8_t test_reg_5;
+  volatile int8_t test_reg_6;
+  volatile int8_t test_reg_7;
+  volatile int8_t test_reg_8;
+  volatile int8_t test_reg_9;
 //Commmand Registers
   //volatile uint8_t init_servo_radio;
   //volatile uint8_t begin_data_collection;
@@ -71,15 +71,15 @@ typedef struct reg_struct {
   volatile uint8_t begin_data_collection;
   volatile uint8_t print_imu;
 //IMU Registers
-  volatile uint16_t euler_x;
-  volatile uint16_t euler_y;
-  volatile uint16_t euler_z;
-  volatile uint16_t accl_x;
-  volatile uint16_t accl_y;
-  volatile uint16_t accl_z;
-  volatile uint16_t gyro_x;
-  volatile uint16_t gyro_y;
-  volatile uint16_t gyro_z;
+  volatile int16_t euler_x;
+  volatile int16_t euler_y;
+  volatile int16_t euler_z;
+  volatile int16_t accl_x;
+  volatile int16_t accl_y;
+  volatile int16_t accl_z;
+  volatile int16_t gyro_x;
+  volatile int16_t gyro_y;
+  volatile int16_t gyro_z;
     
 } reg_struct_t ;
 
@@ -90,7 +90,7 @@ typedef union reg_union {
 } reg_union_t;
 
 //Initialize the register union (making it all zeroes by default)
-reg_union_t registers = {0,0,0,0,0,0,0,0,0,0,0,1,1};
+reg_union_t registers;//Instantiate the register union
 
 //Initializes a register buffer of the same union type as registers. Now registers and registers_buf can copy themselves into each other. Used in spi0_isr to prevent writing 
 //data to registers while they are being accessed by spi task.
@@ -195,7 +195,10 @@ void setup() {
   NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
 //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
-//Print dem regis up bro
+//Initialize some of the starting conditions of the registers
+  registers.reg_map.begin_data_collection = 1;//Set Begin Data Collection flag high
+  registers.reg_map.print_imu = 0;//Control wether IMU data is printing or not
+//Print the registers at initialization
   spi_print();
 
 /* Start Up the BNO055 IMU*/
@@ -343,8 +346,8 @@ void loop() {
 /* print_sensors register*/
   //Print live time IMU values
   if (registers.reg_map.print_imu){
-      delay(3);
-      print_imu();  
+      delay(50);
+      print_imu_data();  
   }
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
@@ -611,7 +614,7 @@ void spi_print(void){//This prints the name and address of each of the items in 
     Serial.println();
     
     first_pointer = (uint32_t)&registers.reg_map;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
-    
+      
     next_pointer = (uint32_t)&registers.reg_map.test_reg_0 - first_pointer;
       Serial << "test_reg_0: ";       
       Serial.println(); 
@@ -722,7 +725,7 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.print_imu - first_pointer;
-      Serial << "print IMU: "; 
+      Serial << "print_imu: "; 
       Serial.println(); 
       Serial << " \t value = "<< registers.reg_map.print_imu;
       Serial.println(); 
@@ -830,7 +833,7 @@ void spi_print(void){//This prints the name and address of each of the items in 
 
 }
 
-void print_imu(void){
+void print_imu_data(void){
   
       Serial << "euler_x: " << registers.reg_map.euler_x;
       Serial.println(); 
