@@ -70,6 +70,7 @@ typedef struct reg_struct {
   volatile uint8_t print_imu;
   volatile uint8_t print_radio;
   volatile uint8_t init_servo_radio;
+  volatile uint8_t init_motor_controllers;
 //Read Registers
   //IMU Registers
   volatile int16_t euler_x;
@@ -207,6 +208,7 @@ void setup() {
   registers.reg_map.print_imu = 0;//Control wether IMU data is printing or not
   registers.reg_map.init_servo_radio = 1;//Control wether the initialization code for the servo and radio will run
   registers.reg_map.print_radio = 0;//Control wether radio transeiver data is printing or not
+  registers.reg_map.init_motor_controllers = 1;//Control wether motor controllers (CAN Bus) initializes or not
 //Print the registers at initialization
   spi_print();
 
@@ -235,7 +237,7 @@ Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
 
 void loop() {
 
-  //CAN_message_t msg;//Dont know why this has to be at the beginning of void loop() but here it is
+  CAN_message_t msg;//Dont know why this has to be at the beginning of void loop() but here it is
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*SPI Task*/
@@ -258,73 +260,6 @@ void loop() {
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
 /* COMMANDS Master sends a 1 if it wants the peripheral to be initialized, data collection to start, or some other command to run*/
-
-/*INIT_MOTOR_CONTROLLERS register*/   
-//  //grab spi_register_array data for use by Teensy
-//
-//
-//      //Initialize the motor controllers if asked to do so by Master and the on flag is false  
-//      if (register_data == 1 && motor_controllers_on == false) {
-//        //Run Initialize motor code if the register data is 1
-//        ret = reset_nodes();
-//        if (ret > 0)
-//        {
-//          error = ret;
-//        }
-//        delay(1000);
-//
-//        ret = initialize_CAN();
-//        if (ret > 0)
-//        {
-//          error = ret;
-//        }
-//        delay(50);
-//
-//        ret = initialize_MC(NODE_1);
-//        if (ret > 0)
-//        {
-//          error = ret;
-//        }
-//
-//        process_available_msgs();
-//        delay(100);
-//        ret = initialize_MC(NODE_2);
-//        if (ret > 0)
-//        {
-//          error = ret;
-//        }
-//        process_available_msgs();
-//        delay(100);
-//        ret = initialize_MC(NODE_3);
-//        if (ret > 0)
-//        {
-//          error = ret;
-//        }
-//
-//        process_available_msgs();
-//        delay(100);
-//        ret = initialize_MC(NODE_4);
-//        if (ret > 0)
-//        {
-//          error = ret;
-//        }
-//
-//        if (error == ERROR_CAN_WRITE)
-//        {
-//          delay(500);
-//          stop_remote_node(NODE_1); //DOES THIS TURN OFF THE MOTOR DRIVERS?
-//          stop_remote_node(NODE_2);
-//          stop_remote_node(NODE_3);
-//          stop_remote_node(NODE_4);
-//
-//          //NEED TO DEAL WITH ERROR CODE HERE. IF NO STARTUP THEN DO SOMETHING
-//        }
-//        else
-//        {
-//          motor_controllers_on = true;
-//        }
-//
-//      }
 
 /*begin_data_collection register*/   
   if (registers.reg_map.begin_data_collection && !collecting_data ) { 
@@ -365,6 +300,73 @@ void loop() {
     initServo();
     servo_radio_on = true;
   }
+  
+/*init_motor_controllers register*/   
+      //Initialize the motor controllers if asked to do so by Master and the on flag is false  
+      if (registers.reg_map.init_motor_controllers && !motor_controllers_on) {
+        //Run Initialize motor code if the register data is 1
+        ret = reset_nodes();
+        if (ret > 0)
+        {
+          error = ret;
+        }
+        delay(1000);
+
+        ret = initialize_CAN();
+        if (ret > 0)
+        {
+          error = ret;
+        }
+        delay(50);
+
+        ret = initialize_MC(NODE_1);
+        if (ret > 0)
+        {
+          error = ret;
+        }
+
+        process_available_msgs();
+        delay(100);
+        ret = initialize_MC(NODE_2);
+        if (ret > 0)
+        {
+          error = ret;
+        }
+        process_available_msgs();
+        delay(100);
+        ret = initialize_MC(NODE_3);
+        if (ret > 0)
+        {
+          error = ret;
+        }
+
+        process_available_msgs();
+        delay(100);
+        ret = initialize_MC(NODE_4);
+        if (ret > 0)
+        {
+          error = ret;
+        }
+
+        if (error == ERROR_CAN_WRITE)
+        {
+          delay(500);
+          stop_remote_node(NODE_1); //DOES THIS TURN OFF THE MOTOR DRIVERS?
+          stop_remote_node(NODE_2);
+          stop_remote_node(NODE_3);
+          stop_remote_node(NODE_4);
+          
+          delay(500);
+          process_available_msgs();
+          //NEED TO DEAL WITH ERROR CODE HERE. IF NO STARTUP THEN DO SOMETHING
+          error = 0;
+        }
+        else
+        {
+          motor_controllers_on = true;
+        }
+
+      }
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
 /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array*/
@@ -760,6 +762,16 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
+      
+    next_pointer = (uint32_t)&registers.reg_map.init_motor_controllers - first_pointer;
+      Serial << "init_motor_controllers: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.init_motor_controllers;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
 
     next_pointer = (uint32_t)&registers.reg_map.euler_x - first_pointer;
       Serial << "euler_x: "; 
