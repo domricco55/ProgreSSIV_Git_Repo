@@ -83,11 +83,13 @@ typedef struct reg_struct {
   volatile int16_t gyro_y;
   volatile int16_t gyro_z;
   //Servo and Radio Read Registers 
-  volatile int16_t radio_steering_read;
   volatile int16_t radio_throttle_read; 
-   
+  volatile int16_t radio_steering_read;
 //Write Registers
-  volatile int16_t throttle_all_write;  
+  volatile int16_t throttle_right_front_write; 
+  volatile int16_t throttle_left_front_write; 
+  volatile int16_t throttle_right_rear_write; 
+  volatile int16_t throttle_left_rear_write; 
   volatile int16_t servo_write;  
 } reg_struct_t ;
 
@@ -128,7 +130,7 @@ bool reg_buf_flag = true;
 bool address_flag = true;
 
 /* Teensy Status Byte */
-volatile uint8_t Teensy_Status_Byte = 69;
+volatile uint8_t Teensy_Status_Byte = 25;
 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -209,6 +211,7 @@ void setup() {
   registers.reg_map.init_servo_radio = 1;//Control wether the initialization code for the servo and radio will run
   registers.reg_map.print_radio = 0;//Control wether radio transeiver data is printing or not
   registers.reg_map.init_motor_controllers = 1;//Control wether motor controllers (CAN Bus) initializes or not
+  registers.reg_map.servo_write = -500;
 //Print the registers at initialization
   spi_print();
 
@@ -231,7 +234,7 @@ bno.setExtCrystalUse(true);
 Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
 
 /*Startup CAN network*/
-  //CANbus.begin();
+CANbus.begin();
 
 }
 
@@ -363,7 +366,16 @@ void loop() {
         }
         else
         {
-          motor_controllers_on = true;
+          motor_controllers_on = true;         
+          //arm
+          link_node(NODE_1);
+          delay(500);
+          link_node(NODE_2);
+          delay(500);
+          link_node(NODE_3);
+          delay(500);
+          link_node(NODE_4);
+          delay(500);
         }
 
       }
@@ -371,24 +383,21 @@ void loop() {
 
 /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array*/
 
-/*throttle_all_write register*/
-    //Send CAN message to update all motors with a the same torque setpoint
+  //Write the servo value from servo_write register
+  writeServo(registers.reg_map.servo_write);
+          
+  //Write the throttle_right_front_write register value to the motor controller
+  write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front_write * SCALE_FACTOR);
+  
+  //Write the throttle_left_front_write register value to the motor controller
+  write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front_write * SCALE_FACTOR);
+  
+  //Write the throttle_right_rear_write register value to the motor controller
+  write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear_write * SCALE_FACTOR);
 
-/*throttle_right_front_write register*/
-    //Send CAN message to update right front motor torque setpoint
+  //Write the throttle_left_rear_write register value to the motor controller
+  write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear_write * SCALE_FACTOR);
 
-/*throttle_left_front_write register*/
-    //Send CAN message to update left front motor torque setpoint
-
-/*throttle_right_rear_write register*/
-    //Send CAN message to update right rear motor torque setpoint
-
-/*throttle_left_rear_write register*/
-    //Send CAN message to update left rear motor torque setpoint
-
-/*STEERING_WRITE register*/
-    //Update the servo pwm value
-    //writeServo(registers.steering);
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
@@ -854,6 +863,16 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial.println();  
       Serial.println(); 
 
+
+    next_pointer = (uint32_t)&registers.reg_map.radio_throttle_read - first_pointer;
+      Serial << "radio_throttle_read: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.radio_throttle_read;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+      
     next_pointer = (uint32_t)&registers.reg_map.radio_steering_read - first_pointer;
       Serial << "radio_steering_read: "; 
       Serial.println(); 
@@ -864,19 +883,37 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial.println(); 
 
 
-    next_pointer = (uint32_t)&registers.reg_map.radio_throttle_read - first_pointer;
-      Serial << "radio_throttle_read: "; 
+    next_pointer = (uint32_t)&registers.reg_map.throttle_right_front_write - first_pointer;
+      Serial << "throttle_right_front_write: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.radio_throttle_read;
+      Serial << " \t value = "<< registers.reg_map.throttle_right_front_write;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
-
-    next_pointer = (uint32_t)&registers.reg_map.throttle_all_write - first_pointer;
-      Serial << "throttle_all_write: "; 
+      
+    next_pointer = (uint32_t)&registers.reg_map.throttle_left_front_write - first_pointer;
+      Serial << "throttle_left_front_write: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.throttle_all_write;
+      Serial << " \t value = "<< registers.reg_map.throttle_left_front_write;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+      
+    next_pointer = (uint32_t)&registers.reg_map.throttle_right_rear_write - first_pointer;
+      Serial << "throttle_right_rear_write: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.throttle_right_rear_write;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+      
+    next_pointer = (uint32_t)&registers.reg_map.throttle_left_rear_write - first_pointer;
+      Serial << "throttle_left_rear_write: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.throttle_left_rear_write;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
