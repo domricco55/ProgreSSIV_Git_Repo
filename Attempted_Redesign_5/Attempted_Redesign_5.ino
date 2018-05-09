@@ -240,8 +240,6 @@ CANbus.begin();
 
 void loop() {
 
-  CAN_message_t msg;//Dont know why this has to be at the beginning of void loop() but here it is
-
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*SPI Task*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -385,7 +383,10 @@ void loop() {
 
   //Write the servo value from servo_write register
   writeServo(registers.reg_map.servo_write);
-          
+
+  Serial << "Servo_Actuate: " << registers.reg_map.servo_write;
+  Serial.println();
+         
   //Write the throttle_right_front_write register value to the motor controller
   write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front_write * SCALE_FACTOR);
   

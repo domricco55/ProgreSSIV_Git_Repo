@@ -683,8 +683,8 @@ void print_outgoing_CAN_message(CAN_message_t msg)
 
 void print_incoming_CAN_message(CAN_message_t msg)
 {
-  //if (PRINT)
-  //{
+  if (PRINT)
+  {
     Serial.println("***Incoming CAN Message***");
     Serial.print("ID: ");
     Serial.println(msg.id, HEX);
@@ -706,7 +706,7 @@ void print_incoming_CAN_message(CAN_message_t msg)
     Serial.println(msg.buf[6], HEX);
     Serial.print("Byte[7]: ");
     Serial.println(msg.buf[7], HEX);
-  //}
+  }
   
 }
 
