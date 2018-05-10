@@ -53,26 +53,14 @@ T3SPI SPI_SLAVE;
 /* Spi Register Setup*/
 //Create a register map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr 
 typedef struct reg_struct {
-//  //Test Registers
-//  volatile int8_t test_reg_0;  
-//  volatile int8_t test_reg_1;
-//  volatile int8_t test_reg_2;
-//  volatile int8_t test_reg_3;
-//  volatile int8_t test_reg_4;
-//  volatile int8_t test_reg_5;
-//  volatile int8_t test_reg_6;
-//  volatile int8_t test_reg_7;
-//  volatile int8_t test_reg_8;
-//  volatile int8_t test_reg_9;
-//Commmand Registers
   volatile uint8_t print_registers;
   volatile uint8_t begin_data_collection;
   volatile uint8_t print_imu;
   volatile uint8_t print_radio;
   volatile uint8_t init_servo_radio;
   volatile uint8_t init_motor_controllers;
-//Read Registers
-  //IMU Registers
+// Sensor/Data registers
+  // IMU 
   volatile double euler_x;
   volatile double euler_y;
   volatile double euler_z;
@@ -82,15 +70,15 @@ typedef struct reg_struct {
   volatile double gyro_x;
   volatile double gyro_y;
   volatile double gyro_z;
-  //Servo and Radio Read Registers 
-  volatile int16_t radio_throttle_read; 
-  volatile int16_t radio_steering_read;
-//Write Registers
-  volatile int16_t throttle_right_front_write; 
-  volatile int16_t throttle_left_front_write; 
-  volatile int16_t throttle_right_rear_write; 
-  volatile int16_t throttle_left_rear_write; 
-  volatile int16_t servo_write;  
+  //Servo and Radio 
+  volatile int16_t radio_throttle; 
+  volatile int16_t radio_steering;
+// Output/Actuation Registers
+  volatile int16_t throttle_right_front; 
+  volatile int16_t throttle_left_front; 
+  volatile int16_t throttle_right_rear; 
+  volatile int16_t throttle_left_rear; 
+  volatile int16_t servo_out;  
 } reg_struct_t ;
 
 //union type definition linking the above reg_struct type to a 128 byte array that will be instantiated in loop below. This will be the memory accessed by both the struct and the array
@@ -210,8 +198,8 @@ void setup() {
   registers.reg_map.print_imu = 1;//Control wether IMU data is printing or not
   registers.reg_map.init_servo_radio = 1;//Control wether the initialization code for the servo and radio will run
   registers.reg_map.print_radio = 0;//Control wether radio transeiver data is printing or not
-  registers.reg_map.init_motor_controllers = 1;//Control wether motor controllers (CAN Bus) initializes or not
-  registers.reg_map.servo_write = -500;
+  registers.reg_map.init_motor_controllers = 0;//Control wether motor controllers (CAN Bus) initializes or not
+  registers.reg_map.servo_out = -500;
 //Print the registers at initialization
   spi_print();
 
@@ -303,101 +291,101 @@ void loop() {
   }
   
 /*init_motor_controllers register*/   
-      //Initialize the motor controllers if asked to do so by Master and the on flag is false  
-      if (registers.reg_map.init_motor_controllers && !motor_controllers_on) {
-        //Run Initialize motor code if the register data is 1
-        ret = reset_nodes();
-        if (ret > 0)
-        {
-          error = ret;
-        }
-        delay(1000);
+  //Initialize the motor controllers if asked to do so by Master and the on flag is false  
+  if (registers.reg_map.init_motor_controllers && !motor_controllers_on) {
+    //Run Initialize motor code if the register data is 1
+    ret = reset_nodes();
+    if (ret > 0)
+    {
+      error = ret;
+    }
+    delay(1000);
 
-        ret = initialize_CAN();
-        if (ret > 0)
-        {
-          error = ret;
-        }
-        delay(50);
+    ret = initialize_CAN();
+    if (ret > 0)
+    {
+      error = ret;
+    }
+    delay(50);
 
-        ret = initialize_MC(NODE_1);
-        if (ret > 0)
-        {
-          error = ret;
-        }
+    ret = initialize_MC(NODE_1);
+    if (ret > 0)
+    {
+      error = ret;
+    }
 
-        process_available_msgs();
-        delay(100);
-        ret = initialize_MC(NODE_2);
-        if (ret > 0)
-        {
-          error = ret;
-        }
-        process_available_msgs();
-        delay(100);
-        ret = initialize_MC(NODE_3);
-        if (ret > 0)
-        {
-          error = ret;
-        }
+    process_available_msgs();
+    delay(100);
+    ret = initialize_MC(NODE_2);
+    if (ret > 0)
+    {
+      error = ret;
+    }
+    process_available_msgs();
+    delay(100);
+    ret = initialize_MC(NODE_3);
+    if (ret > 0)
+    {
+      error = ret;
+    }
 
-        process_available_msgs();
-        delay(100);
-        ret = initialize_MC(NODE_4);
-        if (ret > 0)
-        {
-          error = ret;
-        }
+    process_available_msgs();
+    delay(100);
+    ret = initialize_MC(NODE_4);
+    if (ret > 0)
+    {
+      error = ret;
+    }
 
-        if (error == ERROR_CAN_WRITE)
-        {
-          delay(500);
-          stop_remote_node(NODE_1); //DOES THIS TURN OFF THE MOTOR DRIVERS?
-          stop_remote_node(NODE_2);
-          stop_remote_node(NODE_3);
-          stop_remote_node(NODE_4);
-          
-          delay(500);
-          process_available_msgs();
-          //NEED TO DEAL WITH ERROR CODE HERE. IF NO STARTUP THEN DO SOMETHING
-          error = 0;
-        }
-        else
-        {
-          motor_controllers_on = true;         
-          //arm
-          link_node(NODE_1);
-          delay(500);
-          link_node(NODE_2);
-          delay(500);
-          link_node(NODE_3);
-          delay(500);
-          link_node(NODE_4);
-          delay(500);
-        }
+    if (error == ERROR_CAN_WRITE)
+    {
+      delay(500);
+      stop_remote_node(NODE_1); //DOES THIS TURN OFF THE MOTOR DRIVERS?
+      stop_remote_node(NODE_2);
+      stop_remote_node(NODE_3);
+      stop_remote_node(NODE_4);
+      
+      delay(500);
+      process_available_msgs();
+      //NEED TO DEAL WITH ERROR CODE HERE. IF NO STARTUP THEN DO SOMETHING
+      error = 0;
+    }
+    else
+    {
+      motor_controllers_on = true;         
+      //arm
+      link_node(NODE_1);
+      delay(500);
+      link_node(NODE_2);
+      delay(500);
+      link_node(NODE_3);
+      delay(500);
+      link_node(NODE_4);
+      delay(500);
+    }
 
-      }
+  }
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
 /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array*/
 
-  //Write the servo value from servo_write register
-  writeServo(registers.reg_map.servo_write);
+  //Write the servo value from servo_out register
+  writeServo(registers.reg_map.servo_out);
 
-//  Serial << "Servo_Actuate: " << registers.reg_map.servo_write;
+//  Serial << "Servo_Actuate: " << registers.reg_map.servo_out;
 //  Serial.println();
          
-  //Write the throttle_right_front_write register value to the motor controller
-  write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front_write * SCALE_FACTOR);
+  //Write the throttle_right_front register value to the motor controller
+  write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front * SCALE_FACTOR);
   
-  //Write the throttle_left_front_write register value to the motor controller
-  write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front_write * SCALE_FACTOR);
+  //Write the throttle_left_front register value to the motor controller
+  write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front * SCALE_FACTOR);
   
-  //Write the throttle_right_rear_write register value to the motor controller
-  write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear_write * SCALE_FACTOR);
+  //Write the throttle_right_rear register value to the motor controller
+  write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear * SCALE_FACTOR);
 
-  //Write the throttle_left_rear_write register value to the motor controller
-  write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear_write * SCALE_FACTOR);
+  //Write the throttle_left_rear register value to the motor controller
+  write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear * SCALE_FACTOR);
 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
@@ -438,8 +426,8 @@ void loop() {
     registers.reg_map.gyro_z = gyro.z(); //i2C call to IMU BNO to return z direction angular velocity and place in the gyro_z register
 
     //Gather the steering and throttle inputs from the RADIO
-    registers.reg_map.radio_steering_read = ST_in; //This value is an extern declared in input_handler.h
-    registers.reg_map.radio_throttle_read = THR_in; //This value is an extern declared in input_handler.h
+    registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
+    registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
   }
 
 }
@@ -865,65 +853,65 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial.println(); 
 
 
-    next_pointer = (uint32_t)&registers.reg_map.radio_throttle_read - first_pointer;
-      Serial << "radio_throttle_read: "; 
+    next_pointer = (uint32_t)&registers.reg_map.radio_throttle - first_pointer;
+      Serial << "radio_throttle: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.radio_throttle_read;
+      Serial << " \t value = "<< registers.reg_map.radio_throttle;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
       
-    next_pointer = (uint32_t)&registers.reg_map.radio_steering_read - first_pointer;
-      Serial << "radio_steering_read: "; 
+    next_pointer = (uint32_t)&registers.reg_map.radio_steering - first_pointer;
+      Serial << "radio_steering: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.radio_steering_read;
+      Serial << " \t value = "<< registers.reg_map.radio_steering;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
 
-    next_pointer = (uint32_t)&registers.reg_map.throttle_right_front_write - first_pointer;
-      Serial << "throttle_right_front_write: "; 
+    next_pointer = (uint32_t)&registers.reg_map.throttle_right_front - first_pointer;
+      Serial << "throttle_right_front: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.throttle_right_front_write;
-      Serial.println(); 
-      Serial << " \t index = " << next_pointer;
-      Serial.println();  
-      Serial.println(); 
-      
-    next_pointer = (uint32_t)&registers.reg_map.throttle_left_front_write - first_pointer;
-      Serial << "throttle_left_front_write: "; 
-      Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.throttle_left_front_write;
+      Serial << " \t value = "<< registers.reg_map.throttle_right_front;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
       
-    next_pointer = (uint32_t)&registers.reg_map.throttle_right_rear_write - first_pointer;
-      Serial << "throttle_right_rear_write: "; 
+    next_pointer = (uint32_t)&registers.reg_map.throttle_left_front - first_pointer;
+      Serial << "throttle_left_front: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.throttle_right_rear_write;
+      Serial << " \t value = "<< registers.reg_map.throttle_left_front;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
       
-    next_pointer = (uint32_t)&registers.reg_map.throttle_left_rear_write - first_pointer;
-      Serial << "throttle_left_rear_write: "; 
+    next_pointer = (uint32_t)&registers.reg_map.throttle_right_rear - first_pointer;
+      Serial << "throttle_right_rear: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.throttle_left_rear_write;
+      Serial << " \t value = "<< registers.reg_map.throttle_right_rear;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+      
+    next_pointer = (uint32_t)&registers.reg_map.throttle_left_rear - first_pointer;
+      Serial << "throttle_left_rear: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.throttle_left_rear;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.servo_write - first_pointer;
-      Serial << "servo_write: "; 
+    next_pointer = (uint32_t)&registers.reg_map.servo_out - first_pointer;
+      Serial << "servo_out: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.servo_write;
+      Serial << " \t value = "<< registers.reg_map.servo_out;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
@@ -979,11 +967,11 @@ void print_imu_data(void){
 
 void print_radio_data(void){
 
-      Serial << "radio_steering_read: " << registers.reg_map.radio_steering_read;
+      Serial << "radio_steering: " << registers.reg_map.radio_steering;
       Serial.println();  
       Serial.println(); 
       
-      Serial << "radio_throttle_read: " << registers.reg_map.radio_throttle_read;
+      Serial << "radio_throttle: " << registers.reg_map.radio_throttle;
       Serial.println();  
       Serial.println(); 
 }
