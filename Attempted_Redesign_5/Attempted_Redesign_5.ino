@@ -73,15 +73,15 @@ typedef struct reg_struct {
   volatile uint8_t init_motor_controllers;
 //Read Registers
   //IMU Registers
-  volatile int16_t euler_x;
-  volatile int16_t euler_y;
-  volatile int16_t euler_z;
-  volatile int16_t accl_x;
-  volatile int16_t accl_y;
-  volatile int16_t accl_z;
-  volatile int16_t gyro_x;
-  volatile int16_t gyro_y;
-  volatile int16_t gyro_z;
+  volatile double euler_x;
+  volatile double euler_y;
+  volatile double euler_z;
+  volatile double accl_x;
+  volatile double accl_y;
+  volatile double accl_z;
+  volatile double gyro_x;
+  volatile double gyro_y;
+  volatile double gyro_z;
   //Servo and Radio Read Registers 
   volatile int16_t radio_throttle_read; 
   volatile int16_t radio_steering_read;
@@ -152,7 +152,7 @@ int error = NO_ERROR;
 /*Radio Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* Steering and Throttle (both from radio) Preparation (These are externs found in input_handler and are updated in an interrupt service routine)*/
+/* Steering and Throttle (both from radio) Preparation (These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code)*/
 // instantiate variable for throttle input value (ranges from ~-500 to 500)
 volatile int16_t THR_in;
 // instantiate variable for steering input value (ranges from ~-500 to 500)
@@ -207,7 +207,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
 //Initialize some of the starting conditions of the registers
   registers.reg_map.begin_data_collection = 1;//Set Begin Data Collection flag high
-  registers.reg_map.print_imu = 0;//Control wether IMU data is printing or not
+  registers.reg_map.print_imu = 1;//Control wether IMU data is printing or not
   registers.reg_map.init_servo_radio = 1;//Control wether the initialization code for the servo and radio will run
   registers.reg_map.print_radio = 0;//Control wether radio transeiver data is printing or not
   registers.reg_map.init_motor_controllers = 1;//Control wether motor controllers (CAN Bus) initializes or not
@@ -384,8 +384,8 @@ void loop() {
   //Write the servo value from servo_write register
   writeServo(registers.reg_map.servo_write);
 
-  Serial << "Servo_Actuate: " << registers.reg_map.servo_write;
-  Serial.println();
+//  Serial << "Servo_Actuate: " << registers.reg_map.servo_write;
+//  Serial.println();
          
   //Write the throttle_right_front_write register value to the motor controller
   write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front_write * SCALE_FACTOR);
@@ -423,8 +423,8 @@ void loop() {
     imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);  
     //IMU accelration - m/s^2 
     imu::Vector<3> accl = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
-    //quaternion
-    imu::Quaternion quat = bno.getQuat();
+//    //quaternion
+//    imu::Quaternion quat = bno.getQuat();
 
     //Gather the sensor data. These functions are from Adafruit_BNO055.cpp
     registers.reg_map.euler_x = euler.x(); //i2C call to IMU BNO to return x direction euler angle and place in the euler_x register
