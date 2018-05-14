@@ -35,7 +35,7 @@
 //libraries for imu
 #include <Wire.h>
 #include "Adafruit_Sensor.h"
-#include "Adafruit_BNO055.h"
+#include "Adafruit_BNO055_ProgreSSIV.h"
 #include "imumaths.h"
 
 
@@ -61,15 +61,15 @@ typedef struct reg_struct {
   volatile uint8_t init_motor_controllers;
 // Sensor/Data registers
   // IMU 
-  volatile double euler_x;
-  volatile double euler_y;
-  volatile double euler_z;
-  volatile double accl_x;
-  volatile double accl_y;
-  volatile double accl_z;
-  volatile double gyro_x;
-  volatile double gyro_y;
-  volatile double gyro_z;
+  volatile int16_t euler_x;
+  volatile int16_t euler_y;
+  volatile int16_t euler_z;
+  volatile int16_t accl_x;
+  volatile int16_t accl_y;
+  volatile int16_t accl_z;
+  volatile int16_t gyro_x;
+  volatile int16_t gyro_y;
+  volatile int16_t gyro_z;
   //Servo and Radio 
   volatile int16_t radio_throttle; 
   volatile int16_t radio_steering;
@@ -150,10 +150,11 @@ volatile int16_t ST_in;
 /*BNO055 Inertial Measurement Unit Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* Set the delay between fresh samples */
+/* Initialize an Adafruit_BNO055 object */
+//Set the sample rate
 #define BNO055_SAMPLERATE_DELAY_MS (100)
+//bno is the name of the object in this context. Use bno.<function name (arguments)> here to use the objects functions
 Adafruit_BNO055 bno = Adafruit_BNO055();
-
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Debugging setup*/
@@ -195,10 +196,10 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
 //Initialize some of the starting conditions of the registers
   registers.reg_map.begin_data_collection = 1;//Set Begin Data Collection flag high
-  registers.reg_map.print_imu = 1;//Control wether IMU data is printing or not
+  registers.reg_map.print_imu = 0;//Control wether IMU data is printing or not
   registers.reg_map.init_servo_radio = 1;//Control wether the initialization code for the servo and radio will run
-  registers.reg_map.print_radio = 0;//Control wether radio transeiver data is printing or not
-  registers.reg_map.init_motor_controllers = 0;//Control wether motor controllers (CAN Bus) initializes or not
+  registers.reg_map.print_radio = 1;//Control wether radio transeiver data is printing or not
+  registers.reg_map.init_motor_controllers = 1;//Control wether motor controllers (CAN Bus) initializes or not
   registers.reg_map.servo_out = -500;
 //Print the registers at initialization
   spi_print();
@@ -362,6 +363,19 @@ void loop() {
       delay(500);
       link_node(NODE_4);
       delay(500);
+
+      //Make sure the motors arent actuating initially
+      //Write the throttle_right_front register value to the motor controller
+      write_velocity_and_enable_MC(NODE_1, 0 );
+      
+      //Write the throttle_left_front register value to the motor controller
+      write_velocity_and_enable_MC(NODE_2, 0 );
+      
+      //Write the throttle_right_rear register value to the motor controller
+      write_velocity_and_enable_MC(NODE_3, 0 * SCALE_FACTOR);
+    
+      //Write the throttle_left_rear register value to the motor controller
+      write_velocity_and_enable_MC(NODE_4, 0 * SCALE_FACTOR);
     }
 
   }
@@ -393,39 +407,37 @@ void loop() {
 /* UPDATE SENSOR spi_register ARRAYS with the latest readings if collecting_data flag is true (set true via command from Master)*/
 
   if (collecting_data) {
-    //collect and store every sensor value
-    //The CAN messages for wheel velocity readings will be here. Data will be recieved and loaded into the corresponding spi_register.
+    
+//Gather the IMU sensor data. These functions are from Adafruit_BNO055_ProgreSSIV.cpp
 
-    // Grab the IMU vector using I2C communication
-    /*
-    //IMU gravity - m/s^2 
-    imu::Vector<3> gravity = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);  
-    //IMU linear acceleration - m/s^2 
-    imu::Vector<3> lin_accl = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);             
-    //IMU magnetometer - uT
-    imu::Vector<3> mag = bno.getVector(Adafruit_BNO055::VECTOR_MAGNETOMETER);  
-    */
-    //IMU gyroscope - rad/s
-    imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);  
-    //IMU euler - degrees
-    imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);  
-    //IMU accelration - m/s^2 
-    imu::Vector<3> accl = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
-//    //quaternion
-//    imu::Quaternion quat = bno.getQuat();
-
-    //Gather the sensor data. These functions are from Adafruit_BNO055.cpp
-    registers.reg_map.euler_x = euler.x(); //i2C call to IMU BNO to return x direction euler angle and place in the euler_x register
-    registers.reg_map.euler_y = euler.y(); //i2C call to IMU BNO to return y direction euler angle and place in the euler_y register
-    registers.reg_map.euler_z = euler.z(); //i2C call to IMU BNO to return z direction euler angle and place in the euler_z register
-    registers.reg_map.accl_x = accl.x(); //i2C call to IMU BNO to return x direction acceleration and place in the euler_x register
-    registers.reg_map.accl_y = accl.y(); //i2C call to IMU BNO to return y direction acceleration and place in the euler_y register
-    registers.reg_map.accl_z = accl.z(); //i2C call to IMU BNO to return z direction acceleration and place in the euler_z register
-    registers.reg_map.gyro_x = gyro.x(); //i2C call to IMU BNO to return x direction angular velocity and place in the gyro_x register
-    registers.reg_map.gyro_y = gyro.y(); //i2C call to IMU BNO to return y direction angular velocity and place in the gyro_y register
-    registers.reg_map.gyro_z = gyro.z(); //i2C call to IMU BNO to return z direction angular velocity and place in the gyro_z register
-
-    //Gather the steering and throttle inputs from the RADIO
+    //Used to store the I2C message containting the imu data
+    uint8_t bno_buffer[6]; 
+    
+    //Send and I2C message to request the 6 bytes of EULER data
+    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6);
+  
+    //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
+    registers.reg_map.euler_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+    registers.reg_map.euler_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
+    registers.reg_map.euler_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+    
+    //Send and I2C message to request the 6 bytes of ACCELEROMETER data
+    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_ACCELEROMETER, bno_buffer, 6);
+  
+    //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
+    registers.reg_map.accl_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+    registers.reg_map.accl_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
+    registers.reg_map.accl_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+  
+    //Send and I2C message to request the 6 bytes of GYROSCOPE data
+    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_GYROSCOPE, bno_buffer, 6);
+  
+    //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
+    registers.reg_map.gyro_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+    registers.reg_map.gyro_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
+    registers.reg_map.gyro_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+    
+//Gather the steering and throttle inputs from the RADIO
     registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
     registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
   }

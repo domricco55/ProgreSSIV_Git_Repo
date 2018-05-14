@@ -15,6 +15,12 @@
   Written by KTOWN for Adafruit Industries.
 
   MIT license, all text above must be included in any redistribution
+
+  Modified by domricco55 for use in the ProgreSSIV Small-Scale Intelligent 
+  Vehicle Project. The private function readLen was made public for direct
+  access to the 6 byte I2C message.
+
+  MIT license, all text above must be included in any redistribution
  ***************************************************************************/
 
 #ifndef __ADAFRUIT_BNO055_H__
@@ -311,7 +317,6 @@ class Adafruit_BNO055 : public Adafruit_Sensor
     void  setSensorOffsets(const adafruit_bno055_offsets_t &offsets_type);
     bool  isFullyCalibrated(void);
 
-  private:
     byte  read8   ( adafruit_bno055_reg_t );
     bool  readLen ( adafruit_bno055_reg_t, byte* buffer, uint8_t len );
     bool  write8  ( adafruit_bno055_reg_t, byte value );

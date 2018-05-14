@@ -15,6 +15,12 @@
   Written by KTOWN for Adafruit Industries.
 
   MIT license, all text above must be included in any redistribution
+
+  Modified by domricco55 for use in the ProgreSSIV Small-Scale Intelligent 
+  Vehicle Project. The private function readLen was made public for direct
+  access to the 6 byte I2C message.
+
+  MIT license, all text above must be included in any redistribution
  ***************************************************************************/
 
 #if ARDUINO >= 100
@@ -26,7 +32,7 @@
 #include <math.h>
 #include <limits.h>
 
-#include "Adafruit_BNO055.h"
+#include "Adafruit_BNO055_ProgreSSIV.h"
 
 /***************************************************************************
  CONSTRUCTOR
