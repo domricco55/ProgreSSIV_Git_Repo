@@ -11,9 +11,9 @@
    Version Description:
                               -This Version is the fifth attempted restructure of the code to fit new design with Raspberry Pi firmware. Implemented complete restructure since
                               attempted restructure 4. Now there is a register map union whos memory can be accessed wither by a struct type or an array of bytes. The interrupt 
-                              service routine has also been completely rethought. It now accepts an address byte on the first byte of a message, knows wether it is a read or 
+                              service routine has also been completely rethought. It now accepts an address byte on the first byte of a message, knows whether it is a read or 
                               write request, and has a logical structure that allows the master to write to as many addresses as desired in a single message (so long as they
-                              are adjacent)
+                              are adjacent) THE LAST PART OF THIS IS NO LONGER VALID DUE TO HOW THE ALLOCATION OF MEMORY FOR A STRUCT OCCURS
 
    Errors:                    -Probably a lot at the moment
 
@@ -171,6 +171,7 @@ uint32_t first_pointer;
 uint32_t next_pointer;
 uint8_t packet_cnt = 0x01;
 #define DEBUG_PRINT 0
+#define GENERAL_PRINT 0
 //These are used to tell how much time the isr is taking to run
 volatile long isrStartTime;
 volatile long isrEndTime;
@@ -185,8 +186,11 @@ void setup() {
 /*begin serial port operation*/
   Serial.begin(115200);
   while ( !Serial ) ;
-  Serial.println("Hello user. I am your debugging assistant. You may call me TeensyTron5000.");
-  delay(500);
+  if(GENERAL_PRINT){
+    Serial.println("Hello user. I am your debugging assistant. You may call me TeensyTron5000.");
+    delay(500); 
+  }
+
   
 /*Initialize the SPI_slave device,register map, and interrupt service routines*/
   spi_slave_init();
@@ -198,32 +202,43 @@ void setup() {
   registers.reg_map.begin_data_collection = 1;//Set Begin Data Collection flag high
   registers.reg_map.print_imu = 0;//Control wether IMU data is printing or not
   registers.reg_map.init_servo_radio = 1;//Control wether the initialization code for the servo and radio will run
-  registers.reg_map.print_radio = 1;//Control wether radio transeiver data is printing or not
-  registers.reg_map.init_motor_controllers = 1;//Control wether motor controllers (CAN Bus) initializes or not
-  registers.reg_map.servo_out = -500;
-//Print the registers at initialization
-  spi_print();
+  registers.reg_map.print_radio = 0;//Control wether radio transeiver data is printing or not
+  registers.reg_map.init_motor_controllers = 0;//Control wether motor controllers (CAN Bus) initializes or not
+  registers.reg_map.servo_out = -500;//Set an initial servo position value. Just a visual que that servo is working at startup
+  if(GENERAL_PRINT){
+    //Print the registers at initialization
+      spi_print();
+  }
 
-/* Start Up the BNO055 IMU*/
-Serial.println("Orientation Sensor Raw Data Test"); Serial.println("");
-//Initialize the sensor
-if(!bno.begin())
-{
-  //There was a problem detecting the BNO055 ... check your connections
-  Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-  //while(1);
-}
-//Display the current IMU temperature
-int8_t temp = bno.getTemp();
-Serial.print("Current Temperature: ");
-Serial.print(temp);
-Serial.println(" C");
-Serial.println("");
-bno.setExtCrystalUse(true);
-Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
+/* Initialize and confirm the initialization of the BNO055 Inertial Measurement Unit */
+  if(GENERAL_PRINT){
+    Serial.println("Orientation Sensor Raw Data Test"); Serial.println("");
+    //Initialize the sensor
+  }
+
+  if(!bno.begin())
+  {
+    if(GENERAL_PRINT){
+      //There was a problem detecting the BNO055 ... check your connections
+      Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+      //while(1); 
+    }
+
+  }
+  if(GENERAL_PRINT){
+    //Display the current IMU temperature
+    int8_t temp = bno.getTemp();
+    Serial.print("Current Temperature: ");
+    Serial.print(temp);
+    Serial.println(" C");
+    Serial.println("");
+    bno.setExtCrystalUse(true);
+    Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
+  }
+
 
 /*Startup CAN network*/
-CANbus.begin();
+  CANbus.begin();
 
 }
 
@@ -277,7 +292,7 @@ void loop() {
   }
   
 /* print_sensors register*/
-  //Print live time IMU values
+  //Print live time radio values
   if (registers.reg_map.print_radio){
       delay(50);
       print_radio_data();  
@@ -292,52 +307,58 @@ void loop() {
   }
   
 /*init_motor_controllers register*/   
-  //Initialize the motor controllers if asked to do so by Master and the on flag is false  
+  //Initialize the motor controllers if asked to do so by Master and the motor_controllers_on flag is false  
   if (registers.reg_map.init_motor_controllers && !motor_controllers_on) {
-    //Run Initialize motor code if the register data is 1
+    
+    //Run the function that sends the CAN message for reseting the nodes. Ret is what is returned during the CAN message
     ret = reset_nodes();
     if (ret > 0)
     {
       error = ret;
     }
     delay(1000);
-
+    //Run the function that sends the CAN message for initializing CAN. Ret is what is returned during the CAN message
     ret = initialize_CAN();
     if (ret > 0)
     {
       error = ret;
     }
     delay(50);
-
+    //Run the function that sends the CAN message for initializing motor controller node 1. Ret is what is returned during the CAN message
     ret = initialize_MC(NODE_1);
     if (ret > 0)
     {
       error = ret;
     }
-
+    //A uLaren_CAN_Driver function that prints a recieved CAN message I believe. 
     process_available_msgs();
     delay(100);
+    //Run the function that sends the CAN message for initializing motor controller node 2. Ret is what is returned during the CAN message
     ret = initialize_MC(NODE_2);
     if (ret > 0)
     {
       error = ret;
     }
+    //A uLaren_CAN_Driver function that prints a recieved CAN message I believe. 
     process_available_msgs();
     delay(100);
+    //Run the function that sends the CAN message for initializing motor controller node 3. Ret is what is returned during the CAN message
     ret = initialize_MC(NODE_3);
     if (ret > 0)
     {
       error = ret;
     }
-
+    //A uLaren_CAN_Driver function that prints a recieved CAN message I believe. 
     process_available_msgs();
     delay(100);
+    //Run the function that sends the CAN message for initializing motor controller node 4. Ret is what is returned during the CAN message
     ret = initialize_MC(NODE_4);
     if (ret > 0)
     {
       error = ret;
     }
-
+    //If one or more of the attempted initializations returned an ERROR_CAN_WRITE, then stop all motor controllers from operating and 
+    //for now, do nothing and exit. I NEED TO CHANGE WHAT HAPPENS HERE!!! Before there were some printed errors and such but not sure
     if (error == ERROR_CAN_WRITE)
     {
       delay(500);
@@ -347,6 +368,7 @@ void loop() {
       stop_remote_node(NODE_4);
       
       delay(500);
+      //This function "process_available_msgs() may be printing CAN errors if they have occured but not certain. uLaren would know. 
       process_available_msgs();
       //NEED TO DEAL WITH ERROR CODE HERE. IF NO STARTUP THEN DO SOMETHING
       error = 0;
@@ -354,7 +376,11 @@ void loop() {
     else
     {
       motor_controllers_on = true;         
-      //arm
+      //Link the nodes together...a lot is happening in their link_node function. I'm not really sure what is going on with this
+      //The function includes calls to OTHER uLaren_CAN_Driver functions including write_velocity_and_enable_MC(), arm_MC(), and send_statusword_request()
+      //Thinking that they used this function and intended for it only to be used once and maybe Paul thought that was the function 
+      //you call to write a velocity value. Or it could be that they couldnt get the normal write_velocity function to work and resorted
+      //to using the one with the enable_MC thing...really really not sure. NEED TO FIGURE THIS ALL OUT 
       link_node(NODE_1);
       delay(500);
       link_node(NODE_2);
@@ -440,6 +466,8 @@ void loop() {
 //Gather the steering and throttle inputs from the RADIO
     registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
     registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
+
+    Serial.println(registers.reg_map.euler_x);
   }
 
 }
@@ -601,16 +629,17 @@ void spi_transfer_complete_isr(void) {
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void spi_slave_init(void){
-  Serial.println("Made it to spi_slave_init");
-  delay(500);
+  
     //Initialize spi slave object THE OLD WAY, USING T3SPI
   SPI_SLAVE.begin_SLAVE(SCK, MOSI, MISO, CS0);
   //Set the CTAR0_SLAVE0 (Frame Size, SPI Mode)
   SPI_SLAVE.setCTAR_SLAVE(8, SPI_MODE0);
 
+if(GENERAL_PRINT){
   Serial << "SPI0_MCR: ";
   Serial.println(SPI0_MCR,BIN);
-  
+}
+
 //  /*Configure SPI Memory Map*/
 //  SIM_SCGC6 |= SIM_SCGC6_SPI0;    // enable clock to SPI. THIS WAS MISSING PRIOR AND WOULD CAUSE CODE TO GET STUCK IN THIS FUNCTION
 //  delay(1000);
@@ -633,8 +662,11 @@ void spi_slave_init(void){
 //  CORE_PIN12_CONFIG = PORT_PCR_MUX(2);//Master Input Slave Output (MISO) pin
 //  CORE_PIN10_CONFIG = PORT_PCR_MUX(2);//Chip Select 0 (CS0) or Enable  pin
 //  SPI0_MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;//START
+if(GENERAL_PRINT){
   Serial.println("Made it to end of spi_slave_init");//Code is currently not making it to this print statement
-  delay(500);
+  delay(500); 
+}
+
 
 }
 

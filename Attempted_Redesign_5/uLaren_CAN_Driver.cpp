@@ -984,7 +984,7 @@ int link_node(int node_id)
     //previously searched for a 1A0 node id but this isn't always the node id sent when the controller gets armed
     if (msg.buf[4] == 55 && msg.buf[5] == 22)  //37 and 16 in hex
     {
-      //were armed. lets go
+      //we're armed. lets go
       armed = 1;
     }
     
