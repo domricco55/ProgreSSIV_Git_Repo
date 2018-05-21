@@ -120,7 +120,6 @@ bool address_flag = true;
 /* Teensy Status Byte */
 volatile uint8_t Teensy_Status_Byte = 25;
 
-
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -136,6 +135,7 @@ FlexCAN CANbus(1000000);
 //loop CAN variables
 int ret = 0;
 int error = NO_ERROR;
+
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -171,7 +171,7 @@ uint32_t first_pointer;
 uint32_t next_pointer;
 uint8_t packet_cnt = 0x01;
 #define DEBUG_PRINT 0
-#define GENERAL_PRINT 0
+#define GENERAL_PRINT 1
 //These are used to tell how much time the isr is taking to run
 volatile long isrStartTime;
 volatile long isrEndTime;
@@ -179,6 +179,30 @@ volatile long isrEndTime;
 volatile long messageTime1;
 volatile long message_delta_t;
 
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/* Dead Switch code */
+//#define DEAD_SWITCH 0 
+
+////timing variables
+//unsigned long start_time_motors;
+//unsigned long current_time_motors;
+//unsigned long start_time_servo;
+//unsigned long current_time_servo;
+//unsigned long start_time_voltage;
+//unsigned long current_time_voltage;
+
+////code for safety shut off
+//int safe = 1;
+
+
+//// Dead man's switch.  If throttle is not at full(ish) forward or reverse motors set to zero.
+//if (THR_in > 200 || THR_in <-200) {
+//    safe =1;
+//}
+//else {
+//    safe = 0;
+//}
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void setup() {
@@ -203,7 +227,7 @@ void setup() {
   registers.reg_map.print_imu = 0;//Control wether IMU data is printing or not
   registers.reg_map.init_servo_radio = 1;//Control wether the initialization code for the servo and radio will run
   registers.reg_map.print_radio = 0;//Control wether radio transeiver data is printing or not
-  registers.reg_map.init_motor_controllers = 0;//Control wether motor controllers (CAN Bus) initializes or not
+  registers.reg_map.init_motor_controllers = 1;//Control wether motor controllers (CAN Bus) initializes or not
   registers.reg_map.servo_out = -500;//Set an initial servo position value. Just a visual que that servo is working at startup
   if(GENERAL_PRINT){
     //Print the registers at initialization
@@ -441,33 +465,32 @@ void loop() {
     
     //Send and I2C message to request the 6 bytes of EULER data
     bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6);
-  
+//ORDER OF IMU DATA IS DIFFERENT THAN ADAFRUIT FUNCTIONS. THIS IS BECAUSE IMU DATA IS COMING IN STRANGELY. X IS Z AND Z IS X I BELIEVE> SWITCHING THEM HERE AS TEMPORARY MEASURE
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-    registers.reg_map.euler_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+    registers.reg_map.euler_z = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
     registers.reg_map.euler_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-    registers.reg_map.euler_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+    registers.reg_map.euler_x = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
     
     //Send and I2C message to request the 6 bytes of ACCELEROMETER data
     bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_ACCELEROMETER, bno_buffer, 6);
   
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-    registers.reg_map.accl_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+    registers.reg_map.accl_z = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
     registers.reg_map.accl_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-    registers.reg_map.accl_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+    registers.reg_map.accl_x = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
   
     //Send and I2C message to request the 6 bytes of GYROSCOPE data
     bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_GYROSCOPE, bno_buffer, 6);
   
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-    registers.reg_map.gyro_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+    registers.reg_map.gyro_z = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
     registers.reg_map.gyro_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-    registers.reg_map.gyro_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+    registers.reg_map.gyro_x = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
     
 //Gather the steering and throttle inputs from the RADIO
     registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
     registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
 
-    Serial.println(registers.reg_map.euler_x);
   }
 
 }
@@ -768,6 +791,33 @@ void spi_print(void){//This prints the name and address of each of the items in 
 //      Serial.println();  
 //      Serial.println(); 
 
+//REFERENCE!! REPLACE EVERY TIME SOMETHING IS ADDED TO THE REGISTER MAP
+//  volatile uint8_t print_registers;
+//  volatile uint8_t begin_data_collection;
+//  volatile uint8_t print_imu;
+//  volatile uint8_t print_radio;
+//  volatile uint8_t init_servo_radio;
+//  volatile uint8_t init_motor_controllers;
+//// Sensor/Data registers
+//  // IMU 
+//  volatile int16_t euler_x;
+//  volatile int16_t euler_y;
+//  volatile int16_t euler_z;
+//  volatile int16_t accl_x;
+//  volatile int16_t accl_y;
+//  volatile int16_t accl_z;
+//  volatile int16_t gyro_x;
+//  volatile int16_t gyro_y;
+//  volatile int16_t gyro_z;
+//  //Servo and Radio 
+//  volatile int16_t radio_throttle; 
+//  volatile int16_t radio_steering;
+//// Output/Actuation Registers
+//  volatile int16_t throttle_right_front; 
+//  volatile int16_t throttle_left_front; 
+//  volatile int16_t throttle_right_rear; 
+//  volatile int16_t throttle_left_rear; 
+//  volatile int16_t servo_out;  
                                              
     next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
       Serial << "print_registers: "; 
@@ -791,6 +841,16 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial << "print_imu: "; 
       Serial.println(); 
       Serial << " \t value = "<< registers.reg_map.print_imu;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+
+
+    next_pointer = (uint32_t)&registers.reg_map.print_radio - first_pointer;
+      Serial << "print_radio: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.print_radio;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  

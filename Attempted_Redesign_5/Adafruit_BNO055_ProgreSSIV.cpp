@@ -112,7 +112,7 @@ bool Adafruit_BNO055::begin(adafruit_bno055_opmode_t mode)
   delay(10);
   write8(BNO055_AXIS_MAP_SIGN_ADDR, REMAP_SIGN_P2); // P0-P7, Default is P1
   delay(10);
-  */
+
   
   write8(BNO055_SYS_TRIGGER_ADDR, 0x0);
   delay(10);
