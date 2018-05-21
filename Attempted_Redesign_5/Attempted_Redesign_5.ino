@@ -43,7 +43,7 @@
 /*SPI Communication/SPI Task Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/*Instantiate T3SPI class as SPI_SLAVE WHEN AN SPI OBJECT WAS BEING CREATED BY T3SPI*/
+/*Instantiate T3SPI class as SPI_SLAVE(MAY WANT TO COME BACK LATER AND GET RID OF THIS. MOST IF NOT ALL OF THE SPI SETUP CODE IS BELOW COMMENTED OUT)*/
 T3SPI SPI_SLAVE;
 ///* SPI memory map setup definitions */
 //#define SPI_MODE0     0x00//00 mode0, 01 mode1
@@ -59,6 +59,7 @@ typedef struct reg_struct {
   volatile uint8_t print_radio;
   volatile uint8_t init_servo_radio;
   volatile uint8_t init_motor_controllers;
+  volatile uint8_t init_imu;
 // Sensor/Data registers
   // IMU 
   volatile int16_t euler_x;
@@ -106,19 +107,20 @@ OR like this:
 /* spi0_isr buffer related */
 //The address byte sent at the beginning of every spi message contains a 7 bit address and a single read/write bit, the MSB.
 volatile uint8_t spi_address_buf;//stores the address byte for use in the isr
-volatile uint8_t spi_rw_bit;//stores wether the master is sending a read or write message
+volatile uint8_t spi_rw_bit;//stores the information of whether the master is sending a read or write message
 #define RW_MASK 0b10000000 
 #define ADDRESS_MASK 0b01111111
 
 /*Spi Task/isr Flags */
 bool servo_radio_on = false; //Used by SPI task to know if the servo and radio are initialized yet. Initilize commands from master will be ignored if initialization has already occured
-bool motor_controllers_on = false; //Used by SPI task to know if motor controllers have already been initialized
+bool motor_controllers_on = false; //Used by SPI task to know if motor controllers have already been started up
+bool imu_on = false;//Used by SPI task to know if imu has already been started up
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
 bool reg_buf_flag = true;
 bool address_flag = true;
 
 /* Teensy Status Byte */
-volatile uint8_t Teensy_Status_Byte = 25;
+volatile uint8_t Teensy_Status_Byte = 25;//25 by default for now. NOT YET IMPLEMENTED CODE TO HANDLE A TEENSY STATUS BYTE. 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus preparation*/
@@ -136,25 +138,22 @@ FlexCAN CANbus(1000000);
 int ret = 0;
 int error = NO_ERROR;
 
+
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* Steering and Throttle (both from radio) Preparation (These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code)*/
-// instantiate variable for throttle input value (ranges from ~-500 to 500)
-volatile int16_t THR_in;
-// instantiate variable for steering input value (ranges from ~-500 to 500)
-volatile int16_t ST_in;
+/* Steering and Throttle (both for the radio) variable instantiation. These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code*/
+volatile int16_t THR_in; // instantiate variable for throttle input value (ranges from ~-500 to 500)
+volatile int16_t ST_in;  // instantiate variable for steering input value (ranges from ~-500 to 500)
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*BNO055 Inertial Measurement Unit Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* Initialize an Adafruit_BNO055 object */
-//Set the sample rate
-#define BNO055_SAMPLERATE_DELAY_MS (100)
+/* Instantiate and initialize an Adafruit_BNO055 object */
 //bno is the name of the object in this context. Use bno.<function name (arguments)> here to use the objects functions
-Adafruit_BNO055 bno = Adafruit_BNO055();
+Adafruit_BNO055 bno = Adafruit_BNO055(); 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Debugging setup*/
@@ -182,7 +181,11 @@ volatile long message_delta_t;
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Dead Switch code */
-//#define DEAD_SWITCH 0 
+//Controls if the dead switch is active or not (Recommend that this be active while Simulink code is running. Not recommended for normal mode) TURN THIS INTO A REGISTER??
+#define DEAD_SWITCH 1 
+
+//Tells the motor controller actuation code that the trigger
+uint8_t safe = 0;
 
 ////timing variables
 //unsigned long start_time_motors;
@@ -192,19 +195,9 @@ volatile long message_delta_t;
 //unsigned long start_time_voltage;
 //unsigned long current_time_voltage;
 
-////code for safety shut off
-//int safe = 1;
-
-
-//// Dead man's switch.  If throttle is not at full(ish) forward or reverse motors set to zero.
-//if (THR_in > 200 || THR_in <-200) {
-//    safe =1;
-//}
-//else {
-//    safe = 0;
-//}
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
+/* The setup function runs all start up functions. Any functions that are run only once, always, and at startup should go here. */
 void setup() {
 
 /*begin serial port operation*/
@@ -216,25 +209,30 @@ void setup() {
   }
 
   
-/*Initialize the SPI_slave device,register map, and interrupt service routines*/
+/*Configure the Teensy for SPI Slave Mode, set some register map initial conditions, and initialize the interrupt service routines*/
   spi_slave_init();
-//Enable the SPI0 Interrupt
+  
+  //Enable the SPI0 Interrupt
   NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
-//Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
+  
+  //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
-//Initialize some of the starting conditions of the registers
-  registers.reg_map.begin_data_collection = 1;//Set Begin Data Collection flag high
-  registers.reg_map.print_imu = 0;//Control wether IMU data is printing or not
-  registers.reg_map.init_servo_radio = 1;//Control wether the initialization code for the servo and radio will run
-  registers.reg_map.print_radio = 0;//Control wether radio transeiver data is printing or not
-  registers.reg_map.init_motor_controllers = 1;//Control wether motor controllers (CAN Bus) initializes or not
+  
+  //Set some of the starting conditions of the registers in the register map
+  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
+  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task 
+  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
+  registers.reg_map.init_imu = 1;//Anything non-zero will cause the init imu code to run in the SPI task
+  registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
+  registers.reg_map.print_imu = 0;//Controls whether IMU data is printing or not
+  
   registers.reg_map.servo_out = -500;//Set an initial servo position value. Just a visual que that servo is working at startup
   if(GENERAL_PRINT){
     //Print the registers at initialization
       spi_print();
   }
 
-/* Initialize and confirm the initialization of the BNO055 Inertial Measurement Unit */
+/* Start up and confirm the start up of the BNO055 Inertial Measurement Unit */
   if(GENERAL_PRINT){
     Serial.println("Orientation Sensor Raw Data Test"); Serial.println("");
     //Initialize the sensor
@@ -326,7 +324,7 @@ void loop() {
     //Initialize the servo and radio if asked to do so by Master and the on flag is false    
   if (registers.reg_map.init_servo_radio && !servo_radio_on) {
     initPWMin();
-    initServo();
+    initServo(); 
     servo_radio_on = true;
   }
   
@@ -422,11 +420,36 @@ void loop() {
       write_velocity_and_enable_MC(NODE_2, 0 );
       
       //Write the throttle_right_rear register value to the motor controller
-      write_velocity_and_enable_MC(NODE_3, 0 * SCALE_FACTOR);
+      write_velocity_and_enable_MC(NODE_3, 0);
     
       //Write the throttle_left_rear register value to the motor controller
-      write_velocity_and_enable_MC(NODE_4, 0 * SCALE_FACTOR);
+      write_velocity_and_enable_MC(NODE_4, 0);
     }
+
+  /* init_imu register */
+  if(registers.reg_map.init_imu && !imu_on){
+    if(!bno.begin())
+    {
+      if(GENERAL_PRINT){
+        //There was a problem detecting the BNO055 ... check your connections
+        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+        //while(1); 
+      }
+  
+    }
+    if(GENERAL_PRINT){
+      //Display the current IMU temperature
+      int8_t temp = bno.getTemp();
+      Serial.print("Current Temperature: ");
+      Serial.print(temp);
+      Serial.println(" C");
+      Serial.println("");
+      bno.setExtCrystalUse(true);
+      Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
+    }
+    imu_on = true;
+
+  }
 
   }
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
@@ -435,22 +458,45 @@ void loop() {
 
   //Write the servo value from servo_out register
   writeServo(registers.reg_map.servo_out);
-
-//  Serial << "Servo_Actuate: " << registers.reg_map.servo_out;
-//  Serial.println();
-         
-  //Write the throttle_right_front register value to the motor controller
-  write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front * SCALE_FACTOR);
   
-  //Write the throttle_left_front register value to the motor controller
-  write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front * SCALE_FACTOR);
+  // Dead man's switch.  If throttle is not at full(ish) forward or reverse motors should be set to zero.
+  if ( THR_in > 200 ) {
+      safe = 1;
+  }
+  else {
+      safe = 0;
+  }    
   
-  //Write the throttle_right_rear register value to the motor controller
-  write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear * SCALE_FACTOR);
-
-  //Write the throttle_left_rear register value to the motor controller
-  write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear * SCALE_FACTOR);
-
+  if (DEAD_SWITCH && !safe){
+    
+    //Write the throttle_right_front register value to the motor controller
+    write_velocity_and_enable_MC(NODE_1, 0);
+    
+    //Write the throttle_left_front register value to the motor controller
+    write_velocity_and_enable_MC(NODE_2, 0);
+    
+    //Write the throttle_right_rear register value to the motor controller
+    write_velocity_and_enable_MC(NODE_3, 0);
+  
+    //Write the throttle_left_rear register value to the motor controller
+    write_velocity_and_enable_MC(NODE_4, 0);
+    
+  }
+  
+  else{
+      
+    //Write the throttle_right_front register value to the motor controller
+    write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front * SCALE_FACTOR);
+    
+    //Write the throttle_left_front register value to the motor controller
+    write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front * SCALE_FACTOR);
+    
+    //Write the throttle_right_rear register value to the motor controller
+    write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear * SCALE_FACTOR);
+  
+    //Write the throttle_left_rear register value to the motor controller
+    write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear * SCALE_FACTOR);
+  }
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
@@ -465,7 +511,11 @@ void loop() {
     
     //Send and I2C message to request the 6 bytes of EULER data
     bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6);
-//ORDER OF IMU DATA IS DIFFERENT THAN ADAFRUIT FUNCTIONS. THIS IS BECAUSE IMU DATA IS COMING IN STRANGELY. X IS Z AND Z IS X I BELIEVE> SWITCHING THEM HERE AS TEMPORARY MEASURE
+    
+    /* NOTE: ORDER OF IMU DATA IS DIFFERENT THAN IN THE ADAFRUIT PROVIDED FUNCTIONS. THIS IS BECAUSE IMU DATA IS COMING IN STRANGELY. X IS Z AND Z IS X I BELIEVE. 
+     * SWITCHING THEM HERE AS WORK AROUND.
+     */
+    
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
     registers.reg_map.euler_z = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
     registers.reg_map.euler_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
@@ -522,7 +572,7 @@ void spi0_isr(void) {
     }
     address_flag = false;
     spi_address_buf = SPI0_POPR_buf & ADDRESS_MASK; //ANDs the shift register buffer value and the address mask (extract the 7 bit address from the first byte of the message)   
-    spi_rw_bit = SPI0_POPR_buf & RW_MASK;//ANDs the shift register buffer value and the read/write bit mask (extract the MSB that tells wether this is a read or write message)
+    spi_rw_bit = SPI0_POPR_buf & RW_MASK;//ANDs the shift register buffer value and the read/write bit mask (extract the MSB that tells whether this is a read or write message)
     
     if (DEBUG_PRINT){
       Serial.println("State 1:");
