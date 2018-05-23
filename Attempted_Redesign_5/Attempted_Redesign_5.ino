@@ -79,7 +79,9 @@ typedef struct reg_struct {
   volatile int16_t throttle_left_front; 
   volatile int16_t throttle_right_rear; 
   volatile int16_t throttle_left_rear; 
-  volatile int16_t servo_out;  
+  volatile int16_t servo_out;
+//Dead Switch on or off
+  volatile uint8_t dead_switch; 
 } reg_struct_t ;
 
 //union type definition linking the above reg_struct type to a 128 byte array that will be instantiated in loop below. This will be the memory accessed by both the struct and the array
@@ -138,7 +140,6 @@ FlexCAN CANbus(1000000);
 int ret = 0;
 int error = NO_ERROR;
 
-
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -181,19 +182,9 @@ volatile long message_delta_t;
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Dead Switch code */
-//Controls if the dead switch is active or not (Recommend that this be active while Simulink code is running. Not recommended for normal mode) TURN THIS INTO A REGISTER??
-#define DEAD_SWITCH 1 
 
 //Tells the motor controller actuation code that the trigger
 uint8_t safe = 0;
-
-////timing variables
-//unsigned long start_time_motors;
-//unsigned long current_time_motors;
-//unsigned long start_time_servo;
-//unsigned long current_time_servo;
-//unsigned long start_time_voltage;
-//unsigned long current_time_voltage;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -211,21 +202,17 @@ void setup() {
   
 /*Configure the Teensy for SPI Slave Mode, set some register map initial conditions, and initialize the interrupt service routines*/
   spi_slave_init();
-  
   //Enable the SPI0 Interrupt
   NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
-  
   //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
-  
   //Set some of the starting conditions of the registers in the register map
-  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
-  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task 
-  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
-  registers.reg_map.init_imu = 1;//Anything non-zero will cause the init imu code to run in the SPI task
-  registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
-  registers.reg_map.print_imu = 0;//Controls whether IMU data is printing or not
-  
+//  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
+//  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task 
+//  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
+//  registers.reg_map.init_imu = 1;//Anything non-zero will cause the init imu code to run in the SPI task
+//  registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
+//  registers.reg_map.print_imu = 0;//Controls whether IMU data is printing or not
   registers.reg_map.servo_out = -500;//Set an initial servo position value. Just a visual que that servo is working at startup
   if(GENERAL_PRINT){
     //Print the registers at initialization
@@ -467,7 +454,7 @@ void loop() {
       safe = 0;
   }    
   
-  if (DEAD_SWITCH && !safe){
+  if (registers.reg_map.dead_switch && !safe){
     
     //Write the throttle_right_front register value to the motor controller
     write_velocity_and_enable_MC(NODE_1, 0);
@@ -923,7 +910,15 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
       Serial.println(); 
-
+      
+    next_pointer = (uint32_t)&registers.reg_map.init_imu - first_pointer;
+      Serial << "init_imu: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.init_imu;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
 
     next_pointer = (uint32_t)&registers.reg_map.euler_x - first_pointer;
       Serial << "euler_x: "; 
@@ -1071,6 +1066,15 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial.println();  
       Serial.println(); 
 
+
+    next_pointer = (uint32_t)&registers.reg_map.dead_switch - first_pointer;
+      Serial << "dead_switch: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.dead_switch;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
 
       //Last messages frequency (hz)
       long message_f = 1/message_delta_t;
