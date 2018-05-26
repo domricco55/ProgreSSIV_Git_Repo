@@ -281,9 +281,19 @@ class Adafruit_BNO055 : public Adafruit_Sensor
       VECTOR_MAGNETOMETER  = BNO055_MAG_DATA_X_LSB_ADDR,
       VECTOR_GYROSCOPE     = BNO055_GYRO_DATA_X_LSB_ADDR,
       VECTOR_EULER         = BNO055_EULER_H_LSB_ADDR,
+      //
+      ///* Euler data registers */
+      //BNO055_EULER_H_LSB_ADDR                                 = 0X1A,
+      //BNO055_EULER_H_MSB_ADDR                                 = 0X1B,
+      //BNO055_EULER_R_LSB_ADDR                                 = 0X1C,
+      //BNO055_EULER_R_MSB_ADDR                                 = 0X1D,
+      //BNO055_EULER_P_LSB_ADDR                                 = 0X1E,
+      //BNO055_EULER_P_MSB_ADDR                                 = 0X1F,
+      //
       VECTOR_LINEARACCEL   = BNO055_LINEAR_ACCEL_DATA_X_LSB_ADDR,
       VECTOR_GRAVITY       = BNO055_GRAVITY_DATA_X_LSB_ADDR
     } adafruit_vector_type_t;
+
 
 #if defined (ARDUINO_SAMD_ZERO) && ! (ARDUINO_SAMD_FEATHER_M0)
 #error "On an arduino Zero, BNO055's ADR pin must be high. Fix that, then delete this line."

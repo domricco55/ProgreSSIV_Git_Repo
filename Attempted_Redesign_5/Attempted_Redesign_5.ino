@@ -59,17 +59,18 @@ typedef struct reg_struct {
   volatile uint8_t print_radio;
   volatile uint8_t init_servo_radio;
   volatile uint8_t init_motor_controllers;
-  volatile uint8_t init_imu;
+  //volatile uint8_t init_imu;//Removed this because bno055 initialization would only work from setup(). If this can be figured out, it is better to have the initialization be the result of an spi command 
+  volatile uint8_t reset_teensy; //Not implemented yet but would set all initial conditions of the Teensy or perhaps hard reset the Teensy.  
   volatile uint8_t dead_switch; 
 // Sensor/Data registers
   // IMU 
-  volatile int16_t euler_x;
+  volatile int16_t euler_heading;
+  volatile int16_t euler_roll;
+  volatile int16_t euler_pitch;
   volatile int16_t accl_x;
   volatile int16_t gyro_x;
-  volatile int16_t euler_y;
   volatile int16_t accl_y;
   volatile int16_t gyro_y;
-  volatile int16_t euler_z;
   volatile int16_t accl_z;
   volatile int16_t gyro_z;
   //Servo and Radio 
@@ -216,23 +217,17 @@ void setup() {
 //  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
 //  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task 
 //  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
-//  registers.reg_map.init_imu = 1;//Anything non-zero will cause the init imu code to run in the SPI task
-//  registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
-  registers.reg_map.print_imu = 1;//Controls whether IMU data is printing or not
+  registers.reg_map.print_registers = 0;//Controls whether radio transeiver data is printing or not
+  registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
+  registers.reg_map.print_imu = 0;//Controls whether IMU data is printing or not
   registers.reg_map.servo_out = -500;//Set an initial servo position value. Just a visual que that servo is working at startup
   if(GENERAL_PRINT){
     //Print the registers at initialization
-      spi_print();
+      spi_registers_print();
   }
 
-/* Start up and confirm the start up of the BNO055 Inertial Measurement Unit */
-  if(GENERAL_PRINT){
-    Serial.println("Orientation Sensor Raw Data Test"); Serial.println("");
-    //Initialize the sensor
-  }
-
-  if(!bno.begin())
-  {
+  if(!bno.begin()){
+    
     if(GENERAL_PRINT){
       //There was a problem detecting the BNO055 ... check your connections
       Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
@@ -293,35 +288,30 @@ void loop() {
     //start_time_voltage = millis();
   
   }
-
   
-/*print_registers register (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, THERE IS A DELAY)*/   
-  //If Master wants Teensy to print it will send a true to address of print_registers and this code will run
-   if (registers.reg_map.print_registers){
-    
-      delay(1);//Wait for all of the registers to be written to before printing them (in case the print command is being sent along with write data)
-      spi_print();
-      registers.reg_map.print_registers = 0;//Clear the print_registers register so that a print_registers command from master prints the registers only once.
-
-   }
-   
-/* print_sensors register*/
-  //Print live time IMU values
-  if (registers.reg_map.print_imu){
-    current_time_print = micros(); 
-    if ((current_time_print - start_time_print) >= 100000)  //100ms => 10hz
-    {
-      start_time_print = micros();
-      print_imu_data();
-    }  
+/*print command registers (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, CAN CAUSE BUGS TO OCCUR OTHERWISE)*/  
+  current_time_print = micros(); 
+  if ((current_time_print - start_time_print) >= 100000)  //100ms => 10hz
+  { 
+     //If Master wants Teensy to print it will send a non-zero value to the address for the print command and this code will run
+     
+     //Print the entire register map
+     if (registers.reg_map.print_registers){
+        spi_registers_print();
+      } 
+      
+    //Print the IMU values only
+    if (registers.reg_map.print_imu){
+        print_imu_data();
+      }
+  
+    //Print only the registers associated with the radio
+    if (registers.reg_map.print_radio){
+        print_radio_data();  
+    }
+     
   }
   
-/* print_sensors register*/
-  //Print live time radio values
-  if (registers.reg_map.print_radio){
-      delay(50);
-      print_radio_data();  
-  }
   
 /*init_servo_radio register*/
     //Initialize the servo and radio if asked to do so by Master and the on flag is false    
@@ -429,28 +419,28 @@ void loop() {
       write_velocity_and_enable_MC(NODE_4, 0);
     }
 
-  /* init_imu register */
+  /* init_imu register */ //THE IMU WOULD NOT INITIALIZE PROPERLY WHEN THIS CODE WAS PLACED HERE. MOVED THE CODE BACK TO SETUP() FUNCTION. THAT IS WHERE IT WAS ORIGINALLY AND IT WORKS THERE.
   if(registers.reg_map.init_imu && !imu_on){
-    if(!bno.begin())
-    {
-      if(GENERAL_PRINT){
-        //There was a problem detecting the BNO055 ... check your connections
-        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-        //while(1); 
-      }
-  
-    }
-    if(GENERAL_PRINT){
-      //Display the current IMU temperature
-      int8_t temp = bno.getTemp();
-      Serial.print("Current Temperature: ");
-      Serial.print(temp);
-      Serial.println(" C");
-      Serial.println("");
-      bno.setExtCrystalUse(true);
-      Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
-    }
-    imu_on = true;
+//    if(!bno.begin())
+//    {
+//      if(GENERAL_PRINT){
+//        //There was a problem detecting the BNO055 ... check your connections
+//        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+//        //while(1); 
+//      }
+//  
+//    }
+//    if(GENERAL_PRINT){
+//      //Display the current IMU temperature
+//      int8_t temp = bno.getTemp();
+//      Serial.print("Current Temperature: ");
+//      Serial.print(temp);
+//      Serial.println(" C");
+//      Serial.println("");
+//      bno.setExtCrystalUse(true);
+//      Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
+//    }
+//    imu_on = true;
 
   }
 
@@ -527,9 +517,9 @@ void loop() {
      */
     
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-    registers.reg_map.euler_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
-    registers.reg_map.euler_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-    registers.reg_map.euler_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+    registers.reg_map.euler_heading = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+    registers.reg_map.euler_roll = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
+    registers.reg_map.euler_pitch = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
     
     //Send and I2C message to request the 6 bytes of ACCELEROMETER data
     bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_ACCELEROMETER, bno_buffer, 6);
@@ -753,7 +743,7 @@ void spi_slave_init(void){
 
 }
 
-void spi_print(void){//This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
+void spi_registers_print(void){//This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
     Serial.println();
     Serial << "Register Map of Teensy";
     Serial.println();
@@ -763,35 +753,34 @@ void spi_print(void){//This prints the name and address of each of the items in 
 
   //REFERENCE!! REPLACE EVERY TIME SOMETHING IS ADDED TO THE REGISTER MAP
   
-//    volatile uint8_t print_registers;
-//    volatile uint8_t begin_data_collection;
-//    volatile uint8_t print_imu;
-//    volatile uint8_t print_radio;
-//    volatile uint8_t init_servo_radio;
-//    volatile uint8_t init_motor_controllers;
-//    volatile uint8_t init_imu;
-//    volatile uint8_t dead_switch; 
-//  // Sensor/Data registers
-//    // IMU 
-//    volatile int16_t euler_x;
-//    volatile int16_t accl_x;
-//    volatile int16_t gyro_x;
-//    volatile int16_t euler_y;
-//    volatile int16_t accl_y;
-//    volatile int16_t gyro_y;
-//    volatile int16_t euler_z;
-//    volatile int16_t accl_z;
-//    volatile int16_t gyro_z;
-//    //Servo and Radio 
-//    volatile int16_t radio_throttle; 
-//    volatile int16_t radio_steering;
-//  // Output/Actuation Registers
-//    volatile int16_t throttle_right_front; 
-//    volatile int16_t throttle_left_front; 
-//    volatile int16_t throttle_right_rear; 
-//    volatile int16_t throttle_left_rear; 
-//    volatile int16_t servo_out;
-
+//  volatile uint8_t print_registers;
+//  volatile uint8_t begin_data_collection;
+//  volatile uint8_t print_imu;
+//  volatile uint8_t print_radio;
+//  volatile uint8_t init_servo_radio;
+//  volatile uint8_t init_motor_controllers;
+//  volatile uint8_t init_imu;
+//  volatile uint8_t dead_switch; 
+//// Sensor/Data registers
+//  // IMU 
+//  volatile int16_t euler_heading;
+//  volatile int16_t euler_roll;
+//  volatile int16_t euler_pitch;
+//  volatile int16_t accl_x;
+//  volatile int16_t gyro_x;
+//  volatile int16_t accl_y;
+//  volatile int16_t gyro_y;
+//  volatile int16_t accl_z;
+//  volatile int16_t gyro_z;
+//  //Servo and Radio 
+//  volatile int16_t radio_throttle; 
+//  volatile int16_t radio_steering;
+//// Output/Actuation Registers
+//  volatile int16_t throttle_right_front; 
+//  volatile int16_t throttle_left_front; 
+//  volatile int16_t throttle_right_rear; 
+//  volatile int16_t throttle_left_rear; 
+//  volatile int16_t servo_out;
                                              
     next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
       Serial << "print_registers: "; 
@@ -848,10 +837,19 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial.println();  
       Serial.println(); 
       
-    next_pointer = (uint32_t)&registers.reg_map.init_imu - first_pointer;
-      Serial << "init_imu: "; 
+//    next_pointer = (uint32_t)&registers.reg_map.init_imu - first_pointer;
+//      Serial << "init_imu: "; 
+//      Serial.println(); 
+//      Serial << " \t value = "<< registers.reg_map.init_imu;
+//      Serial.println(); 
+//      Serial << " \t index = " << next_pointer;
+//      Serial.println();  
+//      Serial.println(); 
+
+    next_pointer = (uint32_t)&registers.reg_map.reset_teensy - first_pointer;
+      Serial << "reset_teensy: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.init_imu;
+      Serial << " \t value = "<< registers.reg_map.reset_teensy;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
@@ -866,10 +864,28 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.euler_x - first_pointer;
-      Serial << "euler_x: "; 
+    next_pointer = (uint32_t)&registers.reg_map.euler_heading - first_pointer;
+      Serial << "euler_heading: "; 
       Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.euler_x;
+      Serial << " \t value = "<< registers.reg_map.euler_heading;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println(); 
+      
+    next_pointer = (uint32_t)&registers.reg_map.euler_roll - first_pointer;
+      Serial << "euler_roll: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.euler_roll;
+      Serial.println(); 
+      Serial << " \t index = " << next_pointer;
+      Serial.println();  
+      Serial.println();       
+
+    next_pointer = (uint32_t)&registers.reg_map.euler_pitch - first_pointer;
+      Serial << "euler_pitch: "; 
+      Serial.println(); 
+      Serial << " \t value = "<< registers.reg_map.euler_pitch;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
@@ -893,15 +909,6 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial.println();  
       Serial.println(); 
 
-    next_pointer = (uint32_t)&registers.reg_map.euler_y - first_pointer;
-      Serial << "euler_y: "; 
-      Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.euler_y;
-      Serial.println(); 
-      Serial << " \t index = " << next_pointer;
-      Serial.println();  
-      Serial.println(); 
-
     next_pointer = (uint32_t)&registers.reg_map.accl_y - first_pointer;
       Serial << "accl_y: "; 
       Serial.println(); 
@@ -915,15 +922,6 @@ void spi_print(void){//This prints the name and address of each of the items in 
       Serial << "gyro_y: "; 
       Serial.println(); 
       Serial << " \t value = "<< registers.reg_map.gyro_y;
-      Serial.println(); 
-      Serial << " \t index = " << next_pointer;
-      Serial.println();  
-      Serial.println(); 
-
-    next_pointer = (uint32_t)&registers.reg_map.euler_z - first_pointer;
-      Serial << "euler_z: "; 
-      Serial.println(); 
-      Serial << " \t value = "<< registers.reg_map.euler_z;
       Serial.println(); 
       Serial << " \t index = " << next_pointer;
       Serial.println();  
@@ -1022,10 +1020,18 @@ void spi_print(void){//This prints the name and address of each of the items in 
 
 void print_imu_data(void){
   
-      Serial << "euler_x: " << registers.reg_map.euler_x;
+      Serial << "euler_heading: " << registers.reg_map.euler_heading;
+      Serial.println(); 
+      Serial.println(); 
+      
+      Serial << "euler_roll: " << registers.reg_map.euler_roll;
       Serial.println(); 
       Serial.println(); 
 
+      Serial << "euler_pitch: " << registers.reg_map.euler_pitch;
+      Serial.println(); 
+      Serial.println(); 
+      
       Serial << "accl_x: " << registers.reg_map.accl_x;
       Serial.println();  
       Serial.println(); 
@@ -1033,20 +1039,12 @@ void print_imu_data(void){
       Serial << "gyro_x: " << registers.reg_map.gyro_x;
       Serial.println();  
       Serial.println(); 
-
-      Serial << "euler_y: " << registers.reg_map.euler_y;
-      Serial.println();  
-      Serial.println(); 
-
+      
       Serial << "accl_y: " << registers.reg_map.accl_y;
       Serial.println();  
       Serial.println(); 
 
       Serial << "gyro_y: " << registers.reg_map.gyro_y;
-      Serial.println();  
-      Serial.println(); 
-      
-      Serial << "euler_z: " << registers.reg_map.euler_z;
       Serial.println();  
       Serial.println(); 
 
