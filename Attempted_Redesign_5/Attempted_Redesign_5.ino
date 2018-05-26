@@ -31,7 +31,6 @@
 #include "kinetis_flexcan.h"
 #include "input_handler.h"
 #include "output_handler.h"
-#include "t3spi.h"
 //libraries for imu
 #include <Wire.h>
 #include "Adafruit_Sensor.h"
@@ -43,11 +42,9 @@
 /*SPI Communication/SPI Task Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/*Instantiate T3SPI class as SPI_SLAVE(MAY WANT TO COME BACK LATER AND GET RID OF THIS. MOST IF NOT ALL OF THE SPI SETUP CODE IS BELOW COMMENTED OUT)*/
-T3SPI SPI_SLAVE;
 ///* SPI memory map setup definitions */
-//#define SPI_MODE0     0x00//00 mode0, 01 mode1
-//#define CS0           0x0A//0x0A //Should be 0x0A pin 10. changed from 0x01
+#define SPI_MODE0     0x00//00 mode0, 01 mode1
+#define CS0           0x0A//0x0A //Should be 0x0A pin 10. changed from 0x01
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Spi Register Setup*/
@@ -226,26 +223,25 @@ void setup() {
       spi_registers_print();
   }
 
-  if(!bno.begin()){
-    
+  if(!bno.begin()){//This code will cause the bno to initialize. If it did not, it will print the error message
     if(GENERAL_PRINT){
       //There was a problem detecting the BNO055 ... check your connections
       Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
       //while(1); 
     }
-
   }
-  if(GENERAL_PRINT){
-    //Display the current IMU temperature
-    int8_t temp = bno.getTemp();
-    Serial.print("Current Temperature: ");
-    Serial.print(temp);
-    Serial.println(" C");
-    Serial.println("");
+  else{
+    if(GENERAL_PRINT){
+      //Display the current IMU temperature
+      int8_t temp = bno.getTemp();
+      Serial.print("Current Temperature: ");
+      Serial.print(temp);
+      Serial.println(" C");
+      Serial.println("");
+      Serial.println("You may want to calibrate your bno055");
+     }
     bno.setExtCrystalUse(true);
-    Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
   }
-
 
 /*Startup CAN network*/
   CANbus.begin();
@@ -701,44 +697,48 @@ void spi_transfer_complete_isr(void) {
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 void spi_slave_init(void){
-  
-    //Initialize spi slave object THE OLD WAY, USING T3SPI
-  SPI_SLAVE.begin_SLAVE(SCK, MOSI, MISO, CS0);
-  //Set the CTAR0_SLAVE0 (Frame Size, SPI Mode)
-  SPI_SLAVE.setCTAR_SLAVE(8, SPI_MODE0);
 
   if(GENERAL_PRINT){
     Serial << "SPI0_MCR: ";
     Serial.println(SPI0_MCR,BIN);
   }
 
-  //  /*Configure SPI Memory Map*/
-  //  SIM_SCGC6 |= SIM_SCGC6_SPI0;    // enable clock to SPI. THIS WAS MISSING PRIOR AND WOULD CAUSE CODE TO GET STUCK IN THIS FUNCTION
-  //  delay(1000);
-  ////This clears the entire SPI0_MCR register. This will clear the MSTR bit (turn off master mode), clear the 
-  //  SPI0_MCR=0x00000000;
-  ////THIS CLEARS THE ENTIRE SPI0_CTAR0 REGISTER (effectively clearing the default frame size which is 8 --> Not necessary as we want an 8 bit frame size)
-  //  SPI0_CTAR0=0;
-  ////NEED TO FIGURE OUT WHAT THIS ONE IS DOING AND WHAT THE DIFFERENCE IS BETWEEN THIS AND THE ONE ABOVE IT
-  //  SPI0_CTAR0_SLAVE=0;
-  ////This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) and the data is captured on the leading edge of SCK (phase)
-  //  SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
-  ////THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
-  //  SPI0_CTAR0 |= SPI_CTAR_FMSZ(7);
-  ////Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
-  ////the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded. 
-  //  SPI0_RSER = 0x00020000;
-  ////Enable the SCK, MISO, MOSI, and CS0 Pins (connections to the master device)
-  //  CORE_PIN13_CONFIG = PORT_PCR_MUX(2);//Serial Clock (SCK) pin
-  //  CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);//Master Output Slave Input (MOSI) pin
-  //  CORE_PIN12_CONFIG = PORT_PCR_MUX(2);//Master Input Slave Output (MISO) pin
-  //  CORE_PIN10_CONFIG = PORT_PCR_MUX(2);//Chip Select 0 (CS0) or Enable  pin
-  //  SPI0_MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;//START
+    /*Configure SPI Memory Map*/
+    SIM_SCGC6 |= SIM_SCGC6_SPI0;    // enable clock to SPI. THIS WAS MISSING PRIOR AND WOULD CAUSE CODE TO GET STUCK IN THIS FUNCTION
+    delay(1000);
+  //While configuring memory map, halt spi functions
+    SPI0_MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
+    
+  //This clears the entire SPI0_MCR register. This will clear the MSTR bit (master mode is a 1 and slave mode is a 0) 
+    SPI0_MCR=0x00000000;
+
+    
+  //Clears entire CTAR0 slave register
+    SPI0_CTAR0_SLAVE=0;
+
+  //THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
+    SPI0_CTAR0 |= SPI_CTAR_FMSZ(7);
+
+  //This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) and the data is captured on the leading edge of SCK (phase). Configures CTAR0 Slave register
+    SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
+
+  //Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
+  //the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded. 
+    SPI0_RSER = 0x00020000;
+    
+  //Resume spi functions
+    SPI0_MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
+
+  //Enable the SCK, MISO, MOSI, and CS0 Pins (connections to the master device)
+    CORE_PIN13_CONFIG = PORT_PCR_MUX(2);//Serial Clock (SCK) pin
+    CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);//Master Output Slave Input (MOSI) pin
+    CORE_PIN12_CONFIG = PORT_PCR_MUX(2);//Master Input Slave Output (MISO) pin
+    CORE_PIN10_CONFIG = PORT_PCR_MUX(2);//Chip Select 0 (CS0) or Enable  pin
+    SPI0_MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;//START
   if(GENERAL_PRINT){
-    Serial.println("Made it to end of spi_slave_init");//Code is currently not making it to this print statement
+    Serial.println("Made it to end of spi_slave_init");
     delay(500); 
   }
-
 
 }
 
