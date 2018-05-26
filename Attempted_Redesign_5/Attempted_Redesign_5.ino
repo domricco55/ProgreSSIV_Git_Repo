@@ -759,7 +759,8 @@ void spi_registers_print(void){//This prints the name and address of each of the
 //  volatile uint8_t print_radio;
 //  volatile uint8_t init_servo_radio;
 //  volatile uint8_t init_motor_controllers;
-//  volatile uint8_t init_imu;
+//  //volatile uint8_t init_imu;//Removed this because bno055 initialization would only work from setup(). If this can be figured out, it is better to have the initialization be the result of an spi command 
+//  volatile uint8_t reset_teensy; //Not implemented yet but would set all initial conditions of the Teensy or perhaps hard reset the Teensy.  
 //  volatile uint8_t dead_switch; 
 //// Sensor/Data registers
 //  // IMU 
