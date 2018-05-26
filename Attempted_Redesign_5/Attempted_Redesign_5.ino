@@ -209,8 +209,8 @@ void setup() {
   
 /*Configure the Teensy for SPI Slave Mode, set some register map initial conditions, and initialize the interrupt service routines*/
   spi_slave_init();
-  //Enable the SPI0 Interrupt
-  NVIC_ENABLE_IRQ(IRQ_SPI0); //CURRENTLY DONT KNOW WHY THIS IS ENABLING THE ISR
+  //Enable the spi0_isr interrupt
+  NVIC_ENABLE_IRQ(IRQ_SPI0); 
   //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0),spi_transfer_complete_isr,RISING);
   //Set some of the starting conditions of the registers in the register map
@@ -418,9 +418,10 @@ void loop() {
       //Write the throttle_left_rear register value to the motor controller
       write_velocity_and_enable_MC(NODE_4, 0);
     }
+  }
 
   /* init_imu register */ //THE IMU WOULD NOT INITIALIZE PROPERLY WHEN THIS CODE WAS PLACED HERE. MOVED THE CODE BACK TO SETUP() FUNCTION. THAT IS WHERE IT WAS ORIGINALLY AND IT WORKS THERE.
-  if(registers.reg_map.init_imu && !imu_on){
+//  if(registers.reg_map.init_imu && !imu_on){
 //    if(!bno.begin())
 //    {
 //      if(GENERAL_PRINT){
@@ -441,10 +442,8 @@ void loop() {
 //      Serial.println("Calibration status values: 0 uncalibrated, 3 fully calibrated");
 //    }
 //    imu_on = true;
-
-  }
-
-  }
+//    }
+//  }
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/            
 
 /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array*/
