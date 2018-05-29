@@ -144,7 +144,7 @@ volatile int16_t ST_in;  // instantiate variable for steering input value (range
 /*BNO055 Inertial Measurement Unit Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* Instantiate and initialize an Adafruit_BNO055 object */
+/* Instantiate and initialize an Adafruit_BNO055 object. */
 //bno is the name of the object in this context. Use bno.<function name (arguments)> here to use the objects functions
 Adafruit_BNO055 bno = Adafruit_BNO055();
 
@@ -258,18 +258,23 @@ void loop() {
 /*
   SPI Communication Protocol Brief Description:
   
-    Each frame of an spi message is one byte. The Master can send as many bytes per message as it wants and there are two types of messages it can initiate with the slave,
-    a read message and a write message. These are mutually exclusive and which one is occuring is determined by the value of the MSB of the first byte in a message, the Read/Write bit. 
-    The master sets this bit to 1 for reads and 0 for writes. This byte also contains in the remaining LSB's the register map address (a value between 0 an 127). This address indexes 
-    an item in the register map, currently either a command, a sensor reading, or an actuation value. For example:
+    An SPI message in this code consists of several one byte frames. The Master can send as many frames per message as it wants and there are two types of messages it can
+    initiate with the Slave, a read message and a write message. These are mutually exclusive and which one is occuring is determined by the value of the MSB of the first 
+    byte recieved in a message, the Read/Write bit. The master sets this bit to 1 for reads and 0 for writes. This byte also contains in the remaining 7 bits the register 
+    address (a value between 0 an 127). This byte indexes a register in the registers union that is to be read from or written to with SPI data. For example:
 
-         ob10000001 in the first byte of a message indicates that a read message is to follow and it should start at index 1 of the registers struct. 
+         ob10000001 in the first frame of a message indicates that a read message is to follow and it should start at index 1 of bytes of the register union, i.e. registers.bytes[1].
+                    This index currently points to the memory location of the "begin data collection" command flag, i.e. registers.reg_map.begin_data_collection. 
+                    
+    The next frame the master sends will fill this memory location with data. Any subsequent frames will fill further registers with data, i.e. registers.bytes[2], registers.bytes[3] 
+    and so on. These may correspond to different commands, sensor readings, or actuation signals. In this iteration of the code, there is no protection agains writing to a read register 
+    but this is a recommended feature. Making some of the registers read only can prevent errors. 
     
     Below is a description of both a read message and a write message.
 */
 /*
-  If the read bit is set high, the structure of the incoming message will look like this:
-  
+  If the read bit is high, the structure of the incoming message will look like this:
+
     first incoming message -> Teensy recieves register address of data_0 (Interrupt 1)
     second incoming message -> Teensy recieves junk (Interrupt 2)
     third incoming message -> Teensy recieves junk (Interrupt 3)
