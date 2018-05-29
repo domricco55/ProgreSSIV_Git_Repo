@@ -43,7 +43,8 @@
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Spi Register Setup*/
-//Create a register map to store read, write, and command data on the Teensy. Values are volatile because the register map is being accessed by spi0_isr
+//Create a register struct to define data that will be read from, and written to over SPI. Values are volatile because the register map is being accessed during an interrupt
+//service routine
 typedef struct reg_struct {
   volatile uint8_t print_registers;
   volatile uint8_t begin_data_collection;
@@ -76,10 +77,16 @@ typedef struct reg_struct {
   volatile int16_t servo_out;
 } reg_struct_t ;
 
-//union type definition linking the above reg_struct type to a 128 byte array that will be instantiated in loop below. This will be the memory accessed by both the struct and the array
+//union type definition linking the above reg_struct type to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above reg_struct_t defines names and types 
+//of variables that will be stored in the memory, or the "registers". The registers will be 128 bytes of memory that can be accessed in two different ways, one through the name as defined in the struct and 
+//another by simply indexing an array
 typedef union reg_union {
-  volatile uint8_t bytes[128];//Allocates 128 bytes of memory to use for the register map
-  reg_struct_t reg_map; //Map of the registers
+  
+  //Allocate 128 bytes of memory to use for the register map
+  volatile uint8_t bytes[128];
+
+  reg_struct_t reg_map; 
+  
 } reg_union_t;
 
 //Initialize the register union (making it all zeroes by default)
@@ -307,9 +314,9 @@ void loop() {
     timing_init_flag = false; 
   }
   
-  /* COMMANDS Master sends a non-zero value if it wants the peripheral to be initialized, data collection to start, or some other command to run*/
+/* COMMANDS Master sends a non-zero value if it wants the peripheral to be initialized, data collection to start, or some other command to run*/
 
-  /*begin_data_collection register*/
+/*begin_data_collection register*/
   if (registers.reg_map.begin_data_collection && !collecting_data ) {
 
     collecting_data = true;
@@ -317,7 +324,7 @@ void loop() {
 
   }
 
-  /*print command registers (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, MAY CAUSE BUGS TO OCCUR OTHERWISE)*/
+/*print command registers (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, MAY CAUSE BUGS TO OCCUR OTHERWISE)*/
   unsigned long current_time_print = micros();
   if ((current_time_print - start_time_print) >= 100000)  //100ms => 10hz. All printing will happen at this frequency.
   {
@@ -341,7 +348,7 @@ void loop() {
   }
 
 
-  /*init_servo_radio register*/
+/*init_servo_radio register*/
   //Initialize the servo and radio if asked to do so by Master and the on flag is false
   if (registers.reg_map.init_servo_radio && !servo_radio_on) {
     initPWMin();
@@ -349,7 +356,7 @@ void loop() {
     servo_radio_on = true;
   }
 
-  /*init_motor_controllers register*/
+/*init_motor_controllers register*/
   //Initialize the motor controllers if asked to do so by Master (non zero value sent to the init_motor_controllers register) and the motor_controllers_on flag is false
   if (registers.reg_map.init_motor_controllers && !motor_controllers_on) {
 
@@ -478,9 +485,9 @@ void loop() {
   }
 
 
-  /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-  /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array*/
+/* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array*/
 
   //Write the servo value from servo_out register
   writeServo(registers.reg_map.servo_out);
@@ -551,10 +558,6 @@ void loop() {
     //Send and I2C message to request the 6 bytes of EULER data
     bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6);
 
-    /* NOTE: ORDER OF IMU DATA IS DIFFERENT THAN IN THE ADAFRUIT PROVIDED FUNCTIONS. THIS IS BECAUSE IMU DATA IS COMING IN STRANGELY. X IS Z AND Z IS X I BELIEVE.
-       SWITCHING THEM HERE AS WORK AROUND.
-    */
-
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
     registers.reg_map.euler_heading = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
     registers.reg_map.euler_roll = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
@@ -593,7 +596,8 @@ void loop() {
 //Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
 void spi0_isr(void) {
 
-  volatile uint8_t SPI0_POPR_buf = SPI0_POPR;//Grab the SPI0_RXFR1 buffer value. This is the value that was in the push register during the TRANSFER PRIOR TO THAT WHICH CAUSED THIS INTERRUPT
+  //Grab the SPI0_RXFR1 buffer value. This is the value that was in the push register during the TRANSFER PRIOR TO THAT WHICH CAUSED THIS INTERRUPT
+  volatile uint8_t SPI0_POPR_buf = SPI0_POPR;
 
   //If this is a new message, copy the registers into the register buffer for temporary use in the isr
   if (reg_buf_flag) {
@@ -602,6 +606,8 @@ void spi0_isr(void) {
     messageTime1 = micros();
     registers_buf = registers; //Grab the registers current values
   }
+
+  //If this is a new message, also decode the R/W bit and grab the address of the register to be accesses. These are both done with bit masks on the first byte of a message. 
   if (address_flag) {
     if (SPI_SPI_DEBUG_PRINT) {
       Serial.println();
@@ -609,9 +615,14 @@ void spi0_isr(void) {
       Serial.print(message_cnt);
       Serial.println("---------");
     }
+    //Lower the address flag so that when the next frame comes, this code will not run again
     address_flag = false;
-    spi_address_buf = SPI0_POPR_buf & ADDRESS_MASK; //ANDs the shift register buffer value and the address mask (extract the 7 bit address from the first byte of the message)
-    spi_rw_bit = SPI0_POPR_buf & RW_MASK;//ANDs the shift register buffer value and the read/write bit mask (extract the MSB that tells whether this is a read or write message)
+    
+    //ANDs the shift register buffer value and the address mask (extract the 7 bit address from the first byte of the message)
+    spi_address_buf = SPI0_POPR_buf & ADDRESS_MASK; 
+    
+    //ANDs the shift register buffer value and the read/write bit mask (extract the MSB that tells whether this is a read or write message)
+    spi_rw_bit = SPI0_POPR_buf & RW_MASK;
 
     if (SPI_DEBUG_PRINT) {
       Serial.println("State 1:");
@@ -632,10 +643,13 @@ void spi0_isr(void) {
       }
 
       SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf];
-      spi_address_buf++; //Increment the address so the next byte sent will be the next byte in the spi register
+      
+      //Increment the address so the next byte sent will be the next byte in the spi register
+      spi_address_buf++; 
 
     }
   }
+  
   //Now not on the first interrupt anymore. This is the code that will run for all subsequent interrupts of a single message.
   else {
 
@@ -756,10 +770,9 @@ void spi_slave_init(void) {
 
   //While configuring memory map, halt spi functions
   SPI0_MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
-
+  
   //This clears the entire SPI0_MCR register. This will clear the MSTR bit (master mode is a 1 and slave mode is a 0)
   SPI0_MCR = 0x00000000;
-
 
   //Clears entire CTAR0 slave register
   SPI0_CTAR0_SLAVE = 0;
