@@ -42,6 +42,7 @@
 #define CS0           0x0A//0x0A //Should be 0x0A pin 10. changed from 0x01
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
 /* Spi Register Setup*/
 //Create a register struct to define data that will be read from, and written to over SPI. Values are volatile because the register map is being accessed during an interrupt
 //service routine
@@ -168,6 +169,7 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {
 }
 
 /*SPI Debugging Setup*/
+
 // SPI Printing Related
 uint32_t first_pointer;
 uint32_t next_pointer;
@@ -609,7 +611,7 @@ void spi0_isr(void) {
 
   //If this is a new message, also decode the R/W bit and grab the address of the register to be accesses. These are both done with bit masks on the first byte of a message. 
   if (address_flag) {
-    if (SPI_SPI_DEBUG_PRINT) {
+    if (SPI_DEBUG_PRINT) {
       Serial.println();
       Serial.print("--------");
       Serial.print(message_cnt);

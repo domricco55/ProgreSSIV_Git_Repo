@@ -12,7 +12,7 @@
 
 #define PRINT 0
 
-#define SCALE_FACTOR 2
+#define SCALE_FACTOR 1
 
 int  initialize_CAN();
 int  initialize_MC(int node_id);
