@@ -5,7 +5,7 @@
 
    Description: This file is the firmware on the TEENSY for the CALPOLY SSIV
 
-   Date:                      May 27 2018
+   Date:                      May 29 2018
    Last Edit by:              Dominic Riccoboni
 
    Version Description:
@@ -34,14 +34,12 @@
 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*SPI Communication/SPI Task Preparation*/
+/*SPI Interrupt and Task Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-///* SPI memory map setup definitions */
+/* SPI memory map setup definitions */
 #define SPI_MODE0     0x00//00 mode0, 01 mode1
 #define CS0           0x0A//0x0A //Should be 0x0A pin 10. changed from 0x01
-
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Spi Register Setup*/
 //Create a register struct to define data that will be read from, and written to over SPI. Values are volatile because the register map is being accessed during an interrupt
@@ -57,7 +55,7 @@ typedef struct reg_struct {
   //volatile uint8_t reset_teensy; //Not implemented yet but would set all initial conditions of the Teensy or perhaps hard reset the Teensy.
   volatile uint8_t dead_switch;
   // Sensor/Data registers
-  // IMU
+    // IMU
   volatile int16_t euler_heading;
   volatile int16_t euler_roll;
   volatile int16_t euler_pitch;
@@ -67,7 +65,7 @@ typedef struct reg_struct {
   volatile int16_t gyro_y;
   volatile int16_t accl_z;
   volatile int16_t gyro_z;
-  //Servo and Radio
+    //Servo and Radio
   volatile int16_t radio_throttle;
   volatile int16_t radio_steering;
   // Output/Actuation Registers
@@ -78,37 +76,32 @@ typedef struct reg_struct {
   volatile int16_t servo_out;
 } reg_struct_t ;
 
-//union type definition linking the above reg_struct type to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above reg_struct_t defines names and types 
+//Union type definition linking the above reg_struct type to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above reg_struct_t defines names and types 
 //of variables that will be stored in the memory, or the "registers". The registers will be 128 bytes of memory that can be accessed in two different ways, one through the name as defined in the struct and 
 //another by simply indexing an array
 typedef union reg_union {
   
-  //Allocate 128 bytes of memory to use for the register map
-  volatile uint8_t bytes[128];
+  volatile uint8_t bytes[128];//Allocate 128 bytes of memory. The registers ARE these bytes.
 
-  reg_struct_t reg_map; 
+  reg_struct_t reg_map; //Maps the 128 registers to data names and types as defined in the reg_struct above.
   
 } reg_union_t;
 
-//Initialize the register union (making it all zeroes by default)
-reg_union_t registers;//Instantiate the register union
-
-//Initializes a register buffer of the same union type as registers. Now registers and registers_buf can copy themselves into each other. Used in spi0_isr to prevent writing
-//data to registers while they are being accessed by spi task.
-reg_union_t registers_buf = registers;
+reg_union_t registers;//Instantiate the register union (the registers will be filled with zeros by default)
 
 /*
   can access exact same data like this:
     registers.bytes[1]
   OR like this:
-    registers.reg_map.init_servo_radio
+    registers.reg_map.begin_data_collection
 */
 
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+reg_union_t registers_buf = registers; //Create a register buffer of the same union type as registers. The registers get copied into registers_buf and remain there for the duration of an spi message. This is to prevent data from being corrupted
+                                       //if both spi task and spi0_isr attempt to alter the same register at the same time. 
 
 /* spi0_isr buffer related */
-//The address byte sent at the beginning of every spi message contains a 7 bit address and a single read/write bit, the MSB.
-volatile uint8_t spi_address_buf;//stores the address byte for use in the isr
+volatile uint8_t spi_address_buf;//The address byte sent at the beginning of every spi message contains a 7 bit address and a single read/write bit, the MSB.
 volatile uint8_t spi_rw_bit;//stores the information of whether the master is sending a read or write message
 #define RW_MASK 0b10000000
 #define ADDRESS_MASK 0b01111111
@@ -118,14 +111,14 @@ bool servo_radio_on = false; //Used by SPI task to know if the servo and radio a
 bool motor_controllers_on = false; //Used by SPI task to know if motor controllers have already been started up
 bool imu_on = false;//Used by SPI task to know if imu has already been started up
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
-bool reg_buf_flag = true;
-bool address_flag = true;
+bool reg_buf_flag = true; //Lets spi0_isr know that a new message has begun and it should transfer registers into registers_buf
+bool address_flag = true;  //Lets spi0_isr know that a new message has begun and it should decode the R/W bit and the register address
 
 /* Teensy Status Byte */
 volatile uint8_t Teensy_Status_Byte = 25;//25 by default for now. NOT YET IMPLEMENTED CODE TO HANDLE A TEENSY STATUS BYTE.
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*CAN bus preparation*/
+/*CAN bus preparation (From uLaren_CAN_driver)*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 FlexCAN CANbus(1000000);
@@ -136,7 +129,7 @@ FlexCAN CANbus(1000000);
 #define NODE_3 3
 #define NODE_4 4
 
-//loop CAN variables
+/*loop CAN variables.*/
 int ret = 0;
 int error = NO_ERROR;
 
@@ -153,32 +146,32 @@ volatile int16_t ST_in;  // instantiate variable for steering input value (range
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Instantiate and initialize an Adafruit_BNO055 object. */
-//bno is the name of the object in this context. Use bno.<function name (arguments)> here to use the objects functions
 Adafruit_BNO055 bno = Adafruit_BNO055();
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/* Debugging setup*/
+/* Debugging/Printing setup*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* General Debugging */
-//"Adding streaming (insertion-style) Output" from playground.arduino.cc
-//Allows Serial << "This is an insertion-style message" type operation
-template<class T> inline Print &operator <<(Print &obj, T arg) {
+template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding streaming (insertion-style) Output" from playground.arduino.cc
+                                                                  //Allows Serial << "This is an insertion-style message" type operation
   obj.print(arg);
   return obj;
 }
 
-/*SPI Debugging Setup*/
+#define GENERAL_PRINT 1
 
+/*SPI Debugging Setup*/
 // SPI Printing Related
 uint32_t first_pointer;
 uint32_t next_pointer;
 uint8_t message_cnt = 0x01;
 #define SPI_DEBUG_PRINT 0
-#define GENERAL_PRINT 1
+
 //These are used to tell how much time the isr is taking to run
 volatile long isrStartTime;
 volatile long isrEndTime;
+
 //These are used to tell how much time is elapsing between messages
 volatile long messageTime1;
 volatile long message_delta_t;
@@ -187,14 +180,13 @@ volatile long message_delta_t;
 /* Timing/Frequency setup */
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-//This flag allows the timing variables to be initialized only once in spi task.
-bool timing_init_flag = true;
-//These will act as the previous clock value for which to compare the current value to. The difference will be used to determine whether a portion of code will run or not. 
+bool timing_init_flag = true; //This flag allows the timing variables to be initialized only once in spi task.
+
+//These will act as the previous clock value for which to compare the current value to. These are used to let code run at specified frequencies. 
 unsigned long start_time_print;
 unsigned long start_time_motors;
 unsigned long start_time_servo;
-//unsigned long start_time_voltage;
-
+//unsigned long start_time_voltage;//Need to add in the voltage monitoring feature of the motor controllers. FUTURE WORK
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -220,7 +212,7 @@ void setup() {
   //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr, RISING);
   
-  //Set some of the starting conditions of the registers in the register map
+  //Set some of the starting conditions of the registers
   //  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
   //  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task
   //  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
@@ -259,52 +251,18 @@ void setup() {
 
 }
 
+/* Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Be careful
+when using delays and try to have tasks run quickly. This is where any finite state machine code may be placed.*/
 void loop() {
-
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*SPI Task*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*
-  SPI Communication Protocol Brief Description:
-  
-    An SPI message in this code consists of several one byte frames. The Master can send as many frames per message as it wants and there are two types of messages it can
-    initiate with the Slave, a read message and a write message. These are mutually exclusive and which one is occuring is determined by the value of the MSB of the first 
-    byte recieved in a message, the Read/Write bit. The master sets this bit to 1 for reads and 0 for writes. This byte also contains in the remaining 7 bits the register 
-    address (a value between 0 an 127). This byte indexes a register in the registers union that is to be read from or written to with SPI data. For example:
 
-         ob10000001 in the first frame of a message indicates that a read message is to follow and it should start at index 1 of bytes of the register union, i.e. registers.bytes[1].
-                    This index currently points to the memory location of the "begin data collection" command flag, i.e. registers.reg_map.begin_data_collection. 
-                    
-    The next frame the master sends will fill this memory location with data. Any subsequent frames will fill further registers with data, i.e. registers.bytes[2], registers.bytes[3] 
-    and so on. These may correspond to different commands, sensor readings, or actuation signals. In this iteration of the code, there is no protection agains writing to a read register 
-    but this is a recommended feature. Making some of the registers read only can prevent errors. 
-    
-    Below is a description of both a read message and a write message.
+/* 
+ *  
+ *  SPI TASK DESCRIPTION HERE
+ *  
 */
-/*
-  If the read bit is high, the structure of the incoming message will look like this:
-
-    first incoming message -> Teensy recieves register address of data_0 (Interrupt 1)
-    second incoming message -> Teensy recieves junk (Interrupt 2)
-    third incoming message -> Teensy recieves junk (Interrupt 3)
-    fourth incoming message -> Teensy recieves junk (Interrupt 4)
-    fifth incoming message -> Teensy recieves junk (Interrupt 5) --> After the last spi0_isr interrupt, and immediately after the CS0 pin is brought high by MASTER, the Teensy
-                                                                     will enter the CS0_isr interrupt. There it will load the SPI0_PUSHR_SLAVE push register with the Teensy 
-                                                                     status byte (status byte handler code not yet implemented)  
-*/
-/*
-  If the read bit is set high, the structure of the outgoing message will look like this (there is a wasted byte due to the double buffering of the spi hardware registers):
-  
-    from registers.bytes[address] -> Teens sends junk (Interrupt 1)
-    from registers.bytes[address+1] -> Teensy sends the Teensy_Status byte (Interrupt 2)
-    from registers.bytes[address+2] -> Teensy sends data_0 (Interrupt 3)
-    from registers.bytes[address+3] -> Teensy sends data_1 (Interrupt 4)
-    from registers.bytes[address+4] -> Teensy sends data_2 (Interrupt 5)
-
-  For more details on this process, including a graphical representation of this communnication protocol, please refer to the ProgreSSIV firmware documentation.
-
-*/
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
   if(timing_init_flag){
     // Initialize the Timing Variables so that there is a start time
@@ -316,21 +274,22 @@ void loop() {
     timing_init_flag = false; 
   }
   
-/* COMMANDS Master sends a non-zero value if it wants the peripheral to be initialized, data collection to start, or some other command to run*/
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+ 
+/* COMMANDS. Master sends a non-zero value if it wants the peripheral to be initialized, data collection to start, or some other command to run*/
 
 /*begin_data_collection register*/
   if (registers.reg_map.begin_data_collection && !collecting_data ) {
-
+    
     collecting_data = true;
-
-
+    
   }
 
 /*print command registers (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, MAY CAUSE BUGS TO OCCUR OTHERWISE)*/
   unsigned long current_time_print = micros();
   if ((current_time_print - start_time_print) >= 100000)  //100ms => 10hz. All printing will happen at this frequency.
   {
-    //If Master wants Teensy to print it will send a non-zero value to the address for the print command and this code will run
+    //If Master wants Teensy to print it will send a non-zero value to the address for the print command and its code will run
 
     //Print the entire register map
     if (registers.reg_map.print_registers) {
@@ -369,49 +328,40 @@ void loop() {
       error = ret;
     }
     delay(1000);
-    //Run the function that sends the CAN message for initializing CAN. Ret is what is returned during the CAN message
-    ret = initialize_CAN();
+    ret = initialize_CAN(); //Run the function that sends the CAN message for initializing CAN. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
     delay(50);
-    //Run the function that sends the CAN message for initializing motor controller node 1. Ret is what is returned during the CAN message
-    ret = initialize_MC(NODE_1);
+    ret = initialize_MC(NODE_1); //Run the function that sends the CAN message for initializing motor controller node 1. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
-    //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
-    process_available_msgs();
+    process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe. Not really certain. 
     delay(100);
-    //Run the function that sends the CAN message for initializing motor controller node 2. Ret is what is returned during the CAN message
-    ret = initialize_MC(NODE_2);
+    ret = initialize_MC(NODE_2); //Run the function that sends the CAN message for initializing motor controller node 2. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
-    //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
-    process_available_msgs();
+    process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
     delay(100);
-    //Run the function that sends the CAN message for initializing motor controller node 3. Ret is what is returned during the CAN message
-    ret = initialize_MC(NODE_3);
+    ret = initialize_MC(NODE_3); //Run the function that sends the CAN message for initializing motor controller node 3. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
-    //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
-    process_available_msgs();
+    process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
     delay(100);
-    //Run the function that sends the CAN message for initializing motor controller node 4. Ret is what is returned during the CAN message
-    ret = initialize_MC(NODE_4);
+    ret = initialize_MC(NODE_4); //Run the function that sends the CAN message for initializing motor controller node 4. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
-    //If one or more of the attempted initializations returned an ERROR_CAN_WRITE, then stop all motor controllers from operating and
-    //for now, do nothing and exit. I NEED TO CHANGE WHAT HAPPENS HERE!!! Before there were some printed errors and such but not sure
-    if (error == ERROR_CAN_WRITE)
+    if (error == ERROR_CAN_WRITE)  //If one or more of the attempted initializations returned an ERROR_CAN_WRITE, then stop all motor controllers from operating and
+                                   //for now, do nothing and exit. I NEED TO CHANGE WHAT HAPPENS HERE!!! Before there were some printed errors and such but not sure
     {
       delay(500);
       //If there is an error, stop the motor controller nodes. Not sure yet of the details of this function. Explore the uLaren CAN driver files and MAXON CANopen firmware specification documentation to figure this out.
@@ -421,19 +371,16 @@ void loop() {
       stop_remote_node(NODE_4);
 
       delay(500);
-      //This function "process_available_msgs() may be printing CAN errors if they have occured but not certain. uLaren would know.
-      process_available_msgs();
+      process_available_msgs(); //This function "process_available_msgs() may be printing CAN errors if they have occured but not certain. uLaren would know.
       //NEED TO DEAL WITH ERROR CODE HERE. IF NO STARTUP THEN DO SOMETHING
       error = 0;
     }
     else
     {
-      //Lets Teensy know the motor controllers have already been turned on
-      motor_controllers_on = true;
+      motor_controllers_on = true; //Lets Teensy know the motor controllers have already been turned on
 
-      //Clears the register so that this command can be sent again later. The command still wont do anything if the motor_controllers_on flag is true but this flag can be set false
-      //in motor controller shut off code. Shut off code has not currently been implemented.
-      registers.reg_map.init_motor_controllers = 0;
+      registers.reg_map.init_motor_controllers = 0; //Clears the register so that this command can be sent again later. The command still wont do anything if the motor_controllers_on flag is true but this flag can be set false
+                                                    //in motor controller shut off code. Shut off code has not currently been implemented.
 
       //Link the nodes together...a lot is happening in their link_node function. I'm not really sure what is going on with this
       //The function includes calls to OTHER uLaren_CAN_Driver functions including write_velocity_and_enable_MC(), arm_MC(), and send_statusword_request()
@@ -450,26 +397,22 @@ void loop() {
       delay(500);
 
       //Make sure the motors arent actuating initially
-      //Write the throttle_right_front register value to the motor controller
-      write_velocity_and_enable_MC(NODE_1, 0 );
+      write_velocity_and_enable_MC(NODE_1, 0 ); //Write the throttle_right_front register value to the motor controller
 
-      //Write the throttle_left_front register value to the motor controller
-      write_velocity_and_enable_MC(NODE_2, 0 );
+      write_velocity_and_enable_MC(NODE_2, 0 ); //Write the throttle_left_front register value to the motor controller
 
-      //Write the throttle_right_rear register value to the motor controller
-      write_velocity_and_enable_MC(NODE_3, 0);
+      write_velocity_and_enable_MC(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
 
-      //Write the throttle_left_rear register value to the motor controller
-      write_velocity_and_enable_MC(NODE_4, 0);
+      write_velocity_and_enable_MC(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
     }
   }
-
+  
+/*reset_imu register*/
+  //Run the imu initialization code from Adafruit_BNO055 library to reset the IMU readings 
   if (registers.reg_map.reset_imu) {
     if (!bno.begin()) { //This code will cause the bno to initialize. If it did not, it will print the error message
       if (GENERAL_PRINT) {
-        //There was a problem detecting the BNO055 ... check your connections
-        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-        //while(1);
+        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!"); //Should likely add some error handling code here. Nothing to protect for this occurence.
       }
     }
     else {
@@ -483,44 +426,38 @@ void loop() {
         Serial.println("You may want to calibrate your bno055");
       }
     }
-    registers.reg_map.reset_imu = 0;//Clear the register so reset does not happen continuously
+    registers.reg_map.reset_imu = 0;//Clear the register so that reset code does not run continuously. 
   }
-
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array*/
+/* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array. This code will send the most recent actuation to the approprate peripheral*/
 
   //Write the servo value from servo_out register
   writeServo(registers.reg_map.servo_out);
 
-  // Dead man's switch.  If throttle is not at full(ish) forward or reverse motors should be set to zero.
+  // Dead man's switch.  If throttle is not at full(ish) forward the car should come to a halt. There is a dead switch already implemented in Simulink but that one is 
+  //for redundancy.
   if (registers.reg_map.dead_switch) {
     if ( THR_in > 200 ) {
-      //Write the throttle_right_front register value to the motor controller
-      write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front * SCALE_FACTOR);
+      
+      write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
+      
+      write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
 
-      //Write the throttle_left_front register value to the motor controller
-      write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front * SCALE_FACTOR);
+      write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
 
-      //Write the throttle_right_rear register value to the motor controller
-      write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear * SCALE_FACTOR);
-
-      //Write the throttle_left_rear register value to the motor controller
-      write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear * SCALE_FACTOR);
+      write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
     }
     else {
-      //Write the throttle_right_front register value to the motor controller
-      write_velocity_and_enable_MC(NODE_1, 0);
+ 
+      write_velocity_and_enable_MC(NODE_1, 0); //Write the throttle_right_front register value to the motor controller
 
-      //Write the throttle_left_front register value to the motor controller
-      write_velocity_and_enable_MC(NODE_2, 0);
+      write_velocity_and_enable_MC(NODE_2, 0); //Write the throttle_left_front register value to the motor controller
 
-      //Write the throttle_right_rear register value to the motor controller
-      write_velocity_and_enable_MC(NODE_3, 0);
+      write_velocity_and_enable_MC(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
 
-      //Write the throttle_left_rear register value to the motor controller
-      write_velocity_and_enable_MC(NODE_4, 0);
+      write_velocity_and_enable_MC(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
 
       //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
       registers.reg_map.throttle_right_front = 0;
@@ -532,49 +469,42 @@ void loop() {
 
   //If the dead man's switch is turned off, just update the motor controllers immediately.
   else {
+    
+      write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
+      
+      write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
 
-    //Write the throttle_right_front register value to the motor controller
-    write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front * SCALE_FACTOR);
+      write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
 
-    //Write the throttle_left_front register value to the motor controller
-    write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front * SCALE_FACTOR);
-
-    //Write the throttle_right_rear register value to the motor controller
-    write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear * SCALE_FACTOR);
-
-    //Write the throttle_left_rear register value to the motor controller
-    write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear * SCALE_FACTOR);
+      write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+      
   }
 
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-  /* UPDATE SENSOR spi_register ARRAYS with the latest readings if collecting_data flag is true (set true via command from Master)*/
+/* UPDATE SENSOR READINGS. This code will grab the latest sensor values and store them in the registers if collecting_data is true. */
 
   if (collecting_data) {
 
     //Gather the IMU sensor data. These functions are from Adafruit_BNO055_ProgreSSIV.cpp
+    
+    uint8_t bno_buffer[6]; //Used to store the I2C message containting the imu data
 
-    //Used to store the I2C message containting the imu data
-    uint8_t bno_buffer[6];
-
-    //Send and I2C message to request the 6 bytes of EULER data
-    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6);
+    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6); //Send and I2C message to request the 6 bytes of EULER data
 
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
     registers.reg_map.euler_heading = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
     registers.reg_map.euler_roll = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
     registers.reg_map.euler_pitch = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
-
-    //Send and I2C message to request the 6 bytes of ACCELEROMETER data
-    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_ACCELEROMETER, bno_buffer, 6);
+    
+    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_ACCELEROMETER, bno_buffer, 6); //Send and I2C message to request the 6 bytes of ACCELEROMETER data
 
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
     registers.reg_map.accl_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
     registers.reg_map.accl_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
     registers.reg_map.accl_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
 
-    //Send and I2C message to request the 6 bytes of GYROSCOPE data
-    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_GYROSCOPE, bno_buffer, 6);
+    bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_GYROSCOPE, bno_buffer, 6); //Send and I2C message to request the 6 bytes of GYROSCOPE data
 
     //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
     registers.reg_map.gyro_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
@@ -592,14 +522,59 @@ void loop() {
 /* END OF MAIN LOOP*/
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*INTERRUPT SERVICE ROUTINES*/
+/*SERIAL PERIPHERAL INTERFACE (SPI) INTERRUPT SERVICE ROUTINES*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-//Interrupt Service Routine to run the slave data transfer function call. Responds to the Masters request for a message.
+/*
+  Teensy SPI Communication Protocol Description: 
+
+    spi0_isr handles the incoming bytes - or each frame - of an SPI message while spi_transfer_complete_isr prepares the code for recieving a new spi message
+    once the current one is complete. 
+  
+    An SPI message in this code consists of several one byte frames. The Master can send as many frames per message as it wants and there are two types of messages it can
+    initiate with the Slave, a read message and a write message. These are mutually exclusive and which one is occuring is determined by the value of the MSB of the first 
+    byte recieved in a message, the Read/Write bit. The master sets this bit to 1 for reads and 0 for writes. This byte also contains in the remaining 7 bits the register 
+    address (a value between 0 an 127). This value indexes a register in the registers union that is to be read from or written to with SPI data. For example:
+
+         ob10000001 -  This as the first frame of a message indicates that a read message is to follow and it should start at index 1 of the registers, i.e. registers.bytes[1].
+                       This index currently points to the memory location of the "begin data collection" command flag, i.e. registers.reg_map.begin_data_collection. 
+                    
+    The next frame the master sends will fill this memory location with data. Any subsequent frames will fill further registers with data, i.e. registers.bytes[2], registers.bytes[3] 
+    and so on. These may correspond to different commands, sensor readings, or actuation signals. In this iteration of the code, there is no protection agains writing to a read register 
+    but this is a recommended feature. Making some of the registers read only can prevent errors. 
+    
+    Below is an outline of both a read message and a write message.
+*/
+/*
+  If the read bit is high, the structure of the incoming message will behave like this:
+
+    first incoming message -> Teensy recieves register address of data_0 (Just prior to Interrupt 1)
+    second incoming message -> Teensy recieves junk (Just prior to Interrupt 2)
+    third incoming message -> Teensy recieves junk (Just prior to Interrupt 3)
+    fourth incoming message -> Teensy recieves junk (Just prior to Interrupt 4)
+    fifth incoming message -> Teensy recieves junk (Just prior to Interrupt 5) --> After the last spi0_isr interrupt (5), and immediately after the CS0 pin is brought high by MASTER, the Teensy
+                                                                                   will enter the spi_transfer_complete_isr interrupt. There it will load the SPI0_PUSHR_SLAVE push register with the Teensy 
+                                                                                   status byte to be sent out in the next message (status byte handler code not yet implemented)  
+*/
+/*
+  If the read bit is set high, the structure of the outgoing message will look like this (there is a wasted byte due to the double buffering of the spi hardware registers):
+  
+    from registers.bytes[address] -> Teensy sends junk (Just prior to Interrupt 1)
+    from registers.bytes[address+1] -> Teensy sends the Teensy_Status byte (Just prior to Interrupt 2)
+    from registers.bytes[address+2] -> Teensy sends requested data 0 (Just prior to Interrupt 3)
+    from registers.bytes[address+3] -> Teensy sends requested data 1 (Just prior to Interrupt 4)
+    from registers.bytes[address+4] -> Teensy sends requested data 2 (Just prior to Interrupt 5)
+
+  For more details on this process, including a graphical representation of this communnication protocol, please refer to the ProgreSSIV firmware documentation.
+
+*/
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/*Interrupt Service Routine to run the slave data transfer function call. Responds to the Master's request for a message*/
 void spi0_isr(void) {
 
-  //Grab the SPI0_RXFR1 buffer value. This is the value that was in the push register during the TRANSFER PRIOR TO THAT WHICH CAUSED THIS INTERRUPT
-  volatile uint8_t SPI0_POPR_buf = SPI0_POPR;
+  volatile uint8_t SPI0_POPR_buf = SPI0_POPR; //Grab the SPI0_RXFR1 buffer value. This is the value that was in the push register during the TRANSFER PRIOR TO THAT WHICH CAUSED THIS INTERRUPT
 
   //If this is a new message, copy the registers into the register buffer for temporary use in the isr
   if (reg_buf_flag) {
@@ -617,14 +592,12 @@ void spi0_isr(void) {
       Serial.print(message_cnt);
       Serial.println("---------");
     }
-    //Lower the address flag so that when the next frame comes, this code will not run again
-    address_flag = false;
     
-    //ANDs the shift register buffer value and the address mask (extract the 7 bit address from the first byte of the message)
-    spi_address_buf = SPI0_POPR_buf & ADDRESS_MASK; 
+    address_flag = false; //Lower the address flag so that when the next frame comes, this code will not run again
     
-    //ANDs the shift register buffer value and the read/write bit mask (extract the MSB that tells whether this is a read or write message)
-    spi_rw_bit = SPI0_POPR_buf & RW_MASK;
+    spi_address_buf = SPI0_POPR_buf & ADDRESS_MASK; //ANDs the shift register buffer value and the address mask (extract the 7 bit address from the first byte of the message)
+    
+    spi_rw_bit = SPI0_POPR_buf & RW_MASK; //ANDs the shift register buffer value and the read/write bit mask (extract the MSB that tells whether this is a read or write message)
 
     if (SPI_DEBUG_PRINT) {
       Serial.println("State 1:");
@@ -644,15 +617,15 @@ void spi0_isr(void) {
         Serial.println(registers_buf.bytes[spi_address_buf]);
       }
 
-      SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf];
+      SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf];//Place the read message byte into the push register. By the next interrupt this value will have been placed in the shift register
+                                                              //and by the one after that, it will have been shifted out to the Master device. The message lags by two frames.
       
-      //Increment the address so the next byte sent will be the next byte in the spi register
-      spi_address_buf++; 
+      spi_address_buf++; //Increment the address so the next byte sent will be the next byte in the spi register
 
     }
   }
   
-  //Now not on the first interrupt anymore. This is the code that will run for all subsequent interrupts of a single message.
+  //NOW NOT ON THE FIRST INTERRUPT ANYMORE. This is the code that will run for all subsequent interrupts of a single spi message.
   else {
 
     if (spi_rw_bit & RW_MASK) { //Message is a READ message
@@ -665,7 +638,9 @@ void spi0_isr(void) {
         spi_debug();
       }
 
-      SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf];
+      SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf]; //Place the read message byte into the push register. By the next interrupt this value will have been placed in the shift register
+                                                               //and by the one after that, it will have been shifted out to the Master device. The message lags by two frames.
+      
       spi_address_buf++; //Increment the address so the next byte sent will be the next byte in the spi register
 
     }
@@ -697,6 +672,7 @@ void spi0_isr(void) {
 }
 
 /* End spi0_isr */
+
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Used to print some memory map information for debugging purposes. CTR tells the count of the double buffer TX1,2,3, and 4 and PTR tells which data in it is being pointed to*/
@@ -735,23 +711,18 @@ void spi_transfer_complete_isr(void) {
     spi_debug();
   }
   
-  //Clear the TX FIFO counter so that the buffer does not attempt to keep track of multiple spi messges. We are getting around the double buffer behavior
-  //by only using the first byte of the buffer throughout the entire message. NEED TO ELABORATE ON THIS. OPEN UP THE MEMORY MAP DOCUMENTATION AND REFAMILIARIZE. 
-  SPI0_MCR |= (1 << 11); 
-
-  //This loads the push register with the status byte. Currently status byte code is not implemented but perhaps it can be 8 bits that let the Master
-  //know which sensors are currently on. There could be a task that sets the bits according to which peripheral-on flags are high or low. 
-  SPI0_PUSHR_SLAVE = Teensy_Status_Byte;
-
-  //Replace the entire registers struct (the register map) with the updated values that the spi0_isr was storing in the registers buffer. 
-  registers = registers_buf;
-  
-  //For SPI Debugging Purposes. If SPI_DEBUG_PRINT is true, then the packet count will be displayed at the beginning of each spi message/packet
-  message_cnt++;
+  SPI0_MCR |= (1 << 11);  //Clear the TX FIFO counter so that the buffer does not attempt to keep track of multiple spi messges. We are getting around the double buffer behavior
+                          //by only using the first byte of the buffer throughout the entire message. NEED TO ELABORATE ON THIS. OPEN UP THE MEMORY MAP DOCUMENTATION AND REFAMILIARIZE. 
+ 
+  SPI0_PUSHR_SLAVE = Teensy_Status_Byte; //This loads the push register with the status byte. Currently status byte code is not implemented but perhaps it can be 8 bits that let the Master
+                                        //know which sensors are currently on. There could be a task that sets the bits according to which peripheral-on flags are high or low.
+                                        
+  registers = registers_buf; //Replace the entire registers union with the updated values that the spi0_isr was storing in the registers buffer. 
+ 
+  message_cnt++; //For SPI Debugging Purposes. If SPI_DEBUG_PRINT is true, then the packet count will be displayed at the beginning of each spi message/packet
 
   /* Timing Calculations */
-  //Calculate and Print the end of the
-  message_delta_t = micros() - messageTime1;
+  message_delta_t = micros() - messageTime1; //Calculate the time the spi message took to occur from start to finish. Can be used to help diagnose performance/frequency issues
 
   if (SPI_DEBUG_PRINT) {
     Serial.print("Message Time: ");
@@ -759,7 +730,9 @@ void spi_transfer_complete_isr(void) {
   }
 
 }
+
 /* End spi_transfer_complete_isr */
+
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*FUNCTIONS*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -770,27 +743,22 @@ void spi_slave_init(void) {
   SIM_SCGC6 |= SIM_SCGC6_SPI0;    // enable clock to SPI. THIS WAS MISSING PRIOR AND WOULD CAUSE CODE TO GET STUCK IN THIS FUNCTION
   delay(1000);
 
-  //While configuring memory map, halt spi functions
-  SPI0_MCR |= SPI_MCR_HALT | SPI_MCR_MDIS;
+  SPI0_MCR |= SPI_MCR_HALT | SPI_MCR_MDIS; //While configuring memory map, halt spi functions
   
-  //This clears the entire SPI0_MCR register. This will clear the MSTR bit (master mode is a 1 and slave mode is a 0)
-  SPI0_MCR = 0x00000000;
+  SPI0_MCR = 0x00000000; //This clears the entire SPI0_MCR register. This will clear the MSTR bit (master mode is a 1 and slave mode is a 0)
 
-  //Clears entire CTAR0 slave register
-  SPI0_CTAR0_SLAVE = 0;
+  SPI0_CTAR0_SLAVE = 0; //Clears entire CTAR0 slave register
 
-  //THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size. Master and slave in our system agree on this)
-  SPI0_CTAR0 |= SPI_CTAR_FMSZ(7);
+  SPI0_CTAR0 |= SPI_CTAR_FMSZ(7); //THIS SETS THE BITS FOR FRAME SIZE (The value in this register plus one is the frame size. Want a single byte frame size.
+                                  //Master and slave in our system agree on this)
+                                  
+  SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25; //This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) 
+                                                                                //and the data is captured on the leading edge of SCK (phase). Configures CTAR0 Slave register
 
-  //This line sets the clock phase and clock polarity bits. Clock is inactive low (polarity) and the data is captured on the leading edge of SCK (phase). Configures CTAR0 Slave register
-  SPI0_CTAR0 = SPI0_CTAR0 & ~(SPI_CTAR_CPOL | SPI_CTAR_CPHA) | SPI_MODE0 << 25;
+  SPI0_RSER = 0x00020000; //Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
+                          //the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded.
 
-  //Request Select and Enable Register. Setting the RFDF_RE FIFO DRAIN REQUEST ENABLE Pin that allows interrupts or DMA to occur. The default method of draining
-  //the SPI hardware data register is interrupts. When a full 8 bits has been recieved an interrupt will be triggered (SPI0_ISR) and the data will be decoded.
-  SPI0_RSER = 0x00020000;
-
-  //Resume spi functions
-  SPI0_MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS;
+//  SPI0_MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS; //Resume spi functions
 
   //Enable the SCK, MISO, MOSI, and CS0 Pins (connections to the master device)
   CORE_PIN13_CONFIG = PORT_PCR_MUX(2);//Serial Clock (SCK) pin
