@@ -111,8 +111,9 @@ bool servo_radio_on = false; //Used by SPI task to know if the servo and radio a
 bool motor_controllers_on = false; //Used by SPI task to know if motor controllers have already been started up
 bool imu_on = false;//Used by SPI task to know if imu has already been started up
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
-bool reg_buf_flag = true; //Lets spi0_isr know that a new message has begun and it should transfer registers into registers_buf
-bool address_flag = true;  //Lets spi0_isr know that a new message has begun and it should decode the R/W bit and the register address
+bool first_interrupt_flag = true;
+//bool reg_buf_flag = true; //Lets spi0_isr know that a new message has begun and it should transfer registers into registers_buf
+//bool address_flag = true;  //Lets spi0_isr know that a new message has begun and it should decode the R/W bit and the register address
 
 /* Teensy Status Byte */
 volatile uint8_t Teensy_Status_Byte = 25;//25 by default for now. NOT YET IMPLEMENTED CODE TO HANDLE A TEENSY STATUS BYTE.
@@ -173,7 +174,7 @@ volatile long isrStartTime;
 volatile long isrEndTime;
 
 //These are used to tell how much time is elapsing between messages
-volatile long messageTime1;
+volatile long messageStartTime;
 volatile long message_delta_t;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -576,24 +577,20 @@ void spi0_isr(void) {
 
   volatile uint8_t SPI0_POPR_buf = SPI0_POPR; //Use SPI0_POPR to read the R1 FIFO buffer value. This is the value that was just recieved in the spi shift register from Master.
 
-  //If this is a new message, copy the registers into the register buffer for temporary use in the isr
-  if (reg_buf_flag) {
-    reg_buf_flag = false;
-    isrStartTime = micros();
-    messageTime1 = micros();
-    registers_buf = registers; //Grab the registers current values
-  }
-
   //If this is a new message, also decode the R/W bit and grab the address of the register to be accesses. These are both done with bit masks on the first byte of a message.
-  if (address_flag) {
+  if (first_interrupt_flag) {
+    
+    first_interrupt_flag = false;
+    isrStartTime = micros();
+    messageStartTime = micros();
+    registers_buf = registers; //If this is a new message, copy the registers into the register buffer for temporary use in the isr
+    
     if (SPI_DEBUG_PRINT) {
       Serial.println();
       Serial.print("--------");
       Serial.print(message_cnt);
       Serial.println("---------");
     }
-
-    address_flag = false; //Lower the address flag so that when the next frame comes, this code will not run again
 
     spi_address_buf = SPI0_POPR_buf & ADDRESS_MASK; //ANDs the shift register buffer value and the address mask (extract the 7 bit address from the first byte of the message)
 
@@ -699,9 +696,8 @@ void spi_debug(void) {
   (by setting a bit in the SPI0_MCR register high) and loads the push register buffer with the Teensy status byte.   */
 void spi_transfer_complete_isr(void) {
 
-  //Having both of these flags may be redundant but it's too late into senior project to test only using one. Could break everything. Not worth it. Go for it if you want.
-  reg_buf_flag = true;//Raises the new message flag so spi0_isr knows to load the register buffer
-  address_flag = true;//Let spi0_isr know the address/rw byte was just sent
+  first_interrupt_flag = true;//Raises the new message flag so spi0_isr knows to take the initial interrupt service routine actions of copying the register buffer, extracting the address 
+                              //and extracting the R/W bits
 
   if (SPI_DEBUG_PRINT) {
     Serial.println("State 4a:");
@@ -725,7 +721,7 @@ void spi_transfer_complete_isr(void) {
   message_cnt++; //For SPI Debugging Purposes. If SPI_DEBUG_PRINT is true, then the packet count will be displayed at the beginning of each spi message/packet
 
   /* Timing Calculations */
-  message_delta_t = micros() - messageTime1; //Calculate the time the spi message took to occur from start to finish. Can be used to help diagnose performance/frequency issues
+  message_delta_t = micros() - messageStartTime; //Calculate the time the spi message took to occur from start to finish. Can be used to help diagnose performance/frequency issues
 
   if (SPI_DEBUG_PRINT) {
     Serial.print("Message Time: ");
