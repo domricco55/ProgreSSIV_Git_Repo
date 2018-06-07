@@ -636,13 +636,15 @@ void spi0_isr(void) {
         spi_debug();
       }
 
-      SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf]; //Place the read message byte into the push register. By the next interrupt this value will have been placed in the shift register
-      //and by the one after that, it will have been shifted out to the Master device. The message lags by two frames.
+      SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf]; //Place the read message byte into the push register to be immediately placed in the T1 FIFO register. By the next 
+                                                               //interrupt this value will have been placed in the shift register and by the one after that, it will have been shifted
+                                                               //out to the Master device. The message from slave to master lags by two frames.
 
     }
     else {//Message is a WRITE message
 
       registers_buf.bytes[spi_address_buf] = SPI0_POPR_buf;
+      
       if (SPI_DEBUG_PRINT) {
         Serial.println("State 4:");
         Serial.print("\tAddr: ");
