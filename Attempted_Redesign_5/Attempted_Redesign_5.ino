@@ -539,7 +539,7 @@ void loop() {
     byte recieved in a message, the Read/Write bit. The master sets this bit to 1 for reads and 0 for writes. This byte also contains in the remaining 7 bits the register
     address (a value between 0 an 127). This value indexes a register in the registers union that is to be read from or written to with SPI data. For example:
 
-         ob10000001 -  This as the first frame of a message indicates that a read message is to follow and it should start at index 1 of the registers, i.e. registers.bytes[1].
+         0b10000001 -  This as the first frame of a message indicates that a read message is to follow and it should start at index 1 of the registers, i.e. registers.bytes[1].
                        This index currently points to the memory location of the "begin data collection" command flag, i.e. registers.reg_map.begin_data_collection.
 
     The next frame the master sends will fill this memory location with data. Any subsequent frames will fill further registers with data, i.e. registers.bytes[2], registers.bytes[3]
@@ -551,11 +551,11 @@ void loop() {
 /*
   If the read bit is high, the structure of the incoming message will behave like this:
 
-    first incoming message -> Teensy recieves register address of data_0 (Just prior to Interrupt 1)
-    second incoming message -> Teensy recieves junk (Just prior to Interrupt 2)
-    third incoming message -> Teensy recieves junk (Just prior to Interrupt 3)
-    fourth incoming message -> Teensy recieves junk (Just prior to Interrupt 4)
-    fifth incoming message -> Teensy recieves junk (Just prior to Interrupt 5) --> After the last spi0_isr interrupt (5), and immediately after the CS0 pin is brought high by MASTER, the Teensy
+    first incoming frame -> Teensy recieves register address of data_0 (Just prior to Interrupt 1)
+    second incoming frame -> Teensy recieves junk (Just prior to Interrupt 2)
+    third incoming frame -> Teensy recieves junk (Just prior to Interrupt 3)
+    fourth incoming frame -> Teensy recieves junk (Just prior to Interrupt 4)
+    fifth incoming frame -> Teensy recieves junk (Just prior to Interrupt 5) --> After the last spi0_isr interrupt (5), and immediately after the CS0 pin is brought high by MASTER, the Teensy
                                                                                    will enter the spi_transfer_complete_isr interrupt. There it will load the SPI0_PUSHR_SLAVE push register with the Teensy
                                                                                    status byte to be sent out in the next message (status byte handler code not yet implemented)
 */
