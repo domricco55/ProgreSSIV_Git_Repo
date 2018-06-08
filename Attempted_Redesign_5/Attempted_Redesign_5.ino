@@ -217,7 +217,7 @@ void setup() {
   //  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
   //  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task
   //  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
-  registers.reg_map.print_registers = 0;//Controls whether radio transeiver data is printing or not
+  registers.reg_map.print_registers = 1;//Controls whether radio transeiver data is printing or not
   registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
   registers.reg_map.print_imu = 0;//Controls whether IMU data is printing or not
   registers.reg_map.servo_out = -500;//Set an initial servo position value. Just a visual que that servo is working at startup
@@ -287,15 +287,17 @@ void loop() {
   }
 
   /*print command registers (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, MAY CAUSE BUGS TO OCCUR OTHERWISE)*/
+  
+  //Print the entire register map
+  if (registers.reg_map.print_registers) {
+    spi_registers_print();
+    registers.reg_map.print_registers = 0; //Clear the flag register so that the printing only occurs once. Master must write to this each time it wants the register map to print. 
+  }
+  
   unsigned long current_time_print = micros();
   if ((current_time_print - start_time_print) >= 100000)  //100ms => 10hz. All printing will happen at this frequency.
   {
     //If Master wants Teensy to print it will send a non-zero value to the address for the print command and its code will run
-
-    //Print the entire register map
-    if (registers.reg_map.print_registers) {
-      spi_registers_print();
-    }
 
     //Print the IMU values only
     if (registers.reg_map.print_imu) {
@@ -533,7 +535,7 @@ void loop() {
     once the current one is complete.
 
     An SPI message in this code consists of several one byte frames. The Master can send as many frames per message as it wants and there are two types of messages it can
-    initiate with the Slave, a read message and a write message. These are mutually exclusive and which one is occuring is determined by the value of the MSB of the first
+    initiate with the Slave, a read message and a write message. These are mutually exclusive and which one is occurring is determined by the value of the MSB of the first
     byte recieved in a message, the Read/Write bit. The master sets this bit to 1 for reads and 0 for writes. This byte also contains in the remaining 7 bits the register
     address (a value between 0 an 127). This value indexes a register in the registers union that is to be read from or written to with SPI data. For example:
 
