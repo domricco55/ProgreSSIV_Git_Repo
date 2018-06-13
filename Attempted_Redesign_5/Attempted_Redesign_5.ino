@@ -657,6 +657,9 @@ void spi0_isr(void) {
       }
 
     }
+    
+    spi_address_buf++; //Increment the address so the next byte sent will be the next byte in the spi register
+    
   }
   
   isrEndTime = micros();
@@ -666,7 +669,6 @@ void spi0_isr(void) {
     Serial.println();
   }
 
-  spi_address_buf++; //Increment the address so the next byte sent will be the next byte in the spi register
 
   SPI0_SR |= SPI_SR_RFDF; //Setting the RFDF or "Recieve FIFO Drain Flag" bit in the SPI0_SR register low (this is cleared by writing a 1 to it) to let the SPI0 module know that all entries have
                           //been removed from the RXFIFO register. Not sure exactly why this needs to be done or if it is absolutely necessary. 
