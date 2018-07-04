@@ -329,7 +329,7 @@ void loop() {
       error = ret;
     }
     delay(1000);
-    ret = initialize_CAN(); //Run the function that sends the CAN message for initializing CAN. Ret is what is returned during the CAN message
+    ret = start_remote_nodes(); //Run the function that sends the CAN message for initializing CAN. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;

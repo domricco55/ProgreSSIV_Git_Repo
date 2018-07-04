@@ -19,18 +19,18 @@
 
 extern FlexCAN CANbus;
 
-int initialize_CAN()
+int start_remote_nodes()
 {
 	CAN_message_t msg;
   int ret = 0;
 
-	//"Start Remote Node"
-	msg.id = 0;
+	//"Start Remote Node CAN Message"
+	msg.id = 0;//CAN_id for NMT or network management
 	msg.ext = 0;
 	msg.len = 2;
-	msg.timeout = 0;
-	msg.buf[0] = 0x01;
-	msg.buf[1] = 0;
+	msg.timeout = 0; //NOT SURE WHAT THESE DO
+	msg.buf[0] = 0x01; //Command Specifier for "start_remote_node"
+	msg.buf[1] = 0;//when set to zero, all slaves will be started
 
 	if (CANbus.write(msg) == 0)
  {
@@ -245,6 +245,7 @@ int initialize_MC(int node_id)
       
     }
   }
+  
 	//initialize MC's to profile velocity mode
   msg.id = 0x600 + node_id;
 	msg.len = 5;

@@ -16,7 +16,7 @@
 
 #define SCALE_FACTOR 2
 
-int  initialize_CAN();
+int  start_remote_nodes();
 int  initialize_MC(int node_id);
 int  arm_MC(int node_id);
 int  write_throttle_to_MC(int node_id, int throttle);
