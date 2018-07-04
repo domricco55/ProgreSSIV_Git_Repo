@@ -335,28 +335,28 @@ void loop() {
       error = ret;
     }
     delay(50);
-    ret = initialize_MC(NODE_1); //Run the function that sends the CAN message for initializing motor controller node 1. Ret is what is returned during the CAN message
+    ret = initialize_MC_Profile_Vel_Mode(NODE_1); //Run the function that sends the CAN message for initializing motor controller node 1. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
     process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe. Not really certain.
     delay(100);
-    ret = initialize_MC(NODE_2); //Run the function that sends the CAN message for initializing motor controller node 2. Ret is what is returned during the CAN message
+    ret = initialize_MC_Profile_Vel_Mode(NODE_2); //Run the function that sends the CAN message for initializing motor controller node 2. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
     process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
     delay(100);
-    ret = initialize_MC(NODE_3); //Run the function that sends the CAN message for initializing motor controller node 3. Ret is what is returned during the CAN message
+    ret = initialize_MC_Profile_Vel_Mode(NODE_3); //Run the function that sends the CAN message for initializing motor controller node 3. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
     process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
     delay(100);
-    ret = initialize_MC(NODE_4); //Run the function that sends the CAN message for initializing motor controller node 4. Ret is what is returned during the CAN message
+    ret = initialize_MC_Profile_Vel_Mode(NODE_4); //Run the function that sends the CAN message for initializing motor controller node 4. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;

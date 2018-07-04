@@ -177,7 +177,7 @@ int resetFault (int node_id)
   }
 }
 
-int initialize_MC(int node_id)
+int initialize_MC_Profile_Vel_Mode(int node_id)
 {
 	CAN_message_t msg;
   int ret = 0;
@@ -246,7 +246,7 @@ int initialize_MC(int node_id)
     }
   }
   
-	//initialize MC's to profile velocity mode
+	//Set MC's to profile velocity mode
   msg.id = 0x600 + node_id;
 	msg.len = 5;
   msg.timeout = 0;
@@ -394,6 +394,166 @@ int initialize_MC(int node_id)
   return ret;
 }
 
+int initialize_MC_Torque_Mode(int node_id)
+{
+  CAN_message_t msg;
+  int ret = 0;
+
+  //make sure node_id is valid!
+  if (node_id > 0 && node_id < 127)
+  {
+    
+  }
+  else 
+  {
+    if (PRINT)
+    {
+      Serial.print("***** I received a bad node_id of: ");
+      Serial.println(node_id);
+    }
+    
+    exit(0);
+  }
+
+  //tell MC's to go to shutdown state
+  msg.id = 0x600 + node_id;
+  msg.ext = 0;
+  msg.len = 6;
+  msg.timeout = 0;
+  //
+  msg.buf[0] = 0x2B;  
+  msg.buf[2] = 0x60;  
+  msg.buf[1] = 0x40;
+  msg.buf[3] = 0x00;
+  //
+  msg.buf[5] = 0x00;
+  msg.buf[4] = 0b00000110;
+  msg.buf[6] = 0;
+  msg.buf[7] = 0;
+
+  if (CANbus.write(msg) == 0)
+  {
+    ret = ERROR_CAN_WRITE;
+    if (PRINT)
+    {
+      Serial.println("ERROR: CAN Write.");
+      Serial.print("Node id: ");
+      Serial.println(node_id);
+    }
+    
+  }
+  else {
+    //print_outgoing_CAN_message(msg);
+    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+    if (CANbus.read(msg) != 0)
+    {
+      if (PRINT)
+      {
+        Serial.println("Received Shutdown Confirmation");
+      }
+      
+    }
+    else
+    {
+      if (PRINT)
+      {
+        Serial.println("DID NOT Receive Shutdown Confirmation");
+      }
+      
+    }
+  }
+  
+  //initialize MC's to torque mode
+  msg.id = 0x600 + node_id;
+  msg.len = 5;
+  msg.timeout = 0;
+  msg.buf[0] = 0x2F;
+  msg.buf[2] = 0x60;
+  msg.buf[1] = 0x60;
+  msg.buf[3] = 0;
+  msg.buf[4] = TORQUE_MODE;
+
+  if (CANbus.write(msg) == 0)
+  {
+    ret = ERROR_CAN_WRITE;
+    if (PRINT)
+    {
+      Serial.println("ERROR: CAN Write.");
+      Serial.print("Node id: ");
+      Serial.println(node_id);
+    }
+    
+  }
+  else {
+    //print_outgoing_CAN_message(msg);
+    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+    if (CANbus.read(msg) != 0)
+    {
+      if (PRINT)
+      {
+        Serial.println("Received Profile Velocity Confirmation");
+      }
+      
+    }
+    else
+    {
+      if (PRINT)
+      {
+        Serial.println("DID NOT Receive Profile Velocity Confirmation");
+      }
+      
+    }
+  }
+  
+  //tell MC's to go to switch-on state
+  msg.id = 0x600 + node_id;
+  msg.ext = 0;
+  msg.len = 6;
+  msg.timeout = 0;
+  //
+  msg.buf[0] = 0x2B;
+  msg.buf[2] = 0x60;
+  msg.buf[1] = 0x40;
+  msg.buf[3] = 0x00;
+  //
+  msg.buf[5] = 0x00;
+  msg.buf[4] = 0b00000111;
+
+  if (CANbus.write(msg) == 0)
+  {
+    ret = ERROR_CAN_WRITE;
+    if (PRINT)
+    {
+      Serial.println("ERROR: CAN Write.");
+      Serial.print("Node id: ");
+      Serial.println(node_id);
+    }
+    
+  }
+  else {
+    //print_outgoing_CAN_message(msg);
+    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+    if (CANbus.read(msg) != 0)
+    {
+      if (PRINT)
+      {
+        Serial.println("Received Switch ON Confirmation");
+      }
+      
+    }
+    else
+    {
+      if (PRINT)
+      {
+        Serial.println("DID NOT Receive Switch ON Confirmation");
+      }
+      
+    }
+  }
+  return ret;
+}
+
+
 int arm_MC(int node_id)
 {
   CAN_message_t msg;
@@ -450,136 +610,136 @@ int arm_MC(int node_id)
 }
 
 
-int write_throttle_to_MC(int node_id, int throttle)
-{
-  CAN_message_t msg;
-  int ret = 0;
-    
-  //make sure node_id is valid!
-  if (node_id > 0 && node_id < 127)
-  {
-    
-  }
-  else 
-  {
-    if (PRINT)
-    {
-      Serial.print("***** I received a bad node_id of: ");
-      Serial.println(node_id);
-    }
-    
-    exit(0);
-  }
-
-  //make sure throttle does not exceed limits
-  if (throttle > 500) 
-  {
-    throttle = 500;
-  }
-  else if (throttle < -500)
-  {
-    throttle = -500;
-  }
-  else if (throttle < 10 && throttle > -10)
-  {
-    throttle = 0;
-  }
-
-  //write to Target Velocity
-  msg.id = 0x600 + node_id;
-  msg.ext = 0;
-  msg.len = 8;
-  msg.timeout = 0;
-  msg.buf[0] = 0x23;
-  msg.buf[2] = 0x60;
-  msg.buf[1] = 0xFF;
-  msg.buf[3] = 0;
-  //
-  memcpy(&(msg.buf[4]), (void *)(&throttle), 1);
-  memcpy(&(msg.buf[5]), ((char *)(&throttle) + 1), 1);
-  memcpy(&(msg.buf[6]), ((char *)(&throttle) + 2), 1);
-  memcpy(&(msg.buf[7]), ((char *)(&throttle) + 3), 1);
-  
-  //write message and receive
-  if (CANbus.write(msg) == 0)
-  {
-    if (PRINT)
-    {
-      Serial.println("error writing CAN message");
-    }
-    
-    ret = ERROR_CAN_WRITE;
-  }
-  //it will stop responding if a can write occurs but i want to test this out
-  else 
-  {
-    if (PRINT)
-      {
-        //Serial.print("Awaiting throttle write confirmation... ");
-      }
-    while (CANbus.read(msg) == 0)
-    {
-      //wait for handshake
-      
-    }
-
-    if (PRINT)
-    {
-      //Serial.println("Received confirmation");
-    }
-  }
-  return ret;
-}
-
-int initiate_target_velocity (int node_id)
-{
-  CAN_message_t msg;
-  int ret = 0;
-  
-  //initiate target velocity
-  //tell MC's to go to operation enabled state w/target velocity enabled
-  msg.id = 0x600 + node_id;
-  msg.ext = 0;
-  msg.len = 6;
-  msg.timeout = 0;
-  //
-  msg.buf[0] = 0x2B;
-  msg.buf[2] = 0x60;
-  msg.buf[1] = 0x40;
-  msg.buf[3] = 0x00;
-  //
-  msg.buf[5] = 0b00000000;
-  msg.buf[4] = 0b00001111;
-  msg.buf[6] = 0;
-  msg.buf[7] = 0;
-
-  //write message
-  if (CANbus.write(msg) == 0)
-  {
-    ret = ERROR_CAN_WRITE;
-  }
-  else 
-  {
-  //it will stop responding but i want to test
-    //print_outgoing_CAN_message(msg);
-    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_FAST_US);
-    if (PRINT)
-    {
-      //Serial.print("Awaiting initiate target velocity confirmation... ");
-    }
-    while (CANbus.read(msg) == 0)
-    {
-      //wait for handshake
-    }
-
-    if (PRINT)
-    {
-      //Serial.println("Received confirmation");
-    }
-  }
-
-  return ret;
-}
+//int write_throttle_to_MC(int node_id, int throttle)
+//{
+//  CAN_message_t msg;
+//  int ret = 0;
+//    
+//  //make sure node_id is valid!
+//  if (node_id > 0 && node_id < 127)
+//  {
+//    
+//  }
+//  else 
+//  {
+//    if (PRINT)
+//    {
+//      Serial.print("***** I received a bad node_id of: ");
+//      Serial.println(node_id);
+//    }
+//    
+//    exit(0);
+//  }
+//
+//  //make sure throttle does not exceed limits
+//  if (throttle > 500) 
+//  {
+//    throttle = 500;
+//  }
+//  else if (throttle < -500)
+//  {
+//    throttle = -500;
+//  }
+//  else if (throttle < 10 && throttle > -10)
+//  {
+//    throttle = 0;
+//  }
+//
+//  //write to Target Velocity
+//  msg.id = 0x600 + node_id;
+//  msg.ext = 0;
+//  msg.len = 8;
+//  msg.timeout = 0;
+//  msg.buf[0] = 0x23;
+//  msg.buf[2] = 0x60;
+//  msg.buf[1] = 0xFF;
+//  msg.buf[3] = 0;
+//  //
+//  memcpy(&(msg.buf[4]), (void *)(&throttle), 1);
+//  memcpy(&(msg.buf[5]), ((char *)(&throttle) + 1), 1);
+//  memcpy(&(msg.buf[6]), ((char *)(&throttle) + 2), 1);
+//  memcpy(&(msg.buf[7]), ((char *)(&throttle) + 3), 1);
+//  
+//  //write message and receive
+//  if (CANbus.write(msg) == 0)
+//  {
+//    if (PRINT)
+//    {
+//      Serial.println("error writing CAN message");
+//    }
+//    
+//    ret = ERROR_CAN_WRITE;
+//  }
+//  //it will stop responding if a can write occurs but i want to test this out
+//  else 
+//  {
+//    if (PRINT)
+//      {
+//        //Serial.print("Awaiting throttle write confirmation... ");
+//      }
+//    while (CANbus.read(msg) == 0)
+//    {
+//      //wait for handshake
+//      
+//    }
+//
+//    if (PRINT)
+//    {
+//      //Serial.println("Received confirmation");
+//    }
+//  }
+//  return ret;
+//}
+//
+////int initiate_target_velocity (int node_id)
+////{
+////  CAN_message_t msg;
+////  int ret = 0;
+////  
+////  //initiate target velocity
+////  //tell MC's to go to operation enabled state w/target velocity enabled
+////  msg.id = 0x600 + node_id;
+////  msg.ext = 0;
+////  msg.len = 6;
+////  msg.timeout = 0;
+////  //
+////  msg.buf[0] = 0x2B;
+////  msg.buf[2] = 0x60;
+////  msg.buf[1] = 0x40;
+////  msg.buf[3] = 0x00;
+////  //
+////  msg.buf[5] = 0b00000000;
+////  msg.buf[4] = 0b00001111;
+////  msg.buf[6] = 0;
+////  msg.buf[7] = 0;
+////
+////  //write message
+////  if (CANbus.write(msg) == 0)
+////  {
+////    ret = ERROR_CAN_WRITE;
+////  }
+////  else 
+////  {
+////  //it will stop responding but i want to test
+////    //print_outgoing_CAN_message(msg);
+////    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_FAST_US);
+////    if (PRINT)
+////    {
+////      //Serial.print("Awaiting initiate target velocity confirmation... ");
+////    }
+////    while (CANbus.read(msg) == 0)
+////    {
+////      //wait for handshake
+////    }
+////
+////    if (PRINT)
+////    {
+////      //Serial.println("Received confirmation");
+////    }
+////  }
+////
+////  return ret;
+////}
 
 int write_velocity(int node_id, int throttle)
 {
@@ -620,8 +780,7 @@ int write_velocity(int node_id, int throttle)
     throttle = 0;
   }
   
-  //initiate target velocity
-  //tell MC's to go to operation enabled state w/target velocity enabled
+  //RxPDO 4, setting the controlword value and updating the target velocity
   msg.id = 0x500 + node_id;
   msg.ext = 0;
   msg.len = 6;
@@ -652,6 +811,62 @@ int write_velocity(int node_id, int throttle)
 
   return 0;
 }
+
+int write_torque(int node_id, int throttle)
+{
+  CAN_message_t msg;
+  int ret = 0;
+  int error = 0;
+
+  //make sure throttle does not exceed limits
+  if (throttle > (500 * SCALE_FACTOR + 200))  
+  {
+    throttle = 500 * SCALE_FACTOR;
+  }
+  else if (throttle < (-500 * SCALE_FACTOR - 200))
+  {
+    throttle = -500 * SCALE_FACTOR;
+  }
+
+  //initiate throttle dead zone
+  if (throttle < (10 * SCALE_FACTOR) && throttle > (-10 * SCALE_FACTOR))
+  {
+    throttle = 0;
+  }
+  
+  //set the target torque value
+  //tell MC's to go to operation enabled state w/target velocity enabled
+  msg.id = 0x00000500 + node_id; //COB-id of RxPDO 4
+  msg.ext = 0;
+  msg.len = 6;
+  msg.timeout = 0;
+  //
+  msg.buf[0] = 0x0F;
+  msg.buf[1] = 0x00;
+  memcpy(&(msg.buf[2]), (void *)(&throttle), 1);
+  memcpy(&(msg.buf[3]), ((char *)(&throttle) + 1), 1);
+  memcpy(&(msg.buf[4]), ((char *)(&throttle) + 2), 1);
+  memcpy(&(msg.buf[5]), ((char *)(&throttle) + 3), 1);
+//  msg.buf[6] = 0;
+//  msg.buf[7] = 0;
+
+  if (PRINT)
+  {
+    print_outgoing_CAN_message(msg);
+  }
+
+  ret = CANbus.write(msg);
+  if (ret == 1)
+  {
+    error = NO_ERROR;
+  }
+  else {
+    error = ERROR_CAN_WRITE;
+  }
+
+  return 0;
+}
+
 
 void print_outgoing_CAN_message(CAN_message_t msg)
 {
@@ -1070,7 +1285,7 @@ int rearm_MC(int node_id)
   int error = 0;
 
   /*
-  ret = initialize_MC(node_id);
+  ret = initialize_MC_Profile_Vel_Mode(node_id);
   if (ret > 0)
   {
     error = ret;
@@ -1084,7 +1299,7 @@ int rearm_MC(int node_id)
   delay(200);
   resetFault(node_id);
   delay(200);
-  initialize_MC(node_id);
+  initialize_MC_Profile_Vel_Mode(node_id);
   delay(200);
   while (CANbus.available())
   {
