@@ -1,0 +1,28 @@
+%implements s81_b0_vk26h_0_PublicModuleTypes "C"
+
+%function PublicModuleTypes(block) Output
+
+
+/* Custom Type definition for MATLABSystem: '<S3>/SPI Master Transfer Read radio_steering' */
+#include "MW_SVD.h"
+#include <stddef.h>
+
+#ifndef typedef_bdsgsfqfrb
+#define typedef_bdsgsfqfrb
+typedef struct
+{
+    int32_T __dummy;
+} bdsgsfqfrb;
+#endif /*typedef_bdsgsfqfrb*/
+#ifndef typedef_nxh1cwezgh
+#define typedef_nxh1cwezgh
+typedef struct
+{
+    boolean_T matlabCodegenIsDeleted;
+    int32_T isInitialized;
+    boolean_T isSetupComplete;
+    bdsgsfqfrb Hw;
+    MW_Handle_Type MW_SPI_HANDLE;
+} nxh1cwezgh;
+#endif /*typedef_nxh1cwezgh*/
+%endfunction

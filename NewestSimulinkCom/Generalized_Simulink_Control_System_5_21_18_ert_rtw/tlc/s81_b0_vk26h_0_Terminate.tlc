@@ -1,0 +1,47 @@
+%implements s81_b0_vk26h_0_Terminate "C"
+
+%function Terminate(block, system) Output
+%assign cfgTxt = ""
+%openfile cfgTxt
+%assign localVarDecl = ""
+%assign _modelSS = ""
+
+%if SLibCG_FcnCallArgAccessed(0,6,0,0)
+%<SLibCG_AccessArg(0 ,6, 1)>
+%endif
+%if SLibCG_FcnCallArgAccessed(0,6,0,1)
+%<SLibCG_AccessArg(0 ,6, 0)>
+%endif
+
+/* Terminate for MATLABSystem: '<S3>/SPI Master Transfer Read radio_steering' */
+%<(SLibCGCallSubFcn("ekk0yizesa", ["&localDW->e2a5ozwqf2", "%<::tSimStruct>"], 0, 6, 0))>;
+%closefile cfgTxt
+%<cfgTxt>
+%assign rtmArgSys = ::CompiledModel.System[::CompiledModel.System[::CompiledModel.RTWCGModules.RTWCGModule[0].CGSystemIdx].NonInlinedParentSystemIdx]
+%if SysFcnArgNeeded("Terminate", rtmArgSys.Interface.RTMArgDef, rtmArgSys.CurrentTID, FcnSysModuleIsRateGrouping(rtmArgSys, "Terminate"))
+%<SLibCG_AccessArg(0, 6, 0)>
+%endif
+%if SLibCG_ArgAccessed(0, 6, 0)
+%<SLibAccessArg(rtmArgSys.Interface.RTMArgDef, "Terminate", rtmArgSys.CurrentTID, FcnSysModuleIsRateGrouping(rtmArgSys, "Terminate"))>
+%endif
+%if (IsModelReferenceBaseSys(rtmArgSys) && (IsModelRefScalableBuild() || GenerateClassInterface)) ||...
+(GenerateClassInterface && SLibIsMultiInstanceServer(rtmArgSys))
+%<SLibCG_UndoAccessArg(0, 6, 0)>
+%endif
+%endfunction
+%function TerminateFcnProtoType(block, system) Output
+%assign fcnProtoType = ""
+%openfile fcnProtoType
+static void mvaxodm52r(\
+%assign comma = ""
+%if SLibCG_ArgAccessed(0, 6, 0)
+%<comma>%<::tSimStructType> * const %<::tSimStruct>\
+%assign comma = ", "
+%endif
+%if SLibCG_ArgAccessed(0, 6, 1)
+%<comma>masv35lgnd *localDW\
+%assign comma = ", "
+%endif
+%closefile fcnProtoType
+%<SLibCG_SetFcnProtoType(0, 6, fcnProtoType)>
+%endfunction

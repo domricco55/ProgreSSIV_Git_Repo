@@ -1,0 +1,62 @@
+%implements s81_b0_vk26h_0_Start "C"
+
+%function Start(block, system) Output
+%assign cfgTxt = ""
+%openfile cfgTxt
+%assign localVarDecl = ""
+%openfile localVarDecl
+
+nxh1cwezgh *obj;
+uint32_T SSPinNameLoc;
+uint32_T MOSIPinLoc;
+uint32_T MISOPinLoc;
+uint32_T SCKPinLoc;
+%closefile localVarDecl
+/* Start for MATLABSystem: '<S3>/SPI Master Transfer Read radio_steering' */
+localDW->e2a5ozwqf2.matlabCodegenIsDeleted = true;
+localDW->e2a5ozwqf2.isInitialized = 0;
+localDW->e2a5ozwqf2.matlabCodegenIsDeleted = false;
+localDW->axqhjrjw0v = true;
+obj = &localDW->e2a5ozwqf2;
+localDW->e2a5ozwqf2.isSetupComplete = false;
+localDW->e2a5ozwqf2.isInitialized = 1;
+SSPinNameLoc = SPI0_CE1;
+MOSIPinLoc = MW_UNDEFINED_VALUE;
+MISOPinLoc = MW_UNDEFINED_VALUE;
+SCKPinLoc = MW_UNDEFINED_VALUE;
+obj->MW_SPI_HANDLE = MW_SPI_Open(0U, MOSIPinLoc, MISOPinLoc, SCKPinLoc, SSPinNameLoc, true, 0);
+MW_SPI_SetBusSpeed(localDW->e2a5ozwqf2.MW_SPI_HANDLE, 500000U);
+localDW->e2a5ozwqf2.isSetupComplete = true;
+%closefile cfgTxt
+%<cfgTxt>
+%assign rtmArgSys = ::CompiledModel.System[::CompiledModel.System[::CompiledModel.RTWCGModules.RTWCGModule[0].CGSystemIdx].NonInlinedParentSystemIdx]
+%if SysFcnArgNeeded("Start", rtmArgSys.Interface.RTMArgDef, rtmArgSys.CurrentTID, FcnSysModuleIsRateGrouping(rtmArgSys, "Start"))
+%<SLibCG_AccessArg(0, 4, 0)>
+%endif
+%if SLibCG_ArgAccessed(0, 4, 0)
+%<SLibAccessArg(rtmArgSys.Interface.RTMArgDef, "Start", rtmArgSys.CurrentTID, FcnSysModuleIsRateGrouping(rtmArgSys, "Start"))>
+%endif
+%if (IsModelReferenceBaseSys(rtmArgSys) && (IsModelRefScalableBuild() || GenerateClassInterface)) ||...
+(GenerateClassInterface && SLibIsMultiInstanceServer(rtmArgSys))
+%<SLibCG_UndoAccessArg(0, 4, 0)>
+%endif
+%<LibSetSystemField(system, "CachedStartLocalVars", localVarDecl)>
+%endfunction
+%function StartFcnProtoType(block, system) Output
+%assign fcnProtoType = ""
+%openfile fcnProtoType
+static void bdsxtmxzbc(\
+%assign comma = ""
+%if SLibCG_ArgAccessed(0, 4, 0)
+%<comma>%<::tSimStructType> * const %<::tSimStruct>\
+%assign comma = ", "
+%endif
+%if SLibCG_ArgAccessed(0, 4, 1)
+%<comma>const uint8_T hqx0x1bw1i[4]\
+%assign comma = ", "
+%endif
+%<comma>masv35lgnd *localDW\
+%assign comma = ", "
+%closefile fcnProtoType
+%<SLibCG_SetFcnProtoType(0, 4, fcnProtoType)>
+%endfunction
