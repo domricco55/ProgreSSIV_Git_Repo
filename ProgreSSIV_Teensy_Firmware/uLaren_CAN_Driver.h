@@ -6,7 +6,9 @@
 #define NO_ERROR 0
 #define ERROR_CAN_WRITE 1
 
+/*Define the data bytes available for selecting the modes of operation*/
 #define PROFILE_VELOCITY_MODE 3
+#define TORQUE_MODE 10
 //#define CURRENT_MODE 253 //0xfd
 
 
