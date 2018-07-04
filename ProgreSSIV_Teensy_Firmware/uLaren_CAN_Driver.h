@@ -21,7 +21,7 @@ int  initialize_MC(int node_id);
 int  arm_MC(int node_id);
 int  write_throttle_to_MC(int node_id, int throttle);
 int  initiate_target_velocity (int node_id);
-int  write_velocity_and_enable_MC(int node_id, int throttle);
+int  write_velocity(int node_id, int throttle);
 void print_outgoing_CAN_message(CAN_message_t msg);
 void print_incoming_CAN_message(CAN_message_t msg);
 int  send_statusword_request(int node_id);

@@ -580,7 +580,7 @@ int initiate_target_velocity (int node_id)
   return ret;
 }
 
-int write_velocity_and_enable_MC(int node_id, int throttle)
+int write_velocity(int node_id, int throttle)
 {
   CAN_message_t msg;
   int ret = 0;
@@ -1011,7 +1011,7 @@ int link_node(int node_id)
     Serial.println("*****WRITING VELOCITY and INITIATING****");
   }
   
-  write_velocity_and_enable_MC(node_id,0);
+  write_velocity(node_id,0);
   delay(50);
   while (CANbus.available())
   {

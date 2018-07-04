@@ -112,8 +112,6 @@ bool motor_controllers_on = false; //Used by SPI task to know if motor controlle
 bool imu_on = false;//Used by SPI task to know if imu has already been started up
 bool collecting_data = false; //Used by SPI task to start and stop data collection from sensors
 bool first_interrupt_flag = true;
-//bool reg_buf_flag = true; //Lets spi0_isr know that a new message has begun and it should transfer registers into registers_buf
-//bool address_flag = true;  //Lets spi0_isr know that a new message has begun and it should decode the R/W bit and the register address
 
 /* Teensy Status Byte */
 volatile uint8_t Teensy_Status_Byte = 25;//25 by default for now. NOT YET IMPLEMENTED CODE TO HANDLE A TEENSY STATUS BYTE.
@@ -386,7 +384,7 @@ void loop() {
       //in motor controller shut off code. Shut off code has not currently been implemented.
 
       //Link the nodes together...a lot is happening in their link_node function. I'm not really sure what is going on with this
-      //The function includes calls to OTHER uLaren_CAN_Driver functions including write_velocity_and_enable_MC(), arm_MC(), and send_statusword_request()
+      //The function includes calls to OTHER uLaren_CAN_Driver functions including write_velocity(), arm_MC(), and send_statusword_request()
       //Thinking that they used this function and intended for it only to be used once and maybe Paul thought that was the function
       //you call to write a velocity value. Or it could be that they couldnt get the normal write_velocity function to work and resorted
       //to using the one with the enable_MC thing...really really not sure. NEED TO FIGURE THIS ALL OUT
@@ -400,13 +398,13 @@ void loop() {
       delay(500);
 
       //Make sure the motors arent actuating initially
-      write_velocity_and_enable_MC(NODE_1, 0 ); //Write the throttle_right_front register value to the motor controller
+      write_velocity(NODE_1, 0 ); //Write the throttle_right_front register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_2, 0 ); //Write the throttle_left_front register value to the motor controller
+      write_velocity(NODE_2, 0 ); //Write the throttle_left_front register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
+      write_velocity(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
+      write_velocity(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
     }
   }
 
@@ -444,23 +442,23 @@ void loop() {
   if (registers.reg_map.dead_switch) {
     if ( THR_in > 200 ) {
 
-      write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
+      write_velocity(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
+      write_velocity(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
+      write_velocity(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+      write_velocity(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
     }
     else {
 
-      write_velocity_and_enable_MC(NODE_1, 0); //Write the throttle_right_front register value to the motor controller
+      write_velocity(NODE_1, 0); //Write the throttle_right_front register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_2, 0); //Write the throttle_left_front register value to the motor controller
+      write_velocity(NODE_2, 0); //Write the throttle_left_front register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
+      write_velocity(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
 
-      write_velocity_and_enable_MC(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
+      write_velocity(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
 
       //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
       registers.reg_map.throttle_right_front = 0;
@@ -473,13 +471,13 @@ void loop() {
   //If the dead man's switch is turned off, just update the motor controllers immediately.
   else {
 
-    write_velocity_and_enable_MC(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
+    write_velocity(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
 
-    write_velocity_and_enable_MC(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
+    write_velocity(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
 
-    write_velocity_and_enable_MC(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
+    write_velocity(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
 
-    write_velocity_and_enable_MC(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+    write_velocity(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
 
   }
 
