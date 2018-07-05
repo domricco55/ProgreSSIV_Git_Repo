@@ -510,12 +510,14 @@ int initialize_MC_Torque_Mode(int node_id)
   msg.ext = 0;
   msg.len = 6;
   msg.timeout = 0;
-  //
+  //Command Specifier for Write Dictionary Object of 2 bytes
   msg.buf[0] = 0x2B;
+  //Control word Object dictionary index
   msg.buf[2] = 0x60;
   msg.buf[1] = 0x40;
+  //Control word Object dictionary sub-index
   msg.buf[3] = 0x00;
-  //
+  //Control word bytes
   msg.buf[5] = 0x00;
   msg.buf[4] = 0b00000111;
 
@@ -586,8 +588,8 @@ int arm_MC(int node_id)
   msg.buf[1] = 0x40;
   msg.buf[3] = 0x00;
   //
-  msg.buf[5] = 0x01;
-  msg.buf[4] = 0b00001111;
+  msg.buf[5] = 0x01;//Not sure which of these is the high byte and which is the low byte. Not certain what each does either. Look at firmware specification documentation.
+  msg.buf[4] = 0b00001111;//THIS IS THE CONTROL WORD ACCESS THAT THE write_velocity_and_enable_op FUNCTION SEEMS TO BE ACCESSING AS WELL. REDUNDANT. 
 
   if (CANbus.write(msg) == 0)
   {
@@ -741,7 +743,7 @@ int arm_MC(int node_id)
 ////  return ret;
 ////}
 
-int write_velocity(int node_id, int throttle)
+int write_velocity_and_enable_op(int node_id, int throttle)
 {
   CAN_message_t msg;
   int ret = 0;
@@ -763,37 +765,36 @@ int write_velocity(int node_id, int throttle)
     exit(0);
   }
 
-  
-  //make sure throttle does not exceed limits
-  if (throttle > (500 * SCALE_FACTOR + 200))  
-  {
-    throttle = 500 * SCALE_FACTOR;
-  }
-  else if (throttle < (-500 * SCALE_FACTOR - 200))
-  {
-    throttle = -500 * SCALE_FACTOR;
-  }
-
-  //initiate throttle dead zone
-  if (throttle < (10 * SCALE_FACTOR) && throttle > (-10 * SCALE_FACTOR))
-  {
-    throttle = 0;
-  }
+//  
+//  //make sure throttle does not exceed limits
+//  if (throttle > (500 * SCALE_FACTOR + 200))  
+//  {
+//    throttle = 500 * SCALE_FACTOR;
+//  }
+//  else if (throttle < (-500 * SCALE_FACTOR - 200))
+//  {
+//    throttle = -500 * SCALE_FACTOR;
+//  }
+//
+//  //initiate throttle dead zone
+//  if (throttle < (10 * SCALE_FACTOR) && throttle > (-10 * SCALE_FACTOR))
+//  {
+//    throttle = 0;
+//  }
   
   //RxPDO 4, setting the controlword value and updating the target velocity
-  msg.id = 0x500 + node_id;
+  msg.id = 0x500 + node_id; //COB-id of RxPDO 4
   msg.ext = 0;
   msg.len = 6;
   msg.timeout = 0;
-  //
-  msg.buf[0] = 0x0F;
-  msg.buf[1] = 0x00;
+  //Control Word bytes
+  msg.buf[0] = 0x0F;//Device control command for "Enable Operation" I BELIEVE
+  msg.buf[1] = 0x00;//
+  //Target velocity bytes
   memcpy(&(msg.buf[2]), (void *)(&throttle), 1);
   memcpy(&(msg.buf[3]), ((char *)(&throttle) + 1), 1);
   memcpy(&(msg.buf[4]), ((char *)(&throttle) + 2), 1);
   memcpy(&(msg.buf[5]), ((char *)(&throttle) + 3), 1);
-  msg.buf[6] = 0;
-  msg.buf[7] = 0;
 
   if (PRINT)
   {
@@ -812,7 +813,7 @@ int write_velocity(int node_id, int throttle)
   return 0;
 }
 
-int write_torque(int node_id, int throttle)
+int write_torque_and_enable_op(int node_id, int throttle)
 {
   CAN_message_t msg;
   int ret = 0;
@@ -834,21 +835,19 @@ int write_torque(int node_id, int throttle)
     throttle = 0;
   }
   
-  //set the target torque value
-  //tell MC's to go to operation enabled state w/target velocity enabled
-  msg.id = 0x00000500 + node_id; //COB-id of RxPDO 4
+  //RxPDO 3, setting the controlword value and updating the target torque
+  msg.id = 0x400 + node_id; //COB-id of RxPDO 3 for this specific node
   msg.ext = 0;
   msg.len = 6;
   msg.timeout = 0;
-  //
+  //Control Word bytes
   msg.buf[0] = 0x0F;
   msg.buf[1] = 0x00;
+  //Target torque bytes
   memcpy(&(msg.buf[2]), (void *)(&throttle), 1);
   memcpy(&(msg.buf[3]), ((char *)(&throttle) + 1), 1);
   memcpy(&(msg.buf[4]), ((char *)(&throttle) + 2), 1);
   memcpy(&(msg.buf[5]), ((char *)(&throttle) + 3), 1);
-//  msg.buf[6] = 0;
-//  msg.buf[7] = 0;
 
   if (PRINT)
   {
@@ -1227,7 +1226,7 @@ int link_node(int node_id)
     Serial.println("*****WRITING VELOCITY and INITIATING****");
   }
   
-  write_velocity(node_id,0);
+  write_velocity_and_enable_op(node_id,0);
   delay(50);
   while (CANbus.available())
   {
@@ -1432,4 +1431,5 @@ int shutdown_MC(int node_id)
 
   return ret; 
 }
+
 

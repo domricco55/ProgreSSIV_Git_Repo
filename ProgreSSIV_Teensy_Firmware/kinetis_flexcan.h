@@ -1145,3 +1145,4 @@ typedef volatile uint32_t vuint32_t;
 
 /********************************************************************/
 #endif // __KINETIS_FLEXCAN_H
+

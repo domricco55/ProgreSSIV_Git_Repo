@@ -215,7 +215,7 @@ void setup() {
   //  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
   //  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task
   //  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
-  registers.reg_map.print_registers = 1;//Controls whether radio transeiver data is printing or not
+  registers.reg_map.print_registers = 1;//Controls whether the registers are printed at startup or not
   registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
   registers.reg_map.print_imu = 0;//Controls whether IMU data is printing or not
   registers.reg_map.servo_out = -500;//Set an initial servo position value. Just a visual que that servo is working at startup
@@ -335,28 +335,28 @@ void loop() {
       error = ret;
     }
     delay(50);
-    ret = initialize_MC_Profile_Vel_Mode(NODE_1); //Run the function that sends the CAN message for initializing motor controller node 1. Ret is what is returned during the CAN message
+    ret = initialize_MC_Torque_Mode(NODE_1); //Run the function that sends the CAN message for initializing motor controller node 1. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
     process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe. Not really certain.
     delay(100);
-    ret = initialize_MC_Profile_Vel_Mode(NODE_2); //Run the function that sends the CAN message for initializing motor controller node 2. Ret is what is returned during the CAN message
+    ret = initialize_MC_Torque_Mode(NODE_2); //Run the function that sends the CAN message for initializing motor controller node 2. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
     process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
     delay(100);
-    ret = initialize_MC_Profile_Vel_Mode(NODE_3); //Run the function that sends the CAN message for initializing motor controller node 3. Ret is what is returned during the CAN message
+    ret = initialize_MC_Torque_Mode(NODE_3); //Run the function that sends the CAN message for initializing motor controller node 3. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
     }
     process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
     delay(100);
-    ret = initialize_MC_Profile_Vel_Mode(NODE_4); //Run the function that sends the CAN message for initializing motor controller node 4. Ret is what is returned during the CAN message
+    ret = initialize_MC_Torque_Mode(NODE_4); //Run the function that sends the CAN message for initializing motor controller node 4. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
@@ -384,9 +384,9 @@ void loop() {
       //in motor controller shut off code. Shut off code has not currently been implemented.
 
       //Link the nodes together...a lot is happening in their link_node function. I'm not really sure what is going on with this
-      //The function includes calls to OTHER uLaren_CAN_Driver functions including write_velocity(), arm_MC(), and send_statusword_request()
+      //The function includes calls to OTHER uLaren_CAN_Driver functions including write_velocity_and_enable_op(), arm_MC(), and send_statusword_request()
       //Thinking that they used this function and intended for it only to be used once and maybe Paul thought that was the function
-      //you call to write a velocity value. Or it could be that they couldnt get the normal write_velocity function to work and resorted
+      //you call to write a velocity value. Or it could be that they couldnt get the normal write_velocity_and_enable_op function to work and resorted
       //to using the one with the enable_MC thing...really really not sure. NEED TO FIGURE THIS ALL OUT
       link_node(NODE_1);
       delay(500);
@@ -398,13 +398,13 @@ void loop() {
       delay(500);
 
       //Make sure the motors arent actuating initially
-      write_velocity(NODE_1, 0 ); //Write the throttle_right_front register value to the motor controller
+      write_torque_and_enable_op(NODE_1, 0 ); //Write the throttle_right_front register value to the motor controller
 
-      write_velocity(NODE_2, 0 ); //Write the throttle_left_front register value to the motor controller
+      write_torque_and_enable_op(NODE_2, 0 ); //Write the throttle_left_front register value to the motor controller
 
-      write_velocity(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
+      write_torque_and_enable_op(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
 
-      write_velocity(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
+      write_torque_and_enable_op(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
     }
   }
 
@@ -442,23 +442,23 @@ void loop() {
   if (registers.reg_map.dead_switch) {
     if ( THR_in > 200 ) {
 
-      write_velocity(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
+      write_torque_and_enable_op(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
 
-      write_velocity(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
+      write_torque_and_enable_op(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
 
-      write_velocity(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
+      write_torque_and_enable_op(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
 
-      write_velocity(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+      write_torque_and_enable_op(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
     }
     else {
 
-      write_velocity(NODE_1, 0); //Write the throttle_right_front register value to the motor controller
+      write_torque_and_enable_op(NODE_1, 0); //Write the throttle_right_front register value to the motor controller
 
-      write_velocity(NODE_2, 0); //Write the throttle_left_front register value to the motor controller
+      write_torque_and_enable_op(NODE_2, 0); //Write the throttle_left_front register value to the motor controller
 
-      write_velocity(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
+      write_torque_and_enable_op(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
 
-      write_velocity(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
+      write_torque_and_enable_op(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
 
       //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
       registers.reg_map.throttle_right_front = 0;
@@ -471,13 +471,13 @@ void loop() {
   //If the dead man's switch is turned off, just update the motor controllers immediately.
   else {
 
-    write_velocity(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
+    write_torque_and_enable_op(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
 
-    write_velocity(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
+    write_torque_and_enable_op(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
 
-    write_velocity(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
+    write_torque_and_enable_op(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
 
-    write_velocity(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+    write_torque_and_enable_op(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
 
   }
 
@@ -1102,4 +1102,5 @@ void print_radio_data(void) {
   Serial.println();
   Serial.println();
 }
+
 
