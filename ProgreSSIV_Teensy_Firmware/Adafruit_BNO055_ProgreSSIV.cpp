@@ -635,3 +635,4 @@ bool Adafruit_BNO055::readLen(adafruit_bno055_reg_t reg, byte * buffer, uint8_t 
   /* ToDo: Check for errors! */
   return true;
 }
+

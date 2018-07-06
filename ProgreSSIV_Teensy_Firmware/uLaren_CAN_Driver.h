@@ -36,3 +36,4 @@ int  query_voltage_level(int node_id);
 int  shutdown_MC(int node_id);
 
 #endif
+
