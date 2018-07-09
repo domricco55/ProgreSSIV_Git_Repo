@@ -214,7 +214,7 @@ void setup() {
   //Set some of the starting conditions of the registers
   //  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
   //  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task
-  //  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
+  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
   registers.reg_map.print_registers = 1;//Controls whether the registers are printed at startup or not
   registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
   registers.reg_map.print_imu = 0;//Controls whether IMU data is printing or not
@@ -329,7 +329,7 @@ void loop() {
       error = ret;
     }
     delay(1000);
-    ret = start_remote_nodes(); //Run the function that sends the CAN message for initializing CAN. Ret is what is returned during the CAN message
+    ret = start_remote_nodes(); //Run the function that starts the remote nodes. Ret is what is returned during the CAN message
     if (ret > 0)
     {
       error = ret;
@@ -388,14 +388,14 @@ void loop() {
       //Thinking that they used this function and intended for it only to be used once and maybe Paul thought that was the function
       //you call to write a velocity value. Or it could be that they couldnt get the normal write_velocity_and_enable_op function to work and resorted
       //to using the one with the enable_MC thing...really really not sure. NEED TO FIGURE THIS ALL OUT
-      link_node(NODE_1);
-      delay(500);
-      link_node(NODE_2);
-      delay(500);
-      link_node(NODE_3);
-      delay(500);
-      link_node(NODE_4);
-      delay(500);
+//      link_node(NODE_1);
+//      delay(500);
+//      link_node(NODE_2);
+//      delay(500);
+//      link_node(NODE_3);
+//      delay(500);
+//      link_node(NODE_4);
+//      delay(500);
 
       //Make sure the motors arent actuating initially
       write_torque_and_enable_op(NODE_1, 0 ); //Write the throttle_right_front register value to the motor controller
@@ -1102,5 +1102,6 @@ void print_radio_data(void) {
   Serial.println();
   Serial.println();
 }
+
 
 

@@ -28,7 +28,7 @@ int start_remote_nodes()
 	msg.id = 0;//CAN_id for NMT or network management
 	msg.ext = 0;
 	msg.len = 2;
-	msg.timeout = 0; //NOT SURE WHAT THESE DO
+	msg.timeout = 0; //Tells how long the system should wait for a response to this CAN message? LOOK AT FLEXCAN README FOR ANSWER TO THIS
 	msg.buf[0] = 0x01; //Command Specifier for "start_remote_node"
 	msg.buf[1] = 0;//when set to zero, all slaves will be started
 
@@ -87,8 +87,8 @@ int resetFault (int node_id)
   msg.len = 6;
   msg.timeout = 0;
   //
-  msg.buf[0] = 0x2B;  //68
-  msg.buf[2] = 0x60;  //60
+  msg.buf[0] = 0x2B; 
+  msg.buf[2] = 0x60; 
   msg.buf[1] = 0x40;
   msg.buf[3] = 0x00;
   //
@@ -109,24 +109,24 @@ int resetFault (int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
-    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
-    if (CANbus.read(msg) != 0)
-    {
-      if (PRINT)
-      {
-        Serial.println("Received Shutdown Confirmation");
-      }
-      
-    }
-    else
-    {
-      if (PRINT)
-      {
-        Serial.println("DID NOT Receive Shutdown Confirmation");
-      }
-      
-    }
+//    //print_outgoing_CAN_message(msg);
+//    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+//    if (CANbus.read(msg) != 0)
+//    {
+//      if (PRINT)
+//      {
+//        Serial.println("Received Shutdown Confirmation");
+//      }
+//      
+//    }
+//    else
+//    {
+//      if (PRINT)
+//      {
+//        Serial.println("DID NOT Receive Shutdown Confirmation");
+//      }
+//      
+//    }
   }
     //tell MC to reset communication
   msg.id = 0x00;
@@ -156,24 +156,24 @@ int resetFault (int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
-    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
-    if (CANbus.read(msg) != 0)
-    {
-      if (PRINT)
-      {
-        Serial.println("Received Shutdown Confirmation");
-      }
-      
-    }
-    else
-    {
-      if (PRINT)
-      {
-        Serial.println("DID NOT Receive Shutdown Confirmation");
-      }
-      
-    }
+//    //print_outgoing_CAN_message(msg);
+//    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+//    if (CANbus.read(msg) != 0)
+//    {
+//      if (PRINT)
+//      {
+//        Serial.println("Received Shutdown Confirmation");
+//      }
+//      
+//    }
+//    else
+//    {
+//      if (PRINT)
+//      {
+//        Serial.println("DID NOT Receive Shutdown Confirmation");
+//      }
+//      
+//    }
   }
 }
 
@@ -226,24 +226,24 @@ int initialize_MC_Profile_Vel_Mode(int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
-    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
-    if (CANbus.read(msg) != 0)
-    {
-      if (PRINT)
-      {
-        Serial.println("Received Shutdown Confirmation");
-      }
-      
-    }
-    else
-    {
-      if (PRINT)
-      {
-        Serial.println("DID NOT Receive Shutdown Confirmation");
-      }
-      
-    }
+//    //print_outgoing_CAN_message(msg);
+//    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+//    if (CANbus.read(msg) != 0)
+//    {
+//      if (PRINT)
+//      {
+//        Serial.println("Received Shutdown Confirmation");
+//      }
+//      
+//    }
+//    else
+//    {
+//      if (PRINT)
+//      {
+//        Serial.println("DID NOT Receive Shutdown Confirmation");
+//      }
+//      
+//    }
   }
   
 	//Set MC's to profile velocity mode
@@ -428,8 +428,8 @@ int initialize_MC_Torque_Mode(int node_id)
   //
   msg.buf[5] = 0x00;
   msg.buf[4] = 0b00000110;
-  msg.buf[6] = 0;
-  msg.buf[7] = 0;
+//  msg.buf[6] = 0;
+//  msg.buf[7] = 0;
 
   if (CANbus.write(msg) == 0)
   {
@@ -443,24 +443,24 @@ int initialize_MC_Torque_Mode(int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
-    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
-    if (CANbus.read(msg) != 0)
-    {
-      if (PRINT)
-      {
-        Serial.println("Received Shutdown Confirmation");
-      }
-      
-    }
-    else
-    {
-      if (PRINT)
-      {
-        Serial.println("DID NOT Receive Shutdown Confirmation");
-      }
-      
-    }
+//    //print_outgoing_CAN_message(msg);
+//    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+//    if (CANbus.read(msg) != 0)
+//    {
+//      if (PRINT)
+//      {
+//        Serial.println("Received Shutdown Confirmation");
+//      }
+//      
+//    }
+//    else
+//    {
+//      if (PRINT)
+//      {
+//        Serial.println("DID NOT Receive Shutdown Confirmation");
+//      }
+//      
+//    }
   }
   
   //initialize MC's to torque mode
@@ -491,7 +491,7 @@ int initialize_MC_Torque_Mode(int node_id)
     {
       if (PRINT)
       {
-        Serial.println("Received Profile Velocity Confirmation");
+        Serial.println("Received Torque Mode Confirmation");
       }
       
     }
@@ -499,7 +499,7 @@ int initialize_MC_Torque_Mode(int node_id)
     {
       if (PRINT)
       {
-        Serial.println("DID NOT Receive Profile Velocity Confirmation");
+        Serial.println("DID NOT Receive Torque Mode Confirmation");
       }
       
     }
@@ -518,8 +518,8 @@ int initialize_MC_Torque_Mode(int node_id)
   //Control word Object dictionary sub-index
   msg.buf[3] = 0x00;
   //Control word bytes
-  msg.buf[5] = 0x00;
-  msg.buf[4] = 0b00000111;
+  msg.buf[5] = 0x00;//Controlword high byte
+  msg.buf[4] = 0b00000111;//Controlword low byte
 
   if (CANbus.write(msg) == 0)
   {
@@ -588,8 +588,8 @@ int arm_MC(int node_id)
   msg.buf[1] = 0x40;
   msg.buf[3] = 0x00;
   //
-  msg.buf[5] = 0x01;//Not sure which of these is the high byte and which is the low byte. Not certain what each does either. Look at firmware specification documentation.
-  msg.buf[4] = 0b00001111;//THIS IS THE CONTROL WORD ACCESS THAT THE write_velocity_and_enable_op FUNCTION SEEMS TO BE ACCESSING AS WELL. REDUNDANT. 
+  msg.buf[5] = 0x01;//Controlword high byte
+  msg.buf[4] = 0b00001111;//Controlword low byte. THIS IS THE CONTROL WORD ACCESS THAT THE write_velocity_and_enable_op FUNCTION SEEMS TO BE ACCESSING AS WELL. REDUNDANT. 
 
   if (CANbus.write(msg) == 0)
   {
@@ -851,7 +851,7 @@ int write_torque_and_enable_op(int node_id, int throttle)
 
   if (PRINT)
   {
-    print_outgoing_CAN_message(msg);
+    //print_outgoing_CAN_message(msg);
   }
 
   ret = CANbus.write(msg);
@@ -932,7 +932,7 @@ int send_statusword_request(int node_id)
   
   msg.id = 0x600 + node_id;
   msg.ext = 0;
-  msg.len = 4;
+  msg.len = 8;//Changed this to 8 so that the command specifier, index, subindex, and four bytes of junk data are sent (buf 0 - 7)
   msg.timeout = 0;
   //
   msg.buf[0] = 0x40;
@@ -1186,8 +1186,10 @@ int link_node(int node_id)
       
   arm_MC(node_id);
   delay(1000);
+  
   send_statusword_request(node_id);
   delay(200);
+  
   while (CANbus.available())
   {
     CANbus.read(msg);
@@ -1226,7 +1228,7 @@ int link_node(int node_id)
     Serial.println("*****WRITING VELOCITY and INITIATING****");
   }
   
-  write_velocity_and_enable_op(node_id,0);
+  write_torque_and_enable_op(node_id,0);
   delay(50);
   while (CANbus.available())
   {
@@ -1295,17 +1297,22 @@ int rearm_MC(int node_id)
   {
     error = ret;
   }*/
+  
   delay(200);
   resetFault(node_id);
+  
   delay(200);
-  initialize_MC_Profile_Vel_Mode(node_id);
+  initialize_MC_Torque_Mode(node_id);
+  
   delay(200);
   while (CANbus.available())
   {
     CANbus.read(msg);
   }
+  
   arm_MC(node_id);
   delay(500);
+  
   send_statusword_request(node_id);
   delay(200);
   
@@ -1431,5 +1438,6 @@ int shutdown_MC(int node_id)
 
   return ret; 
 }
+
 
 

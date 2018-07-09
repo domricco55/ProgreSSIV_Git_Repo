@@ -72,9 +72,9 @@ typedef struct {
         };
         /* Orientation sensors */
         struct {
-            float roll;    /**< Rotation around the longitudinal axis (the plane body, 'X axis'). Roll is positive and increasing when moving downward. -90Â°<=roll<=90Â° */
-            float pitch;   /**< Rotation around the lateral axis (the wing span, 'Y axis'). Pitch is positive and increasing when moving upwards. -180Â°<=pitch<=180Â°) */
-            float heading; /**< Angle between the longitudinal axis (the plane body) and magnetic north, measured clockwise when viewing from the top of the device. 0-359Â° */
+            float roll;    /**< Rotation around the longitudinal axis (the plane body, 'X axis'). Roll is positive and increasing when moving downward. -90Ã‚Â°<=roll<=90Ã‚Â° */
+            float pitch;   /**< Rotation around the lateral axis (the wing span, 'Y axis'). Pitch is positive and increasing when moving upwards. -180Ã‚Â°<=pitch<=180Ã‚Â°) */
+            float heading; /**< Angle between the longitudinal axis (the plane body) and magnetic north, measured clockwise when viewing from the top of the device. 0-359Ã‚Â° */
         };
     };
     int8_t status;
@@ -152,4 +152,5 @@ class Adafruit_Sensor {
 };
 
 #endif
+
 
