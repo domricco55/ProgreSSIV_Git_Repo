@@ -589,7 +589,7 @@ int arm_MC(int node_id)
   msg.buf[3] = 0x00;
   //
   msg.buf[5] = 0x01;//Controlword high byte
-  msg.buf[4] = 0b00001111;//Controlword low byte. THIS IS THE CONTROL WORD ACCESS THAT THE write_velocity_and_enable_op FUNCTION SEEMS TO BE ACCESSING AS WELL. REDUNDANT. 
+  msg.buf[4] = 0b00001111;//Controlword low byte.
 
   if (CANbus.write(msg) == 0)
   {
@@ -1225,7 +1225,7 @@ int link_node(int node_id)
   //write
   if (PRINT)
   {
-    Serial.println("*****WRITING VELOCITY and INITIATING****");
+    Serial.println("*****WRITING Torque and INITIATING****");
   }
   
   write_torque_and_enable_op(node_id,0);
