@@ -1,9 +1,9 @@
-/* This text file contains every CAN message used in the uLaren_CAN_driver file.*/
+/* This text file contains every CAN message used in the uLaren_CAN_driver file relating to our current operation - torque mode.*/
 
 /* NMT Messages
- (look at firmware specification documentation for the NMT state machine)*/
+ (look at firmware specification documentation for the NMT state machine)...NEED TO UNDERSTAND THESE BETTER*/
 
-	//reset node communications
+	//reset node communications (within reset_nodes() function)
 	msg.id = 0;//CAN_id for NMT or network management
 	msg.ext = 0;//Default is 0...related to FlexCAN
 	msg.len = 2;
@@ -17,13 +17,27 @@
 	msg.buf[6] = 0;
 	msg.buf[7] = 0;
 
-	//"Start Remote Node CAN Message"
+	//"Start Remote Node" CAN Message (within start_remote_nodes() function)
 	msg.id = 0;//CAN_id for NMT or network management
 	msg.ext = 0;//Default is 0...related to FlexCAN
 	msg.len = 2;
 	msg.timeout = 0; //Tells how long the system should wait for a response to this CAN message? LOOK AT FLEXCAN README FOR ANSWER TO THIS
 	msg.buf[0] = 0x01; //(Command Specifier??) for "start_remote_node"
 	msg.buf[1] = 0;//when set to zero, all slaves will be started
+  
+    //"tell MC to reset communication" (within resetFault(node_id) function)
+	msg.id = 0x00;
+	msg.ext = 0;
+	msg.len = 2;
+	msg.timeout = 0;
+	msg.buf[0] = 0x01;  //68
+	msg.buf[2] = 0x00 + node_id;  //60
+	msg.buf[1] = 0x00;
+	msg.buf[3] = 0x00;
+	msg.buf[5] = 0x00;
+	msg.buf[4] = 0x00;
+	msg.buf[6] = 0;
+	msg.buf[7] = 0;  
   
 /* SDO Messages. 
 These are run at startup for configuration purposes. A message is returned after sending these.
@@ -33,7 +47,7 @@ Finally must send the data associated with the write or zeros for each byte to b
 
 	//Controlword Related
 	
-	  //tell MC's to go to shutdown state
+	  //tell MC's to go to shutdown state (within initialize_MC_Torque_Mode(node_id) function)
 	  msg.id = 0x600 + node_id; //COB-id for an SDO client to server (server to client??) from the Teensy to a node
 	  msg.ext = 0;
 	  msg.len = 6; //Not certain but I think all SDO's need to be 8 bytes long...4 data bytes plus 4 overhead bytes
@@ -45,7 +59,7 @@ Finally must send the data associated with the write or zeros for each byte to b
 	  msg.buf[5] = 0x00; //High byte of controlword data
 	  msg.buf[4] = 0b00000110; //Low byte of controlword - Not sure how to use controlword yet
 
-	  //tell MC's to go to switch-on state
+	  //tell MC's to go to switch-on state (within initialize_MC_Torque_Mode(node_id) function)
 	  msg.id = 0x600 + node_id; //COB-id for an SDO client to server (server to client??) from the Teensy to a node
 	  msg.ext = 0;
 	  msg.len = 6;
@@ -57,7 +71,7 @@ Finally must send the data associated with the write or zeros for each byte to b
 	  msg.buf[5] = 0x00; //High byte of controlword data
 	  msg.buf[4] = 0b00000111; //Low byte of controlword - Not sure how to use controlword yet
 	  
-	  //tell MC's to go to operation enabled state
+	  //tell MC's to go to operation enabled state (within arm_MC(node_id) function)
 	  msg.id = 0x600 + node_id; //COB-id for an SDO client to server (server to client??) from the Teensy to a node
 	  msg.ext = 0;
 	  msg.len = 6;
@@ -69,7 +83,7 @@ Finally must send the data associated with the write or zeros for each byte to b
 	  msg.buf[5] = 0x01; //High byte of controlword data
 	  msg.buf[4] = 0b00001111; //Low byte of controlword - Not sure how to use controlword yet
 	  
-	  //tell MC's to reset faults
+	  //tell MC's to reset faults (within resetFault(node_id) function)
 	  msg.id = 0x600 + node_id; //COB-id for an SDO client to server (server to client??) from the Teensy to a node
 	  msg.ext = 0;
 	  msg.len = 6;
@@ -83,7 +97,7 @@ Finally must send the data associated with the write or zeros for each byte to b
 	
 	//Other SDO's
 	
-	  //initialize MC's to torque mode
+	  //initialize MC's to torque mode (within initialize_MC_Torque_Mode(node_id) function)
 	  msg.id = 0x600 + node_id; //COB-id for an SDO client to server (server to client??) from the Teensy to a node
 	  msg.len = 5;
 	  msg.timeout = 0;
