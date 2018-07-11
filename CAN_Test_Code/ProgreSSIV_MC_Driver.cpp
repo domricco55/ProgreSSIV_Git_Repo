@@ -20,50 +20,130 @@ int reset_nodes()
   CAN_message_t msg;
   int ret = 0;
 
-  //reset node coms
+  //reset nodes NMT command
   msg.id = 0;
   msg.ext = 0;
   msg.len = 2;
-  msg.timeout = 0;
   msg.buf[0] = 0x81;
   msg.buf[1] = 0;
-  
+
+  msg.timeout = 1;//Milliseconds before giving up on message
   if (CANbus.write(msg) == 0)
   {
     ret = ERROR_CAN_WRITE;
     if (PRINT)
     {
+        Serial.println();
         Serial.println("error CAN write during reset_nodes() function call");
+        Serial.println();
         delay(500);
     }
     
   }
-
-  delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
-
-  CANbus.read(msg);
+  else{
+    ret = NO_ERROR;
+    if (PRINT)
+    { 
+        Serial.println();
+        Serial.println("Successful CAN write during reset_nodes() function call");
+        Serial.println();
+        delay(500);
+    }
+  }
+  if(ret == NO_ERROR){//If the CAN write was successful, attempt to read the boot up messages from the CAN bus 
+    for(uint8_t index = 0; index<4 ; index++){
+      
+      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
+      if (CANbus.read(msg) != 0){//If the read message timeout wasnt reached and a message was available to read
+        if (PRINT)
+        {
+          Serial.println();
+          Serial.println("Message read during reset_nodes function call:");
+          Serial.println();
+          print_CAN_message(msg);
+        }
+      }
   
-  print_incoming_CAN_message(msg);
-  
-//  if (CANbus.read(msg) != 0)
-//  {
-//    if (PRINT)
-//    {
-//      Serial.println("Received Reset Node Confirmation");
-//    }
-//    
-//  }
-//  else
-//  {
-//    if (PRINT)
-//    {
-//      Serial.println("DID NOT Receive Reset Node Confirmation");
-//    }
-//    
-//  }
+      else{
+        if(PRINT)
+        {
+          Serial.println();
+          Serial.println("A read message timeout has occured during the reset_nodes function call.");
+          Serial.println();
+        }
+      }
+    }
+  }
 
-  return ret;
+
+  return ret; //May want to change what each of these functions returns
 }
+
+int reset_communications()
+{
+  CAN_message_t msg;
+  int ret = 0;
+
+  //reset communication NMT command
+  msg.id = 0;
+  msg.ext = 0;
+  msg.len = 2;
+  msg.buf[0] = 0x82;
+  msg.buf[1] = 0;
+
+  msg.timeout = 1;//Milliseconds before giving up on broadcastimng CAN message
+  if (CANbus.write(msg) == 0)
+  {
+    ret = ERROR_CAN_WRITE;
+    if (PRINT)
+    {
+        Serial.println();
+        Serial.println("error CAN write during reset_communication() function call");
+        Serial.println();
+        delay(500);
+    }
+    
+  }
+  else{
+    ret = NO_ERROR;
+    if (PRINT)
+    {
+        Serial.println();
+        Serial.println("successful CAN write during reset_communication() function call");
+        Serial.println();
+        delay(500);
+    }
+  }
+
+  if(ret == NO_ERROR){//If the CAN write was successful, attempt to read the boot up messages from the CAN bus 
+    
+    for(uint8_t index = 0; index<4 ; index++){
+      
+      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
+      if (CANbus.read(msg) != 0){//If the read message timeout wasnt reached and a message was available to read
+        if (PRINT)
+        {
+          Serial.println();
+          Serial.println("Message read during reset_communications function call:");
+          Serial.println();
+          print_CAN_message(msg);
+        }
+      }
+  
+      else{
+        if(PRINT)
+        {
+          Serial.println();
+          Serial.println("A read message timeout has occured during the reset_communications function call.");
+          Serial.println();
+        }
+      }
+    }
+  }
+  
+  return ret; //May want to change what each of these functions returns
+}
+
 
 int start_remote_nodes()
 {
@@ -83,7 +163,7 @@ int start_remote_nodes()
  {
     ret = ERROR_CAN_WRITE;
  }
-  //print_outgoing_CAN_message(msg);
+  //print_CAN_message(msg);
 
   delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
   if (CANbus.read(msg) != 0)
@@ -156,7 +236,7 @@ int resetFault (int node_id)
     
   }
   else {
-//    //print_outgoing_CAN_message(msg);
+//    //print_CAN_message(msg);
 //    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
 //    if (CANbus.read(msg) != 0)
 //    {
@@ -203,7 +283,7 @@ int resetFault (int node_id)
     
   }
   else {
-//    //print_outgoing_CAN_message(msg);
+//    //print_CAN_message(msg);
 //    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
 //    if (CANbus.read(msg) != 0)
 //    {
@@ -273,7 +353,7 @@ int initialize_MC_Profile_Vel_Mode(int node_id)
     
   }
   else {
-//    //print_outgoing_CAN_message(msg);
+//    //print_CAN_message(msg);
 //    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
 //    if (CANbus.read(msg) != 0)
 //    {
@@ -315,7 +395,7 @@ int initialize_MC_Profile_Vel_Mode(int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
     delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
     if (CANbus.read(msg) != 0)
     {
@@ -357,14 +437,14 @@ int initialize_MC_Profile_Vel_Mode(int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
     delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
     if (CANbus.read(msg) != 0)
     {
       if (PRINT)
       {
         Serial.println("Received Motion Profile Confirmation");
-        //print_incoming_CAN_message(msg);
+        //print_CAN_message(msg);
       }
       
     }
@@ -419,7 +499,7 @@ int initialize_MC_Profile_Vel_Mode(int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
     delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
     if (CANbus.read(msg) != 0)
     {
@@ -490,7 +570,7 @@ int initialize_MC_Torque_Mode(int node_id)
     
   }
   else {
-//    //print_outgoing_CAN_message(msg);
+//    //print_CAN_message(msg);
 //    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
 //    if (CANbus.read(msg) != 0)
 //    {
@@ -532,7 +612,7 @@ int initialize_MC_Torque_Mode(int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
     delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
     if (CANbus.read(msg) != 0)
     {
@@ -580,7 +660,7 @@ int initialize_MC_Torque_Mode(int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
     delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
     if (CANbus.read(msg) != 0)
     {
@@ -643,12 +723,12 @@ int arm_MC(int node_id)
     ret = ERROR_CAN_WRITE;
   }
   /*else {
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
     delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
     if (CANbus.read(msg) != 0)
     {
       Serial.println("Received Operation Enabled Confirmation");
-      //print_incoming_CAN_message(msg);
+      //print_CAN_message(msg);
     }
     else
     {
@@ -770,7 +850,7 @@ int arm_MC(int node_id)
 ////  else 
 ////  {
 ////  //it will stop responding but i want to test
-////    //print_outgoing_CAN_message(msg);
+////    //print_CAN_message(msg);
 ////    delayMicroseconds(WAIT_FOR_RESPONSE_TIME_FAST_US);
 ////    if (PRINT)
 ////    {
@@ -845,7 +925,7 @@ int write_velocity_and_enable_op(int node_id, int throttle)
 
   if (PRINT)
   {
-    print_outgoing_CAN_message(msg);
+    print_CAN_message(msg);
   }
 
   ret = CANbus.write(msg);
@@ -898,7 +978,7 @@ int write_torque_and_enable_op(int node_id, int throttle)
 
   if (PRINT)
   {
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
   }
 
   ret = CANbus.write(msg);
@@ -913,41 +993,10 @@ int write_torque_and_enable_op(int node_id, int throttle)
   return 0;
 }
 
-
-void print_outgoing_CAN_message(CAN_message_t msg)
-{
-  if (PRINT)
-  {   
-    Serial.println("***Outgoing CAN Message***");
-    Serial.print("ID: ");
-    Serial.println(msg.id, HEX);
-    Serial.print("Length: ");
-    Serial.println(msg.len);
-    Serial.print("Byte[0]: ");
-    Serial.println(msg.buf[0], HEX);
-    Serial.print("Byte[1]: ");
-    Serial.println(msg.buf[1], HEX);
-    Serial.print("Byte[2]: ");
-    Serial.println(msg.buf[2], HEX);
-    Serial.print("Byte[3]: ");
-    Serial.println(msg.buf[3], HEX);
-    Serial.print("Byte[4]: ");
-    Serial.println(msg.buf[4], HEX);
-    Serial.print("Byte[5]: ");
-    Serial.println(msg.buf[5], HEX);
-    Serial.print("Byte[6]: ");
-    Serial.println(msg.buf[6], HEX);
-    Serial.print("Byte[7]: ");
-    Serial.println(msg.buf[7], HEX);
-  }
-  
-}
-
-void print_incoming_CAN_message(CAN_message_t msg)
+void print_CAN_message(CAN_message_t msg)
 {
   if (PRINT)
   {
-    Serial.println("***Incoming CAN Message***");
     Serial.print("ID: ");
     Serial.println(msg.id, HEX);
     Serial.print("Length: ");
@@ -968,6 +1017,7 @@ void print_incoming_CAN_message(CAN_message_t msg)
     Serial.println(msg.buf[6], HEX);
     Serial.print("Byte[7]: ");
     Serial.println(msg.buf[7], HEX);
+    Serial.println();
   }
   
 }
@@ -1002,7 +1052,7 @@ int send_statusword_request(int node_id)
     exit(0);
   }
   
-  print_outgoing_CAN_message(msg);
+  print_CAN_message(msg);
   delayMicroseconds(WAIT_FOR_RESPONSE_TIME_FAST_US);
   /*if (CANbus.read(msg) != 0)
   {
@@ -1011,7 +1061,7 @@ int send_statusword_request(int node_id)
       Serial.println("Received Statusword");
     }
     
-    print_incoming_CAN_message(msg);
+    print_CAN_message(msg);
     ret = 1;
   }
   else
@@ -1045,7 +1095,7 @@ void check_available_msg()
         Serial.println("I read a message!");
       }
       
-      print_incoming_CAN_message(msg);
+      print_CAN_message(msg);
     }
   }
   else
@@ -1064,13 +1114,13 @@ void process_available_msgs()
 {
   CAN_message_t msg;
   
-  delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+  //delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
   while (CANbus.available()) 
   {
 
     if (CANbus.read(msg) != 0)
     {
-      print_incoming_CAN_message(msg);
+      print_CAN_message(msg);
     }
     else
     {
@@ -1103,7 +1153,7 @@ int stop_remote_node(int node_id)
   msg.buf[7] = 0;
   
   ret = CANbus.write(msg);
-  //print_outgoing_CAN_message(msg);
+  //print_CAN_message(msg);
   delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
   if (CANbus.read(msg) != 0)
   {
@@ -1194,7 +1244,7 @@ int link_node(int node_id)
     CANbus.read(msg);
     if (PRINT)
     {
-      print_incoming_CAN_message(msg);
+      print_CAN_message(msg);
     }
     
     //previously searched for a 1A0 node id but this isn't always the node id sent when the controller gets armed
@@ -1232,7 +1282,7 @@ int link_node(int node_id)
   while (CANbus.available())
   {
     CANbus.read(msg);
-    //print_incoming_CAN_message(msg);
+    //print_CAN_message(msg);
   }
   
   /*
@@ -1243,7 +1293,7 @@ int link_node(int node_id)
   while (CANbus.available())
   {
     CANbus.read(msg);
-    print_incoming_CAN_message(msg);
+    print_CAN_message(msg);
   }
   //write
   Serial.println("*****WRITING VELOCITY****");
@@ -1252,7 +1302,7 @@ int link_node(int node_id)
   while (CANbus.available())
   {
     CANbus.read(msg);
-    print_incoming_CAN_message(msg);
+    print_CAN_message(msg);
   }
   
   //initiate
@@ -1262,7 +1312,7 @@ int link_node(int node_id)
   while (CANbus.available())
   {
     CANbus.read(msg);
-    print_incoming_CAN_message(msg);
+    print_CAN_message(msg);
   }
   //stall
   while (1)
@@ -1270,7 +1320,7 @@ int link_node(int node_id)
     if (CANbus.available())
     {
       CANbus.read(msg);
-      print_incoming_CAN_message(msg);
+      print_CAN_message(msg);
     }
     //stall here so i can figure out what messages i should be expecting
   }*/
@@ -1320,7 +1370,7 @@ int rearm_MC(int node_id)
     CANbus.read(msg);
     if (PRINT)
     {
-      print_incoming_CAN_message(msg);
+      print_CAN_message(msg);
     }
     
     //previously searched for a 1A0 node id but this isn't always the node id sent when the controller gets armed
@@ -1364,7 +1414,7 @@ int query_voltage_level(int node_id)
   else 
   {
   //it will stop responding but i want to test
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
     //Serial.println("waiting for response");
     //delayMicroseconds(WAIT_FOR_RESPONSE_TIME_FAST_US);
     while (CANbus.read(msg) == 0)
@@ -1375,7 +1425,7 @@ int query_voltage_level(int node_id)
     memcpy((char *)(&ret), &(msg.buf[4]),  1);
     memcpy((char *)(&ret) + 1, &(msg.buf[5]),  1);
     
-    //print_incoming_CAN_message(msg);
+    //print_CAN_message(msg);
     //Serial.println(ret);
   }
 
@@ -1415,7 +1465,7 @@ int shutdown_MC(int node_id)
     
   }
   else {
-    //print_outgoing_CAN_message(msg);
+    //print_CAN_message(msg);
     delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
     if (CANbus.read(msg) != 0)
     {

@@ -48,6 +48,8 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 
 #define GENERAL_PRINT 1
 
+bool CAN_Test_Flag = true;
+
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* The setup function runs all start up functions. Any functions that are run only once, always, and at startup should go here. */
@@ -71,26 +73,40 @@ void setup() {
   when using delays and try to have tasks run quickly. This is where any finite state machine code may be placed.*/
 void loop() {
 
-  ret = reset_nodes();
-  delay(1000);
+  if(CAN_Test_Flag){
+    
+      ret = reset_nodes();
+      
+      if (GENERAL_PRINT) {
+        Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+      }
+
+     ret = reset_communications();
+     
+      if (GENERAL_PRINT) {
+        Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+      }
   
-//  if (GENERAL_PRINT) {
-//    
-//    if (ret > 0) {
-//    
-//    Serial.println("error CAN write during reset_nodes() function call");
-//    delay(500);
-//    
-//    }
-//    else{
-//      
-//    Serial.println("No CAN write error during reset_nodes() function call");
-//    delay(500);  
-//    
+    CAN_Test_Flag = false;
+  }
+
+
+////If a CAN message is available immediately, then read it (done every time through main, so need to make sure that main loop frequency is much slower than the rate at which PDO's are being broadcast. 
+//  CAN_message_t msg;
+//  msg.timeout = 0;
+//  if (CANbus.read(msg) != 0){//If the read message timeout wasnt reached and a message was available to read
+//    if (PRINT)
+//    {
+//      Serial.println();
+//      Serial.println("Message recently broadcast to CAN bus");
+//      Serial.println();
+//      print_CAN_message(msg);
 //    }
 //  }
-
-  
   
 
 
