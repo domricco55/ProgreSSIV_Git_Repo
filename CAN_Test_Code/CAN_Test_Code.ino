@@ -4,14 +4,14 @@
 
 */
 
-#include "uLaren_CAN_Driver.h"
+#include "ProgreSSIV_MC_Driver.h"
 #include "FlexCAN.h"
 #include "kinetis_flexcan.h"
 #include "input_handler.h"
 #include "output_handler.h"
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*CAN bus preparation (From uLaren_CAN_driver)*/
+/*CAN bus preparation (From ProgreSSIV_MC_Driver)*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 FlexCAN CANbus(1000000);
@@ -48,18 +48,6 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 
 #define GENERAL_PRINT 1
 
-///*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-///* Timing/Frequency setup */
-///*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-//
-//bool timing_init_flag = true; //This flag allows the timing variables to be initialized only once in spi task.
-//
-////These will act as the previous clock value for which to compare the current value to. These are used to let code run at specified frequencies.
-//unsigned long start_time_print;
-//unsigned long start_time_motors;
-//unsigned long start_time_servo;
-////unsigned long start_time_voltage;//Need to add in the voltage monitoring feature of the motor controllers. FUTURE WORK
-
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* The setup function runs all start up functions. Any functions that are run only once, always, and at startup should go here. */
@@ -83,28 +71,36 @@ void setup() {
   when using delays and try to have tasks run quickly. This is where any finite state machine code may be placed.*/
 void loop() {
 
-//  if (timing_init_flag) {
-//    // Initialize the Timing Variables so that there is a start time
-//    start_time_print = millis();
-//    start_time_motors = millis();
-//    start_time_servo = millis();
-//    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
-//    //start_time_voltage = millis();
-//    timing_init_flag = false;
+  ret = reset_nodes();
+  delay(1000);
+  
+//  if (GENERAL_PRINT) {
+//    
+//    if (ret > 0) {
+//    
+//    Serial.println("error CAN write during reset_nodes() function call");
+//    delay(500);
+//    
+//    }
+//    else{
+//      
+//    Serial.println("No CAN write error during reset_nodes() function call");
+//    delay(500);  
+//    
+//    }
 //  }
+
+  
+  
+
+
+
 
 /* END OF MAIN LOOP*/
 
-void print_radio_data(void) {
-
-  Serial << "radio_steering: " << registers.reg_map.radio_steering;
-  Serial.println();
-  Serial.println();
-
-  Serial << "radio_throttle: " << registers.reg_map.radio_throttle;
-  Serial.println();
-  Serial.println();
 }
+
+
 
 
 

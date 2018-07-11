@@ -12,7 +12,7 @@
 //#define CURRENT_MODE 253 //0xfd
 
 
-#define PRINT 0
+#define PRINT 1
 
 #define SCALE_FACTOR 2
 
@@ -38,5 +38,6 @@ int  query_voltage_level(int node_id);
 int  shutdown_MC(int node_id);
 
 #endif
+
 
 

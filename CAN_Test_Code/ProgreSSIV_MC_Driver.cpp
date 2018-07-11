@@ -6,18 +6,64 @@
 /*********************************/
 
 #include "flexCAN.h"
-#include "uLaren_CAN_Driver.h"
+#include "ProgreSSIV_MC_Driver.h"
 #include <string.h>
 
 #define WAIT_FOR_RESPONSE_TIME_SLOW_US 100
 #define WAIT_FOR_RESPONSE_TIME_FAST_US 50
 
-#define NODE_1 1
-#define NODE_2 2
-#define NODE_3 3
-#define NODE_4 4
 
 extern FlexCAN CANbus;
+
+int reset_nodes()
+{
+  CAN_message_t msg;
+  int ret = 0;
+
+  //reset node coms
+  msg.id = 0;
+  msg.ext = 0;
+  msg.len = 2;
+  msg.timeout = 0;
+  msg.buf[0] = 0x81;
+  msg.buf[1] = 0;
+  
+  if (CANbus.write(msg) == 0)
+  {
+    ret = ERROR_CAN_WRITE;
+    if (PRINT)
+    {
+        Serial.println("error CAN write during reset_nodes() function call");
+        delay(500);
+    }
+    
+  }
+
+  delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+
+  CANbus.read(msg);
+  
+  print_incoming_CAN_message(msg);
+  
+//  if (CANbus.read(msg) != 0)
+//  {
+//    if (PRINT)
+//    {
+//      Serial.println("Received Reset Node Confirmation");
+//    }
+//    
+//  }
+//  else
+//  {
+//    if (PRINT)
+//    {
+//      Serial.println("DID NOT Receive Reset Node Confirmation");
+//    }
+//    
+//  }
+
+  return ret;
+}
 
 int start_remote_nodes()
 {
@@ -31,6 +77,7 @@ int start_remote_nodes()
 	msg.timeout = 0; //Tells how long the system should wait for a response to this CAN message? LOOK AT FLEXCAN README FOR ANSWER TO THIS
 	msg.buf[0] = 0x01; //Command Specifier for "start_remote_node"
 	msg.buf[1] = 0;//when set to zero, all slaves will be started
+ 
 
 	if (CANbus.write(msg) == 0)
  {
@@ -1011,55 +1058,7 @@ void check_available_msg()
   }
 }
 
-int reset_nodes()
-{
-  CAN_message_t msg;
-  int ret = 0;
 
-  //reset node coms
-  msg.id = 0;
-  msg.ext = 0;
-  msg.len = 2;
-  msg.timeout = 0;
-  msg.buf[0] = 0x82;
-  msg.buf[1] = 0;
-  msg.buf[2] = 0;
-  msg.buf[3] = 0;
-  msg.buf[4] = 0;
-  msg.buf[5] = 0;
-  msg.buf[6] = 0;
-  msg.buf[7] = 0;
-  
-  if (CANbus.write(msg) == 0)
-  {
-    ret = ERROR_CAN_WRITE;
-    if (PRINT)
-    {
-      Serial.println("error writing CAN message");
-    }
-    
-  }
-  //print_outgoing_CAN_message(msg);
-  delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
-  if (CANbus.read(msg) != 0)
-  {
-    if (PRINT)
-    {
-      Serial.println("Received Reset Node Confirmation");
-    }
-    
-  }
-  else
-  {
-    if (PRINT)
-    {
-      Serial.println("DID NOT Receive Reset Node Confirmation");
-    }
-    
-  }
-
-  return ret;
-}
 
 void process_available_msgs()
 {
@@ -1438,6 +1437,7 @@ int shutdown_MC(int node_id)
 
   return ret; 
 }
+
 
 
 
