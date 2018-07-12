@@ -19,21 +19,18 @@
 int  reset_nodes();
 int  reset_communications();
 int  start_remote_nodes();
-int  initialize_MC_Profile_Vel_Mode(int node_id);
-int  initialize_MC_Torque_Mode(int node_id);
-int  arm_MC(int node_id);
-int  write_throttle_to_MC(int node_id, int throttle);
-int  initiate_target_velocity (int node_id);
-int  write_velocity_and_enable_op(int node_id, int throttle);
+int  set_torque_operating_mode(int node_id);
+
+int controlword_operation_enabled(int node_id);
+
 int  write_torque_and_enable_op(int node_id, int throttle);
 void print_CAN_message(CAN_message_t msg);
+
 int  send_statusword_request(int node_id);
-void check_available_msg();
-void process_available_msgs();
+//void check_available_msg();
+//void process_available_msgs();
 int  stop_remote_node(int node_id);
-int  diagnose_controller_message(CAN_message_t msg);
-int  link_node(int node_id);
-int  rearm_MC(int node_id);
+
 int  query_voltage_level(int node_id);
 int  shutdown_MC(int node_id);
 

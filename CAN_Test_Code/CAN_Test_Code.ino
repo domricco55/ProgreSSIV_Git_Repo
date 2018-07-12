@@ -64,7 +64,7 @@ void setup() {
     delay(500);
   }
 
-  /*Startup CAN network*/
+  /*Startup CAN network (this is a FlexCAN function)*/
   CANbus.begin();
 
 }
@@ -75,7 +75,7 @@ void loop() {
 
   if(CAN_Test_Flag){
     
-      ret = reset_nodes();
+      ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
       
       if (GENERAL_PRINT) {
         Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
@@ -83,14 +83,62 @@ void loop() {
         Serial.println();
       }
 
-     ret = reset_communications();
+     ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
      
-      if (GENERAL_PRINT) {
+     if (GENERAL_PRINT) {
         Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
         Serial.println();
         Serial.println();
       }
-  
+
+     ret = set_torque_operating_mode(NODE_1); // Configure node 1 for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+
+     if (GENERAL_PRINT) {
+        Serial <<"set_torque_operating_mode(NODE_1) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+      }      
+
+     ret = set_torque_operating_mode(NODE_2); // Configure node 2 for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+
+     if (GENERAL_PRINT) {
+        Serial <<"set_torque_operating_mode(NODE_2) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     }    
+
+     ret = set_torque_operating_mode(NODE_3); // Configure node 3 for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+
+     if (GENERAL_PRINT) {
+        Serial <<"set_torque_operating_mode(NODE_3) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     }   
+       
+     ret = set_torque_operating_mode(NODE_4); // Configure node 4 for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+
+     if (GENERAL_PRINT) {
+        Serial <<"set_torque_operating_mode(NODE_4) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     }   
+
+     ret = start_remote_nodes(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+     
+     if (GENERAL_PRINT) {
+        Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     }
+      
+     ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+      
+     if (GENERAL_PRINT) {
+        Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     }
+      
     CAN_Test_Flag = false;
   }
 
