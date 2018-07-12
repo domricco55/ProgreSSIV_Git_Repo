@@ -16,10 +16,10 @@
 
 #define SCALE_FACTOR 2
 
-int  reset_nodes();
-int  reset_communications();
+uint8_t  reset_nodes();
+uint8_t  reset_communications();
 int  start_remote_nodes();
-int  set_torque_operating_mode(int node_id);
+uint8_t  set_torque_operating_mode(int node_id);
 
 int controlword_operation_enabled(int node_id);
 

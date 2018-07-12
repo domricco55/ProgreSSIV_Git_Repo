@@ -15,10 +15,11 @@
 
 extern FlexCAN CANbus;
 
-int reset_nodes()
+uint8_t reset_nodes()
 {
   CAN_message_t msg;
-  int ret = 0;
+  uint8_t ret = 0; //This variable is currently the one being returned by the function but this may change. 
+  uint8_t bootup_count = 0; //This variable will keep track of the number of node NMT boot up confirmations recieved. 
 
   //reset nodes NMT command
   msg.id = 0;
@@ -27,7 +28,7 @@ int reset_nodes()
   msg.buf[0] = 0x81;
   msg.buf[1] = 0;
 
-  msg.timeout = 1;//Milliseconds before giving up on message
+  msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
   if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
@@ -51,48 +52,28 @@ int reset_nodes()
     }
   }
 
-//  if(ret == NO_ERROR){//If the CAN write was successful, attempt to read the boot up messages from the CAN bus 
-//    for(uint8_t index = 0; index<4 ; index++){
-//      
-//      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message (wait for a response from each node on the bus
-//      if (CANbus.read(msg) != 0){//If the read message timeout wasnt reached and a message was available to read
-//        if (PRINT)
-//        {
-//          Serial.println();
-//          Serial.println("Message read during reset_nodes function call:");
-//          Serial.println();
-//          print_CAN_message(msg);
-//        }
-//      }
-//  
-//      else{
-//        if(PRINT)
-//        {
-//          Serial.println();
-//          Serial.println("A read message timeout has occured during the reset_nodes function call.");
-//          Serial.println();
-//        }
-//      }
-//    }
-//  }
-
   if(ret == NO_ERROR){//If the CAN write was successful, attempt to read the boot up messages from the CAN bus 
-
+    
     //The following code will filter out each node's boot up confirmation from other messages that may be in the CAN read buffer. It expects 4 total boot up confirmations
-    for(uint8_t index = 0; index<4 ; index++){
-      
+    for(uint8_t index = 1; index <= 4 ; index++){
+
       msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message (wait a maximum of 1000 milliseconds, the timeout period, for a read message to arrive
       if (CANbus.read(msg) == 0){//If the read message timeout was reached and a message was not available to read.
+        
         if(PRINT)
         {
           Serial.println();
           Serial.println("A read message timeout has occured during the reset_nodes function call. One of the nodes may not be on the CAN bus.");
           Serial.println();
         }
+        
       }
       
       else{//Else, the read message timeout wasn't reached and a message was available to read.
         if(msg.id == 0x701 || msg.id == 0x702 || msg.id == 0x703 || msg.id == 0x704){// If the recieved message is a nodes NMT boot up message, the COB-id will be between 0x701 and 0x704
+          
+          bootup_count++; //A bootup message has been recieved, increment the bootup count.
+          
           if(PRINT)
             {
             Serial.println();
@@ -105,8 +86,9 @@ int reset_nodes()
         else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
 
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
-          Serial.print("A non-boot up message was recieved during the reset_nodes function all and was ignored. The COB-id was: ");
+          Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The COB-id was: ");
           Serial.println(msg.id, HEX);
+          
         } 
       }
     }
@@ -114,10 +96,11 @@ int reset_nodes()
   return ret; //May want to change what each of these functions returns
 }
 
-int reset_communications()
+uint8_t reset_communications()
 {
   CAN_message_t msg;
-  int ret = 0;
+  uint8_t ret = 0; //This variable is currently the one being returned by the function but this may change. 
+  uint8_t bootup_count = 0; //This variable will keep track of the number of node NMT boot up confirmations recieved. 
 
   //reset communication NMT command
   msg.id = 0;
@@ -126,7 +109,7 @@ int reset_communications()
   msg.buf[0] = 0x82;
   msg.buf[1] = 0;
 
-  msg.timeout = 1;//Milliseconds before giving up on broadcastimng CAN message
+  msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
   if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
@@ -152,26 +135,42 @@ int reset_communications()
 
   if(ret == NO_ERROR){//If the CAN write was successful, attempt to read the boot up messages from the CAN bus 
     
-    for(uint8_t index = 0; index<4 ; index++){
-      
-      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
-      if (CANbus.read(msg) != 0){//If the read message timeout wasnt reached and a message was available to read
-        if (PRINT)
-        {
-          Serial.println();
-          Serial.println("Message read during reset_communications function call:");
-          Serial.println();
-          print_CAN_message(msg);
-        }
-      }
-  
-      else{
+    //The following code will filter out each node's boot up confirmation from other messages that may be in the CAN read buffer. It expects 4 total boot up confirmations
+    for(uint8_t index = 1; index <= 4 ; index++){
+
+      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message (wait a maximum of 1000 milliseconds, the timeout period, for a read message to arrive
+      if (CANbus.read(msg) == 0){//If the read message timeout was reached and a message was not available to read.
+        
         if(PRINT)
         {
           Serial.println();
-          Serial.println("A read message timeout has occured during the reset_communications function call.");
+          Serial.println("A read message timeout has occured during the reset_communications function call. One of the nodes may not be on the CAN bus.");
           Serial.println();
         }
+        
+      }
+      
+      else{//Else, the read message timeout wasn't reached and a message was available to read.
+        if(msg.id == 0x701 || msg.id == 0x702 || msg.id == 0x703 || msg.id == 0x704){// If the recieved message is a nodes NMT boot up message, the COB-id will be between 0x701 and 0x704
+          
+          bootup_count++; //A bootup message has been recieved, increment the bootup count.
+          
+          if(PRINT)
+            {
+            Serial.println();
+            Serial.println("An NMT boot up confirmation has been recieved during the reset_communications function call. The recieved message is: ");
+            Serial.println();
+            print_CAN_message(msg);
+            }
+        }
+        
+        else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
+
+          index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
+          Serial.print("A non-boot up message was recieved during the reset_communications function call and was ignored. The COB-id was: ");
+          Serial.println(msg.id, HEX);
+          
+        } 
       }
     }
   }
@@ -179,22 +178,21 @@ int reset_communications()
   return ret; //May want to change what each of these functions returns
 }
 
-int set_torque_operating_mode(int node_id)
+uint8_t set_torque_operating_mode(int node_id)
 {
   CAN_message_t msg;
-  int ret = 0;
+  uint8_t ret = 0;
 
     //initialize MC's to torque mode
   msg.id = 0x600 + node_id;
   msg.len = 5;
-  msg.timeout = 0;
   msg.buf[0] = 0x2F;
   msg.buf[2] = 0x60;
   msg.buf[1] = 0x60;
   msg.buf[3] = 0;
   msg.buf[4] = TORQUE_MODE;
 
-  msg.timeout = 1;//Milliseconds before giving up on broadcastimng CAN message
+  msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
   if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
@@ -217,31 +215,48 @@ int set_torque_operating_mode(int node_id)
         delay(500);
     }
   }
-  
-  if(ret == NO_ERROR){//If the CAN write was successful, attempt to read the boot up messages from the CAN bus 
-      
-    msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
-    if (CANbus.read(msg) != 0){//If the read message timeout wasnt reached and a message was available to read
-      if (PRINT)
-      {
-        Serial.println();
-        Serial.println("Message read during set_torque_operating_mode function call:");
-        Serial.println();
-        print_CAN_message(msg);
-      }
-    }
 
-    else{
-      if(PRINT)
-      {
-        Serial.println();
-        Serial.println("A read message timeout has occured during the set_torque_operating_mode function call.");
-        Serial.println();
+  
+  if(ret == NO_ERROR){//If the CAN write was successful
+
+    //The following code will filter out any message that is not an SDO confirmation resulting from the Set Torque Operating Mode SDO written above
+    for(uint8_t index = 1; index <= 1 ; index++){
+
+      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
+      if (CANbus.read(msg) == 0){//If the read message timeout was reached and a message was not available to read
+  
+        if(PRINT)
+        {
+          Serial.println();
+          Serial.println("A read message timeout has occured during the set_torque_operating_mode function call.");
+          Serial.println();
+        }
+          
+      } 
+  
+      else{
+        if((msg.buf[2] << 8 | msg.buf[1]) == 0x6060 && msg.id == 0x580 + node_id){ //If the returned message was an SDO response (COB-id of 0x580 + node id) and the OD main index was that of the Set Operating Mode object (index of 0x6060)
+          if (PRINT)
+          {
+            Serial.println();
+            Serial.println("Message read during set_torque_operating_mode function call: ");//MAY WANT TO CHANGE THIS PRINT STATEMENT TO BETTER REFLECT WHAT'S HAPPENING
+            Serial.println();
+            print_CAN_message(msg);
+          }
+        }
+
+        else{// Else the recieved message was not an SDO confirmation 
+
+          index--; //Decrement the index so that the loop runs again and checks for the next read message
+          Serial.print("A non-sdo-confirmation message was recieved during the set_torque_operating_mode function call and was ignored. The COB-id was: ");
+          Serial.println(msg.id, HEX);
+          
+        }
       }
     }
   }
 
-  return ret;
+  return ret;//Probably want to have returned wether or not the confirmation SDO was recieved or not
 
 }
 
@@ -290,6 +305,8 @@ int start_remote_nodes()
 }
 
 //MY FUNCTIONS ABOVE HERE
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
 
 int resetFault (int node_id) 
 {

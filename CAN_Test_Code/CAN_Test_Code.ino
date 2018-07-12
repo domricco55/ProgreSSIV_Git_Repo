@@ -130,8 +130,10 @@ void loop() {
         Serial.println();
         Serial.println();
      }
-      
-     ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+
+
+     ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again. Doing this again after nodes being operational
+                         //So that I can test read message filtering in the reset_nodes function. 
       
      if (GENERAL_PRINT) {
         Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
