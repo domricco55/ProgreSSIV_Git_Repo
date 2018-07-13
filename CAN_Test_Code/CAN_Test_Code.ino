@@ -144,24 +144,6 @@ void loop() {
     CAN_Test_Flag = false;
   }
 
-
-////If a CAN message is available immediately, then read it (done every time through main, so need to make sure that main loop frequency is much slower than the rate at which PDO's are being broadcast. 
-//  CAN_message_t msg;
-//  msg.timeout = 0;
-//  if (CANbus.read(msg) != 0){//If the read message timeout wasnt reached and a message was available to read
-//    if (PRINT)
-//    {
-//      Serial.println();
-//      Serial.println("Message recently broadcast to CAN bus");
-//      Serial.println();
-//      print_CAN_message(msg);
-//    }
-//  }
-  
-
-
-
-
 /* END OF MAIN LOOP*/
 
 }
