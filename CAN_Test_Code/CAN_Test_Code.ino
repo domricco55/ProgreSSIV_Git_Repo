@@ -67,6 +67,10 @@ void setup() {
   /*Startup CAN network (this is a FlexCAN function)*/
   CANbus.begin();
 
+  /* Also going to do a little servo testing here*/
+  initPWMin();
+  initServo();
+
 }
 
 /* Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Be careful
@@ -143,6 +147,11 @@ void loop() {
       
     CAN_Test_Flag = false;
   }
+
+  /* Update the servo with the radio value. */
+  writeServo(ST_in);
+
+
 
 /* END OF MAIN LOOP*/
 
