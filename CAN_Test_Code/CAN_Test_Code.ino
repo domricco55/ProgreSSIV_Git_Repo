@@ -23,11 +23,11 @@ FlexCAN CANbus(1000000);
 #define NODE_4 4
 
 /* Controlword values that drive the state transitions within the Device Control state machine. See EPOS4 Firmware Specification documentation for information on the controlword and state machine. */
-#define SHUTDOWN_COMMAND 0x0006; //Controlword for shutdown. Takes the Device Control state machine from the "switch-on disabled" (post initialization state) to the "Ready to switch on" state. 
-#define ENABLE_OP_COMMAND 0x000F; //Controlword for switch on and enable. Puts Device Control state machine into "Operation enabled state" under MOST conditions. 
-#define QUICK_STOP_COMMAND 0x000B; //Controlword for Quick stop. Takes the Device Control state machine from the "Operation enabled" state to the "Quick stop active" state. The motors will decelerate to zero 
+#define SHUTDOWN_COMMAND 0x0006 //Controlword for shutdown. Takes the Device Control state machine from the "switch-on disabled" (post initialization state) to the "Ready to switch on" state. 
+#define ENABLE_OP_COMMAND 0x000F //Controlword for switch on and enable. Puts Device Control state machine into "Operation enabled state" under MOST conditions. 
+#define QUICK_STOP_COMMAND 0x000B //Controlword for Quick stop. Takes the Device Control state machine from the "Operation enabled" state to the "Quick stop active" state. The motors will decelerate to zero 
                                        //velocity at the quick stop deceleration value (index 0x6085). 
-#define RESET_FAULT_COMMAND 0x0080; //Controlword for reset fault. Takes the Device Control state machine from the "fault" state to the "Switch on disabled state"
+#define RESET_FAULT_COMMAND 0x0080 //Controlword for reset fault. Takes the Device Control state machine from the "fault" state to the "Switch on disabled state"
 
 /*loop CAN variables.*/
 int ret = 0;
@@ -56,6 +56,18 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 #define GENERAL_PRINT 1
 
 bool CAN_Test_Flag = true;
+
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/* Timing/Frequency setup */
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+bool timing_init_flag = true; //This flag allows the timing variables to be initialized only once in spi task.
+
+//These will act as the previous clock value for which to compare the current value to. These are used to let code run at specified frequencies.
+unsigned long start_time_motors;
+unsigned long start_time_servo;
+//unsigned long start_time_voltage;//Need to add in the voltage monitoring feature of the motor controllers. FUTURE WORK
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -102,103 +114,83 @@ void loop() {
         Serial.println();
       }
 
-     ret = set_torque_operating_mode(NODE_1); // Configure node 1 for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+     ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
 
      if (GENERAL_PRINT) {
-        Serial <<"set_torque_operating_mode(NODE_1) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
         Serial.println();
         Serial.println();
       }      
 
-     ret = set_torque_operating_mode(NODE_2); // Configure node 2 for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
 
+     ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
+     
      if (GENERAL_PRINT) {
-        Serial <<"set_torque_operating_mode(NODE_2) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     }    
-
-     ret = set_torque_operating_mode(NODE_3); // Configure node 3 for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
-
-     if (GENERAL_PRINT) {
-        Serial <<"set_torque_operating_mode(NODE_3) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     }   
-       
-     ret = set_torque_operating_mode(NODE_4); // Configure node 4 for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
-
-     if (GENERAL_PRINT) {
-        Serial <<"set_torque_operating_mode(NODE_4) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
         Serial.println();
         Serial.println();
      } 
 
-
-     ret = set_node_PDO1_inhibit_time(NODE_1); //Set the TxPDO1 inhibit time for node 1
-     
-     if (GENERAL_PRINT) {
-        Serial <<"set_node_PDO1_inhibit_time(NODE_1) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     } 
-     
-     ret = set_node_PDO1_inhibit_time(NODE_2); //Set the TxPDO1 inhibit time for node 2
-     
-     if (GENERAL_PRINT) {
-        Serial <<"set_node_PDO1_inhibit_time(NODE_2) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     } 
-
-     ret = set_node_PDO1_inhibit_time(NODE_3); //Set the TxPDO1 inhibit time for node 3
-     
-     if (GENERAL_PRINT) {
-        Serial <<"set_node_PDO1_inhibit_time(NODE_3) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     } 
-
-     ret = set_node_PDO1_inhibit_time(NODE_4); //Set the TxPDO1 inhibit time for node 4
-     
-     if (GENERAL_PRINT) {
-        Serial <<"set_node_PDO1_inhibit_time(NODE_4) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     } 
-
-     ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
-     
-     if (GENERAL_PRINT) {
-        Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     }
-
-     ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
-
-     if (GENERAL_PRINT) {
-        Serial <<"RxPDO1_controlword_write function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     }
-
-     ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
-
-     if (GENERAL_PRINT) {
-        Serial <<"RxPDO1_controlword_write function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     }
-
-     
+//
+//     ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
+//     
+//     if (GENERAL_PRINT) {
+//        Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//        Serial.println();
+//        Serial.println();
+//     }
+//
+//     ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
+//
+//     if (GENERAL_PRINT) {
+//        Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+//        Serial.println();
+//        Serial.println();
+//     }
+//
+//     ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
+//
+//     if (GENERAL_PRINT) {
+//        Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+//        Serial.println();
+//        Serial.println();
+//     }
+//
+//     ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+//      
+//      if (GENERAL_PRINT) {
+//        Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//        Serial.println();
+//        Serial.println();
+//      }
 
     CAN_Test_Flag = false;
   }
 
-  /* Update the servo with the radio value. */
-  writeServo(ST_in);
 
+
+//  if (timing_init_flag) {
+//    // Initialize the Timing Variables so that there is a start time
+//    start_time_motors = millis();
+//    start_time_servo = millis();
+//    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
+//    //start_time_voltage = millis();
+//    timing_init_flag = false;
+//  }
+//  
+//  /* Update the servo with the radio value. */
+//  writeServo(ST_in);
+//
+//
+//  unsigned long current_time_motors = micros();
+//  if ((current_time_motors - start_time_motors) >= 556)  //.556 ms => 180hz. Motor torque setpoints will update at this frequency
+//  {
+//
+//    RxPDO2_torque_write(NODE_1, THR_in);
+//    RxPDO2_torque_write(NODE_2, THR_in);
+//    RxPDO2_torque_write(NODE_3, THR_in);
+//    RxPDO2_torque_write(NODE_4, THR_in);
+//  }
 
 
 /* END OF MAIN LOOP*/

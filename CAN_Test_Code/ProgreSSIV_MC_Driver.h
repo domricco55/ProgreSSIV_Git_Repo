@@ -9,25 +9,18 @@
 /*Define the data bytes available for selecting the modes of operation*/
 #define PROFILE_VELOCITY_MODE 3
 #define TORQUE_MODE 10
-//#define CURRENT_MODE 253 //0xfd
 
+uint8_t reset_nodes();
+uint8_t reset_communications();
+uint8_t start_remote_nodes();
+uint8_t set_torque_operating_mode();
+uint8_t set_TxPDO1_inhibit_time();
 
-#define PRINT 1
+uint8_t RxPDO1_controlword_write(uint16_t control_command);
+uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle);
 
-#define SCALE_FACTOR 2
-
-uint8_t  reset_nodes();
-uint8_t  reset_communications();
-uint8_t  start_remote_nodes();
-uint8_t  set_torque_operating_mode(int node_id);
-uint8_t set_node_PDO1_inhibit_time(int node_id);
-
-uint8_t RxPDO1_controlword_write(int node_id);
-
-int  write_torque_and_enable_op(int node_id, int throttle);
 void print_CAN_message(CAN_message_t msg);
 
-int  send_statusword_request(int node_id);
 //void check_available_msg();
 //void process_available_msgs();
 int  stop_remote_node(int node_id);

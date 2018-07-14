@@ -9,16 +9,14 @@
 #include "ProgreSSIV_MC_Driver.h"
 #include <string.h>
 
-#define WAIT_FOR_RESPONSE_TIME_SLOW_US 100
-#define WAIT_FOR_RESPONSE_TIME_FAST_US 50
-
+#define PRINT 0
 
 extern FlexCAN CANbus;
 
 uint8_t reset_nodes()
 {
   CAN_message_t msg;
-  uint8_t ret = 0; //This variable is currently the one being returned by the function but this may change. 
+  uint8_t ret = NO_ERROR; //This variable is currently the one being returned by the function but this may change. 
   uint8_t bootup_count = 0; //This variable will keep track of the number of node NMT boot up confirmations recieved. 
 
   //reset nodes NMT command
@@ -99,7 +97,7 @@ uint8_t reset_nodes()
 uint8_t reset_communications()
 {
   CAN_message_t msg;
-  uint8_t ret = 0; //This variable is currently the one being returned by the function but this may change. 
+  uint8_t ret = NO_ERROR; //This variable is currently the one being returned by the function but this may change. 
   uint8_t bootup_count = 0; //This variable will keep track of the number of node NMT boot up confirmations recieved. 
 
   //reset communication NMT command
@@ -178,171 +176,186 @@ uint8_t reset_communications()
   return ret; //May want to change what each of these functions returns
 }
 
-uint8_t set_torque_operating_mode(int node_id)
+uint8_t set_torque_operating_mode()
 {
   CAN_message_t msg;
-  uint8_t ret = 0;
+  uint8_t ret = NO_ERROR;
 
-    //initialize MC's to torque mode
-  msg.id = 0x600 + node_id;
-  msg.len = 5;
-  msg.buf[0] = 0x2F;
-  msg.buf[2] = 0x60;
-  msg.buf[1] = 0x60;
-  msg.buf[3] = 0;
-  msg.buf[4] = TORQUE_MODE;
-
-  msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
-  if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  //Set the operating mode variable of each node to torque mode
+  for( uint8_t node_id = 1; node_id <=4; node_id++ )
   {
-    ret = ERROR_CAN_WRITE;
-    if (PRINT)
-    {
-        Serial.println();
-        Serial.println("error CAN write during set_torque_operating_mode function call");
-        Serial.println();
-        delay(500);
-    }
+    msg.id = 0x600 + node_id;
+    msg.len = 5;
+    msg.buf[0] = 0x2F;
+    msg.buf[2] = 0x60;
+    msg.buf[1] = 0x60;
+    msg.buf[3] = 0;
+    msg.buf[4] = TORQUE_MODE;
     
-  }
-  else{
-    ret = NO_ERROR;
-    if (PRINT)
+    msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
+    if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
     {
-        Serial.println();
-        Serial.println("successful CAN write during set_torque_operating_mode function call");
-        Serial.println();
-        delay(500);
+      ret = ERROR_CAN_WRITE;
+      if (PRINT)
+      {
+          Serial.println();
+          Serial.println("error CAN write during set_torque_operating_mode function call");
+          Serial.println();
+          delay(500);
+      }
+      
     }
-  }
 
+    if(ret == NO_ERROR)//If the CAN write was successful
+    {
   
-  if(ret == NO_ERROR){//If the CAN write was successful
-
-    //The following code will filter out any message that is not an SDO confirmation resulting from the Set Torque Operating Mode SDO written above
-    for(uint8_t index = 1; index <= 1 ; index++){
-
-      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
-      if (CANbus.read(msg) == 0){//If the read message timeout was reached and a message was not available to read
+      //The following code will filter out any message that is not an SDO confirmation resulting from the Set Torque Operating Mode SDO written above
+      for(uint8_t index = 1; index <= 1 ; index++)
+      {
   
-        if(PRINT)
-        {
-          Serial.println();
-          Serial.println("A read message timeout has occured during the set_torque_operating_mode function call.");
-          Serial.println();
-        }
-          
-      } 
-  
-      else{
-        if((msg.buf[2] << 8 | msg.buf[1]) == 0x6060 && msg.id == 0x580 + node_id){ //If the returned message was an SDO response (COB-id of 0x580 + node id) and the OD main index was that of the Set Operating Mode object (index of 0x6060)
-          if (PRINT)
+        msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
+        if (CANbus.read(msg) == 0){//If the read message timeout was reached and a message was not available to read
+    
+          if(PRINT)
           {
             Serial.println();
-            Serial.println("Message read during set_torque_operating_mode function call: ");//MAY WANT TO CHANGE THIS PRINT STATEMENT TO BETTER REFLECT WHAT'S HAPPENING
+            Serial.println("A read message timeout has occured during the set_torque_operating_mode call.");
             Serial.println();
-            print_CAN_message(msg);
+          }
+            
+        } 
+    
+        else{
+
+          if((msg.buf[2] << 8 | msg.buf[1]) == 0x6060 && msg.id == 0x580 + node_id){ //If the returned message was an SDO response (COB-id of 0x580 + node id) and the OD main index was that of the Set Operating Mode object (index of 0x6060)
+            if (PRINT)
+            {
+              Serial.println();
+              Serial.print("Message read during set_torque_operating_mode function call, node ");//MAY WANT TO CHANGE THIS PRINT STATEMENT TO BETTER REFLECT WHAT'S HAPPENING
+              Serial.print(node_id);
+              Serial.println(":");
+              Serial.println();
+              print_CAN_message(msg);
+            }
+          }
+
+          else{// Else the recieved message was not an SDO confirmation 
+  
+            index--; //Decrement the index so that the loop runs again and checks for the next read message
+            Serial.print("A non-sdo-confirmation message was recieved during the set_torque_operating_mode function call and was ignored. The COB-id was: ");
+            Serial.println(msg.id, HEX);
+            
           }
         }
-
-        else{// Else the recieved message was not an SDO confirmation 
-
-          index--; //Decrement the index so that the loop runs again and checks for the next read message
-          Serial.print("A non-sdo-confirmation message was recieved during the set_torque_operating_mode function call and was ignored. The COB-id was: ");
-          Serial.println(msg.id, HEX);
-          
-        }
       }
-    }
+    }  
   }
 
-  return ret;//Probably want to have returned wether or not the confirmation SDO was recieved or not
+    if(ret = NO_ERROR){
+        if (PRINT)
+        {
+            Serial.println();
+            Serial.println("successful CAN write during set_torque_operating_mode function call");
+            Serial.println();
+            delay(500);
+        }
+    }
+
+  return ret;//Probably want to have returned whether or not the confirmation SDO was recieved or not
 
 }
 
-uint8_t set_node_PDO1_inhibit_time(int node_id)
+
+
+uint8_t set_TxPDO1_inhibit_time()
 {
   CAN_message_t msg;
-  uint8_t ret = 0;
+  uint8_t ret = NO_ERROR;
 
-  //Set the TxPDO1 inhibit time
-  msg.id = 0x600 + node_id;
-  msg.len = 6;
-  msg.buf[0] = 0x2B;//Command specifier for writing 2 bytes
-  msg.buf[2] = 0x18;//High byte of TxPDO1 Parameter Index
-  msg.buf[1] = 0x00;//Low byte of TxPDO1 Parameter Index
-  msg.buf[3] = 0x03;//Sub-index of TxPDO1 Parameter Object, the INHIBIT TIME
-  msg.buf[5] = 0x00;//High byte of data is zero
-  msg.buf[4] = 0x37;//Low byte of data - 55 multiples of 100uS produces an inhibit time of 0.0055 seconds or 180hz
-  
-  msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
-  if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  //Set the TxPDO1 inhibit time for each node
+  for( uint8_t node_id = 1; node_id <=4; node_id++ )
   {
-    ret = ERROR_CAN_WRITE;
-    if (PRINT)
-    {
-        Serial.println();
-        Serial.println("error CAN write during set_node_PDO1_inhibit_time function call");
-        Serial.println();
-        delay(500);
-    }
+    msg.id = 0x600 + node_id;//SDO COB-id for the node
+    msg.len = 6;
+    msg.buf[0] = 0x2B;//Command specifier for writing 2 bytes
+    msg.buf[2] = 0x18;//High byte of TxPDO1 Parameter Index
+    msg.buf[1] = 0x00;//Low byte of TxPDO1 Parameter Index
+    msg.buf[3] = 0x03;//Sub-index of TxPDO1 Parameter Object, the INHIBIT TIME
+    msg.buf[5] = 0x00;//High byte of data is zero
+    msg.buf[4] = 0x37;//Low byte of data - 55 multiples of 100uS produces an inhibit time of 0.0055 seconds or 180hz
     
-  }
-  else{
-    ret = NO_ERROR;
-    if (PRINT)
+    msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
+    if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
     {
-        Serial.println();
-        Serial.println("successful CAN write during set_node_PDO1_inhibit_time function call");
-        Serial.println();
-        delay(500);
+      ret = ERROR_CAN_WRITE;
+      if (PRINT)
+      {
+          Serial.println();
+          Serial.println("error CAN write during set_TxPDO1_inhibit_time function call");
+          Serial.println();
+          delay(500);
+      }
+      
     }
-  }
 
+    if(ret == NO_ERROR)//If the CAN write was successful
+    {
   
-  if(ret == NO_ERROR){//If the CAN write was successful
-
-    //The following code will filter out any message that is not an SDO confirmation resulting from the Set Torque Operating Mode SDO written above
-    for(uint8_t index = 1; index <= 1 ; index++){
-
-      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
-      if (CANbus.read(msg) == 0){//If the read message timeout was reached and a message was not available to read
+      //The following code will filter out any message that is not an SDO confirmation resulting from the Set Torque Operating Mode SDO written above
+      for(uint8_t index = 1; index <= 1 ; index++)
+      {
   
-        if(PRINT)
-        {
-          Serial.println();
-          Serial.println("A read message timeout has occured during the set_node_PDO1_inhibit_time function call.");
-          Serial.println();
-        }
-          
-      } 
-  
-      else{
-        if((msg.buf[2] << 8 | msg.buf[1]) == 0x1800 && msg.id == 0x580 + node_id && msg.buf[3] == 0x03){ //If the returned message was an SDO response (COB-id of 0x580 + node id) and the OD main index was that of the TxPDO1 
-                                                                                                         //parameter object (0x1800) and the sub-index was that of the inhibit time (0x03).
-          if (PRINT)
+        msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
+        if (CANbus.read(msg) == 0){//If the read message timeout was reached and a message was not available to read
+    
+          if(PRINT)
           {
             Serial.println();
-            Serial.println("Message read during set_node_PDO1_inhibit_time function call: ");//MAY WANT TO CHANGE THIS PRINT STATEMENT TO BETTER REFLECT WHAT'S HAPPENING
+            Serial.println("A read message timeout has occured during the set_TxPDO1_inhibit_time function call.");
             Serial.println();
-            print_CAN_message(msg);
+          }
+            
+        } 
+    
+        else{
+          if((msg.buf[2] << 8 | msg.buf[1]) == 0x1800 && msg.id == 0x580 + node_id && msg.buf[3] == 0x03)
+          { //If the returned message was an SDO response (COB-id of 0x580 + node id) and the OD main index was that of the TxPDO1 parameter object (0x1800) and the sub-index was that of the inhibit time (0x03).
+            if (PRINT)
+            {
+              Serial.println();
+              Serial.print("Message read during set_TxPDO1_inhibit_time function call, node ");//MAY WANT TO CHANGE THIS PRINT STATEMENT TO BETTER REFLECT WHAT'S HAPPENING
+              Serial.print(node_id);
+              Serial.println(":");
+              Serial.println();
+              print_CAN_message(msg);
+            }
+          }
+  
+          else{// Else the recieved message was not an SDO confirmation 
+  
+            index--; //Decrement the index so that the loop runs again and checks for the next read message
+            Serial.print("A non-sdo-confirmation message was recieved during the set_TxPDO1_inhibit_time function call and was ignored. The COB-id was: ");
+            Serial.println(msg.id, HEX);
+            
           }
         }
-
-        else{// Else the recieved message was not an SDO confirmation 
-
-          index--; //Decrement the index so that the loop runs again and checks for the next read message
-          Serial.print("A non-sdo-confirmation message was recieved during the set_node_PDO1_inhibit_time function call and was ignored. The COB-id was: ");
-          Serial.println(msg.id, HEX);
-          
-        }
       }
-    }
+    }  
   }
 
+    if(ret = NO_ERROR){
+      if (PRINT)
+      {
+          Serial.println();
+          Serial.println("All CAN writes successful during set_TxPDO1_inhibit_time function call");
+          Serial.println();
+          delay(500);
+      }
+    }
+    
   return ret;//Probably want to have returned wether or not the confirmation SDO was recieved or not
-
 }
+
 
 uint8_t start_remote_nodes()
 {
@@ -350,7 +363,7 @@ uint8_t start_remote_nodes()
   uint8_t ret = 0;
 
 	//"Start Remote Node CAN Message"
-	msg.id = 0;//CAN_id for NMT or network management
+	msg.id = 0;//COB-id for NMT or network management
 	msg.ext = 0;
 	msg.len = 2;
 	msg.timeout = 0; //Tells how long the system should wait for a response to this CAN message? LOOK AT FLEXCAN README FOR ANSWER TO THIS
@@ -388,32 +401,71 @@ uint8_t start_remote_nodes()
 
 }
 
-uint8_t RxPDO1_controlword_write(int node_id, uint16_t control_command) //Send out the RxPDO1 message that updates the node's controlword object
+uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1 message that updates the node's controlword object
 {
   CAN_message_t msg;
-  uint8_t int ret = 0;
-  uint8_t command_HB = (uint8_t)(control_command>>8); //Grab the high byte of the controlword value
-  uint8_t command_LB = (uint8_t)(control_command) //Grab the low byte of the controlword value
+  uint8_t error_count = 0;
+  uint8_t command_HB = (uint8_t)(control_command >> 8); //Grab the high byte of the controlword value
+  uint8_t command_LB = (uint8_t)(control_command); //Grab the low byte of the controlword value
 
-  //CAN message to update the controlword value. Affect the 
-  msg.id = 0x200 + node_id;
+  for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
+    
+    //CAN message to update the controlword value of the node.
+    msg.id = 0x200 + node_id;//COB-id for RxPDO1 - defined using EPOS Studio software
+    msg.ext = 0;
+    msg.len = 2;
+    msg.buf[1] = command_HB;
+    msg.buf[0] = command_LB;
+    
+    msg.timeout = 0;//If this is set to zero, write blocking will not occur - the write function will try to send out the message immediately and return a 0 if unsuccessful
+    if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+    {
+      error_count++;
+      if (PRINT)
+      {
+          Serial.println();
+          Serial.print("error CAN write during RxPDO1_controlword_write function call, node ");
+          Serial.println(node_id);
+          Serial.println();
+          delay(500);
+      }
+    }
+  }
+
+  if(error_count = 0){
+    if (PRINT)
+    {
+        Serial.println();
+        Serial.println("successful CAN writes during RxPDO1_controlword_write function call");
+        Serial.println();
+        delay(500);
+    }
+  }
+  return (4-error_count);
+}
+
+uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO1 message that updates the node's controlword object
+{
+  CAN_message_t msg;
+  uint8_t ret = 0;
+
+  //RxPDO 2,updating the target torque
+  msg.id = 0x300 + node_id; //COB-id of RxPDO 2 for this specific node
   msg.ext = 0;
-  msg.len = 6;
-  msg.buf[0] = 0x2B;
-  msg.buf[2] = 0x60;
-  msg.buf[1] = 0x40;
-  msg.buf[3] = 0x00;
-  msg.buf[5] = command_HB;
-  msg.buf[4] = command_LB;.
+  msg.len = 4;
+  memcpy(&(msg.buf[0]), (void *)(&throttle), 1);
+  memcpy(&(msg.buf[1]), ((char *)(&throttle) + 1), 1);
+  memcpy(&(msg.buf[2]), ((char *)(&throttle) + 2), 1);
+  memcpy(&(msg.buf[3]), ((char *)(&throttle) + 3), 1);
   
-  msg.timeout = 1;//Milliseconds before giving up on broadcasting CAN message
+  msg.timeout = 0;//Milliseconds before giving up on broadcasting CAN message
   if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (PRINT)
     {
         Serial.println();
-        Serial.println("error CAN write during RxPDO1_Controlword_Write function call");
+        Serial.println("error CAN write during RxPDO2_torque_write function call");
         Serial.println();
         delay(500);
     }
@@ -424,7 +476,7 @@ uint8_t RxPDO1_controlword_write(int node_id, uint16_t control_command) //Send o
     if (PRINT)
     {
         Serial.println();
-        Serial.println("successful CAN write during RxPDO1_Controlword_Write function call");
+        Serial.println("successful CAN write during RxPDO2_torque_write function call");
         Serial.println();
         delay(500);
     }
@@ -433,50 +485,8 @@ uint8_t RxPDO1_controlword_write(int node_id, uint16_t control_command) //Send o
   return ret;
 }
 
-uint8_t RxPDO1_torque_write(int node_id, uint16_t control_command) //Send out the RxPDO1 message that updates the node's controlword object
-{
-  CAN_message_t msg;
-  uint8_t int ret = 0;
-  uint8_t command_HB = (uint8_t)(control_command>>8); //Grab the high byte of the controlword value
-  uint8_t command_LB = (uint8_t)(control_command) //Grab the low byte of the controlword value
 
-  //CAN message to update the controlword value. Affect the 
-  msg.id = 0x300 + node_id;
-  msg.ext = 0;
-  msg.len = 6;
-  msg.buf[0] = 0x2B;
-  msg.buf[2] = 0x60;
-  msg.buf[1] = 0x40;
-  msg.buf[3] = 0x00;
-  msg.buf[5] = command_HB;
-  msg.buf[4] = command_LB;.
-  
-  msg.timeout = 1;//Milliseconds before giving up on broadcasting CAN message
-  if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
-  {
-    ret = ERROR_CAN_WRITE;
-    if (PRINT)
-    {
-        Serial.println();
-        Serial.println("error CAN write during RxPDO1_Controlword_Write function call");
-        Serial.println();
-        delay(500);
-    }
-    
-  }
-  else{
-    ret = NO_ERROR;
-    if (PRINT)
-    {
-        Serial.println();
-        Serial.println("successful CAN write during RxPDO1_Controlword_Write function call");
-        Serial.println();
-        delay(500);
-    }
-  }
-  
-  return ret;
-}
+
 //MY FUNCTIONS ABOVE HERE
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -599,60 +609,6 @@ int resetFault (int node_id)
 
 
 
-
-int write_torque_and_enable_op(int node_id, int throttle)
-{
-  CAN_message_t msg;
-  int ret = 0;
-  int error = 0;
-
-  //make sure throttle does not exceed limits
-  if (throttle > (500 * SCALE_FACTOR + 200))  
-  {
-    throttle = 500 * SCALE_FACTOR;
-  }
-  else if (throttle < (-500 * SCALE_FACTOR - 200))
-  {
-    throttle = -500 * SCALE_FACTOR;
-  }
-
-  //initiate throttle dead zone
-  if (throttle < (10 * SCALE_FACTOR) && throttle > (-10 * SCALE_FACTOR))
-  {
-    throttle = 0;
-  }
-  
-  //RxPDO 3, setting the controlword value and updating the target torque
-  msg.id = 0x400 + node_id; //COB-id of RxPDO 3 for this specific node
-  msg.ext = 0;
-  msg.len = 6;
-  msg.timeout = 0;
-  //Control Word bytes
-  msg.buf[0] = 0x0F;
-  msg.buf[1] = 0x00;
-  //Target torque bytes
-  memcpy(&(msg.buf[2]), (void *)(&throttle), 1);
-  memcpy(&(msg.buf[3]), ((char *)(&throttle) + 1), 1);
-  memcpy(&(msg.buf[4]), ((char *)(&throttle) + 2), 1);
-  memcpy(&(msg.buf[5]), ((char *)(&throttle) + 3), 1);
-
-  if (PRINT)
-  {
-    //print_CAN_message(msg);
-  }
-
-  ret = CANbus.write(msg);
-  if (ret == 1)
-  {
-    error = NO_ERROR;
-  }
-  else {
-    error = ERROR_CAN_WRITE;
-  }
-
-  return 0;
-}
-
 void print_CAN_message(CAN_message_t msg)
 {
   if (PRINT)
@@ -683,54 +639,6 @@ void print_CAN_message(CAN_message_t msg)
   
 }
 
-//int send_statusword_request(int node_id)
-//{
-//  CAN_message_t msg;
-//  int ret = 0;
-//  
-//  msg.id = 0x600 + node_id;
-//  msg.ext = 0;
-//  msg.len = 8;//Changed this to 8 so that the command specifier, index, subindex, and four bytes of junk data are sent (buf 0 - 7)
-//  msg.timeout = 1;
-//  msg.buf[0] = 0x40;
-//  msg.buf[2] = 0x60;
-//  msg.buf[1] = 0x41;
-//  msg.buf[3] = 0x00;
-//  msg.buf[4] = 0x00;
-//
-//  if (CANbus.write(msg) == 0)
-//  {
-//    if (PRINT)
-//    {
-//      Serial.println("error writing CAN message");
-//    }
-//    
-//    exit(0);
-//  }
-//  
-////  msg.timeout = 100;
-////  if (CANbus.read(msg) != 0)
-////  {
-////    if (PRINT)
-////    {
-////      Serial.println("Received Statusword");
-////    }
-////    
-////    print_CAN_message(msg);
-////    ret = 1;
-////  }
-////  else
-////  {
-////    if (PRINT)
-////    {
-////      Serial.println("DID NOT Receive Statusword");
-////    }
-//    
-//    ret = 0;
-//  }*/
-//
-//  return ret;
-//}
 
 //void check_available_msg()
 //{
@@ -809,7 +717,7 @@ int stop_remote_node(int node_id)
   
   ret = CANbus.write(msg);
   //print_CAN_message(msg);
-  delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
+//  delayMicroseconds(WAIT_FOR_RESPONSE_TIME_SLOW_US);
   if (CANbus.read(msg) != 0)
   {
     if (PRINT)
