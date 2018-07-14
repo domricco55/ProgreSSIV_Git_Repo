@@ -18,10 +18,11 @@
 
 uint8_t  reset_nodes();
 uint8_t  reset_communications();
-int  start_remote_nodes();
+uint8_t  start_remote_nodes();
 uint8_t  set_torque_operating_mode(int node_id);
+uint8_t set_node_PDO1_inhibit_time(int node_id);
 
-int controlword_operation_enabled(int node_id);
+uint8_t RxPDO1_controlword_write(int node_id);
 
 int  write_torque_and_enable_op(int node_id, int throttle);
 void print_CAN_message(CAN_message_t msg);

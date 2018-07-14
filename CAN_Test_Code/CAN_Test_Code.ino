@@ -22,6 +22,13 @@ FlexCAN CANbus(1000000);
 #define NODE_3 3
 #define NODE_4 4
 
+/* Controlword values that drive the state transitions within the Device Control state machine. See EPOS4 Firmware Specification documentation for information on the controlword and state machine. */
+#define SHUTDOWN_COMMAND 0x0006; //Controlword for shutdown. Takes the Device Control state machine from the "switch-on disabled" (post initialization state) to the "Ready to switch on" state. 
+#define ENABLE_OP_COMMAND 0x000F; //Controlword for switch on and enable. Puts Device Control state machine into "Operation enabled state" under MOST conditions. 
+#define QUICK_STOP_COMMAND 0x000B; //Controlword for Quick stop. Takes the Device Control state machine from the "Operation enabled" state to the "Quick stop active" state. The motors will decelerate to zero 
+                                       //velocity at the quick stop deceleration value (index 0x6085). 
+#define RESET_FAULT_COMMAND 0x0080; //Controlword for reset fault. Takes the Device Control state machine from the "fault" state to the "Switch on disabled state"
+
 /*loop CAN variables.*/
 int ret = 0;
 int error = NO_ERROR;
@@ -125,9 +132,42 @@ void loop() {
         Serial <<"set_torque_operating_mode(NODE_4) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
         Serial.println();
         Serial.println();
-     }   
+     } 
 
-     ret = start_remote_nodes(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+
+     ret = set_node_PDO1_inhibit_time(NODE_1); //Set the TxPDO1 inhibit time for node 1
+     
+     if (GENERAL_PRINT) {
+        Serial <<"set_node_PDO1_inhibit_time(NODE_1) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     } 
+     
+     ret = set_node_PDO1_inhibit_time(NODE_2); //Set the TxPDO1 inhibit time for node 2
+     
+     if (GENERAL_PRINT) {
+        Serial <<"set_node_PDO1_inhibit_time(NODE_2) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     } 
+
+     ret = set_node_PDO1_inhibit_time(NODE_3); //Set the TxPDO1 inhibit time for node 3
+     
+     if (GENERAL_PRINT) {
+        Serial <<"set_node_PDO1_inhibit_time(NODE_3) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     } 
+
+     ret = set_node_PDO1_inhibit_time(NODE_4); //Set the TxPDO1 inhibit time for node 4
+     
+     if (GENERAL_PRINT) {
+        Serial <<"set_node_PDO1_inhibit_time(NODE_4) function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     } 
+
+     ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
      
      if (GENERAL_PRINT) {
         Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
@@ -135,16 +175,24 @@ void loop() {
         Serial.println();
      }
 
+     ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
 
-     ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again. Doing this again after nodes being operational
-                         //So that I can test read message filtering in the reset_nodes function. 
-      
      if (GENERAL_PRINT) {
-        Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial <<"RxPDO1_controlword_write function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
         Serial.println();
         Serial.println();
      }
-      
+
+     ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
+
+     if (GENERAL_PRINT) {
+        Serial <<"RxPDO1_controlword_write function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     }
+
+     
+
     CAN_Test_Flag = false;
   }
 
