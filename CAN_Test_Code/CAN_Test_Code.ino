@@ -131,31 +131,35 @@ void loop() {
         Serial.println();
      } 
 
-//
-//     ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
-//     
-//     if (GENERAL_PRINT) {
-//        Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-//        Serial.println();
-//        Serial.println();
-//     }
-//
-//     ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
-//
-//     if (GENERAL_PRINT) {
-//        Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-//        Serial.println();
-//        Serial.println();
-//     }
-//
-//     ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
-//
-//     if (GENERAL_PRINT) {
-//        Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-//        Serial.println();
-//        Serial.println();
-//     }
-//
+
+     ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
+     
+     if (GENERAL_PRINT) {
+        Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     }
+
+     ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
+
+     if (GENERAL_PRINT) {
+        Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+        Serial.println();
+        Serial.println();
+     }
+
+     delay(1000); //Wait a little for the motor controllers to change state
+
+     ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
+
+     if (GENERAL_PRINT) {
+        Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+        Serial.println();
+        Serial.println();
+     }
+
+     delay(1000); //Wait a little for the motor controllers to change state
+
 //     ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
 //      
 //      if (GENERAL_PRINT) {
@@ -169,28 +173,28 @@ void loop() {
 
 
 
-//  if (timing_init_flag) {
-//    // Initialize the Timing Variables so that there is a start time
-//    start_time_motors = millis();
-//    start_time_servo = millis();
-//    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
-//    //start_time_voltage = millis();
-//    timing_init_flag = false;
-//  }
-//  
-//  /* Update the servo with the radio value. */
-//  writeServo(ST_in);
-//
-//
-//  unsigned long current_time_motors = micros();
-//  if ((current_time_motors - start_time_motors) >= 556)  //.556 ms => 180hz. Motor torque setpoints will update at this frequency
-//  {
-//
-//    RxPDO2_torque_write(NODE_1, THR_in);
-//    RxPDO2_torque_write(NODE_2, THR_in);
-//    RxPDO2_torque_write(NODE_3, THR_in);
-//    RxPDO2_torque_write(NODE_4, THR_in);
-//  }
+  if (timing_init_flag) {
+    // Initialize the Timing Variables so that there is a start time
+    start_time_motors = millis();
+    start_time_servo = millis();
+    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
+    //start_time_voltage = millis();
+    timing_init_flag = false;
+  }
+  
+  /* Update the servo with the radio value. */
+  writeServo(ST_in);
+
+
+  unsigned long current_time_motors = micros();
+  if ((current_time_motors - start_time_motors) >= 556)  //.556 ms => 180hz. Motor torque setpoints will update at this frequency
+  {
+
+    RxPDO2_torque_write(NODE_1, -THR_in);
+    RxPDO2_torque_write(NODE_2, THR_in);
+    RxPDO2_torque_write(NODE_3, -THR_in);
+    RxPDO2_torque_write(NODE_4, THR_in);
+  }
 
 
 /* END OF MAIN LOOP*/
