@@ -32,10 +32,10 @@ FlexCAN CANbus(1000000);
 /*loop CAN variables.*/
 uint8_t ret = 0;
 uint8_t error = NO_ERROR;
-int32_t velocity_FR;//stores rpm/s of node 1 (Front Right wheel)
-int32_t velocity_FL;//stores rpm/s of node 2 (Front Left wheel)
-int32_t velocity_RR;//stores rpm/s of node 3 (Rear Right wheel)
-int32_t velocity_RL;//stores rpm/s of node 4 (Rear Left wheel)
+int32_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
+int32_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
+int32_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
+int32_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
 uint16_t statusword_1;//stores statusword of node 1
 uint16_t statusword_2;//stores statusword of node 2
 uint16_t statusword_3;//stores statusword of node 3
