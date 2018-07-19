@@ -21,7 +21,7 @@
 
 */
 
-#include "uLaren_CAN_Driver.h"
+#include "ProgreSSIV_MC_Driver.h"
 #include "FlexCAN.h"
 #include "kinetis_flexcan.h"
 #include "input_handler.h"
@@ -128,9 +128,16 @@ FlexCAN CANbus(1000000);
 #define NODE_3 3
 #define NODE_4 4
 
+/* Controlword values that drive the state transitions within the Device Control state machine. See EPOS4 Firmware Specification documentation for information on the controlword and state machine. */
+#define SHUTDOWN_COMMAND 0x0006 //Controlword for shutdown. Takes the Device Control state machine from the "switch-on disabled" (post initialization state) to the "Ready to switch on" state. 
+#define ENABLE_OP_COMMAND 0x000F //Controlword for switch on and enable. Puts Device Control state machine into "Operation enabled state" under MOST conditions. 
+#define QUICK_STOP_COMMAND 0x000B //Controlword for Quick stop. Takes the Device Control state machine from the "Operation enabled" state to the "Quick stop active" state. The motors will decelerate to zero 
+                                  //velocity at the quick stop deceleration value (index 0x6085). 
+#define RESET_FAULT_COMMAND 0x0080 //Controlword for reset fault. Takes the Device Control state machine from the "fault" state to the "Switch on disabled state"
+
 /*loop CAN variables.*/
-int ret = 0;
-int error = NO_ERROR;
+uint8_t ret = 0;
+uint8_t error = NO_ERROR;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
@@ -251,7 +258,7 @@ void setup() {
 }
 
 /* Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Be careful
-  when using delays and try to have tasks run quickly. This is where any finite state machine code may be placed.*/
+  when using delays and try to have tasks run quickly.*/
 void loop() {
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
   /*SPI Task*/
@@ -262,12 +269,13 @@ void loop() {
       SPI TASK DESCRIPTION HERE
 
   */
-
+  
+  //Initialize all timing variables for the loop. 
   if (timing_init_flag) {
     // Initialize the Timing Variables so that there is a start time
-    start_time_print = millis();
-    start_time_motors = millis();
+    start_time_motors = micros();
     start_time_servo = millis();
+    start_time_print = millis();
     //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
     //start_time_voltage = millis();
     timing_init_flag = false;
@@ -322,90 +330,72 @@ void loop() {
   //Initialize the motor controllers if asked to do so by Master (non zero value sent to the init_motor_controllers register) and the motor_controllers_on flag is false
   if (registers.reg_map.init_motor_controllers && !motor_controllers_on) {
 
-    //Run the function that sends the CAN message for reseting the nodes. Ret is what is returned during the CAN message
-    ret = reset_nodes();
-    if (ret > 0)
-    {
-      error = ret;
-    }
-    delay(1000);
-    ret = start_remote_nodes(); //Run the function that starts the remote nodes. Ret is what is returned during the CAN message
-    if (ret > 0)
-    {
-      error = ret;
-    }
-    delay(50);
-    ret = initialize_MC_Torque_Mode(NODE_1); //Run the function that sends the CAN message for initializing motor controller node 1. Ret is what is returned during the CAN message
-    if (ret > 0)
-    {
-      error = ret;
-    }
-    process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe. Not really certain.
-    delay(100);
-    ret = initialize_MC_Torque_Mode(NODE_2); //Run the function that sends the CAN message for initializing motor controller node 2. Ret is what is returned during the CAN message
-    if (ret > 0)
-    {
-      error = ret;
-    }
-    process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
-    delay(100);
-    ret = initialize_MC_Torque_Mode(NODE_3); //Run the function that sends the CAN message for initializing motor controller node 3. Ret is what is returned during the CAN message
-    if (ret > 0)
-    {
-      error = ret;
-    }
-    process_available_msgs(); //A uLaren_CAN_Driver function that prints a recieved CAN message I believe.
-    delay(100);
-    ret = initialize_MC_Torque_Mode(NODE_4); //Run the function that sends the CAN message for initializing motor controller node 4. Ret is what is returned during the CAN message
-    if (ret > 0)
-    {
-      error = ret;
-    }
-    if (error == ERROR_CAN_WRITE)  //If one or more of the attempted initializations returned an ERROR_CAN_WRITE, then stop all motor controllers from operating and
-      //for now, do nothing and exit. I NEED TO CHANGE WHAT HAPPENS HERE!!! Before there were some printed errors and such but not sure
-    {
-      delay(500);
-      //If there is an error, stop the motor controller nodes. Not sure yet of the details of this function. Explore the uLaren CAN driver files and MAXON CANopen firmware specification documentation to figure this out.
-      stop_remote_node(NODE_1);
-      stop_remote_node(NODE_2);
-      stop_remote_node(NODE_3);
-      stop_remote_node(NODE_4);
+      ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+      
+      if (GENERAL_PRINT) {
+        Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+      }
 
-      delay(500);
-      process_available_msgs(); //This function "process_available_msgs() may be printing CAN errors if they have occured but not certain. uLaren would know.
-      //NEED TO DEAL WITH ERROR CODE HERE. IF NO STARTUP THEN DO SOMETHING
-      error = 0;
-    }
-    else
-    {
-      motor_controllers_on = true; //Lets Teensy know the motor controllers have already been turned on
+     ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+     
+     if (GENERAL_PRINT) {
+        Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+      }
 
-      registers.reg_map.init_motor_controllers = 0; //Clears the register so that this command can be sent again later. The command still wont do anything if the motor_controllers_on flag is true but this flag can be set false
-      //in motor controller shut off code. Shut off code has not currently been implemented.
+     ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
 
-      //Link the nodes together...a lot is happening in their link_node function. I'm not really sure what is going on with this
-      //The function includes calls to OTHER uLaren_CAN_Driver functions including write_velocity_and_enable_op(), arm_MC(), and send_statusword_request()
-      //Thinking that they used this function and intended for it only to be used once and maybe Paul thought that was the function
-      //you call to write a velocity value. Or it could be that they couldnt get the normal write_velocity_and_enable_op function to work and resorted
-      //to using the one with the enable_MC thing...really really not sure. NEED TO FIGURE THIS ALL OUT
-//      link_node(NODE_1);
-//      delay(500);
-//      link_node(NODE_2);
-//      delay(500);
-//      link_node(NODE_3);
-//      delay(500);
-//      link_node(NODE_4);
-//      delay(500);
+     if (GENERAL_PRINT) {
+        Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+      }      
 
-      //Make sure the motors arent actuating initially
-      write_torque_and_enable_op(NODE_1, 0 ); //Write the throttle_right_front register value to the motor controller
 
-      write_torque_and_enable_op(NODE_2, 0 ); //Write the throttle_left_front register value to the motor controller
+     ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
+     
+     if (GENERAL_PRINT) {
+        Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     } 
 
-      write_torque_and_enable_op(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
 
-      write_torque_and_enable_op(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
-    }
+     ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
+     
+     if (GENERAL_PRINT) {
+        Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+        Serial.println();
+        Serial.println();
+     }
+
+     delay(1); //Wait a little for the motor controllers to change state 
+
+     //NEED TO REQUEST THE STATUSWORD OF EACH NODE HERE AND ENSURE THAT EACH IS IN NMT STATE OPERATIONAL (Bit 9 of statusword)
+
+     ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
+
+     if (GENERAL_PRINT) {
+        Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+        Serial.println();
+        Serial.println();
+     }
+
+     delay(1); //Wait a little for the motor controllers to change state
+
+     ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
+
+     if (GENERAL_PRINT) {
+        Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+        Serial.println();
+        Serial.println();
+     }
+
+     delay(1); //Wait a little for the motor controllers to change state 
+
   }
 
   /*reset_imu register*/
@@ -442,42 +432,55 @@ void loop() {
   if (registers.reg_map.dead_switch) {
     if ( THR_in > 200 ) {
 
-      write_torque_and_enable_op(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
-
-      write_torque_and_enable_op(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
-
-      write_torque_and_enable_op(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
-
-      write_torque_and_enable_op(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+      unsigned long current_time_motors = micros();
+      if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
+      {
+    
+        RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_right_front);//Write the throttle_right_front register value to the motor controller
+        RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_left_front);//Write the throttle_left_front register value to the motor controller
+        RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
+        RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+        
+        start_time_motors = current_time_motors;
+      }
     }
     else {
 
-      write_torque_and_enable_op(NODE_1, 0); //Write the throttle_right_front register value to the motor controller
-
-      write_torque_and_enable_op(NODE_2, 0); //Write the throttle_left_front register value to the motor controller
-
-      write_torque_and_enable_op(NODE_3, 0); //Write the throttle_right_rear register value to the motor controller
-
-      write_torque_and_enable_op(NODE_4, 0); //Write the throttle_left_rear register value to the motor controller
-
-      //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
-      registers.reg_map.throttle_right_front = 0;
-      registers.reg_map.throttle_left_front = 0;
-      registers.reg_map.throttle_right_rear = 0;
-      registers.reg_map.throttle_left_rear = 0;
+      unsigned long current_time_motors = micros();
+      if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
+      {
+    
+        RxPDO2_torque_write(NODE_1, 0);
+        RxPDO2_torque_write(NODE_2, 0);
+        RxPDO2_torque_write(NODE_3, 0);
+        RxPDO2_torque_write(NODE_4, 0);
+        
+        //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
+        registers.reg_map.throttle_right_front = 0;
+        registers.reg_map.throttle_left_front = 0;
+        registers.reg_map.throttle_right_rear = 0;
+        registers.reg_map.throttle_left_rear = 0;
+        
+        start_time_motors = current_time_motors;
+        
+      }
     }
   }
 
   //If the dead man's switch is turned off, just update the motor controllers immediately.
   else {
 
-    write_torque_and_enable_op(NODE_1, -registers.reg_map.throttle_right_front); //Write the throttle_right_front register value to the motor controller
-
-    write_torque_and_enable_op(NODE_2, registers.reg_map.throttle_left_front); //Write the throttle_left_front register value to the motor controller
-
-    write_torque_and_enable_op(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
-
-    write_torque_and_enable_op(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+    unsigned long current_time_motors = micros();
+    if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
+    {
+  
+      RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_right_front);//Write the throttle_right_front register value to the motor controller
+      RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_left_front);//Write the throttle_left_front register value to the motor controller
+      RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
+      RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
+      
+      start_time_motors = current_time_motors;
+    }
 
   }
 
@@ -515,6 +518,47 @@ void loop() {
     //Gather the steering and throttle inputs from the RADIO
     registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
     registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
+
+    //Read a single process data object from the CAN read register if it is available. One should be available INFREQUENTLY because the inhibit time for each of them is 5.5 ms...very long with respect to this prgrams run time
+    CAN_message_t msg;// Struct defined in FlexCAN
+    msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
+    if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
+    {
+      switch(msg.id){
+  
+        case 0x01A1: //If TxPDO1, node 1 (the statusword and motor velocity)
+  
+          statusword_1 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 1
+          velocity_FR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1
+          
+        break;
+  
+        case 0x01A2: //If TxPDO1, node 1 (the statusword and motor velocity)
+  
+          statusword_2 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 2
+          velocity_FL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2
+          
+        break;
+  
+        case 0x01A3: //If TxPDO1, node 1 (the statusword and motor velocity)
+  
+          statusword_3 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 3
+          velocity_RR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3
+          
+        break;
+  
+        case 0x01A4: //If TxPDO1, node 1 (the statusword and motor velocity)
+  
+          statusword_4 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 4
+          velocity_RL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4
+          
+        break;
+  
+        default:
+        break;
+      }
+      
+    }
 
   }
 
