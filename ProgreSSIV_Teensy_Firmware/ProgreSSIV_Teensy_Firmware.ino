@@ -16,7 +16,7 @@
    TO-DOs:
                               -
 
-   Compiling[Y/N]:            Y
+   Compiling[Y/N]:            N
 
 
 */
@@ -74,6 +74,11 @@ typedef struct reg_struct {
   volatile int16_t throttle_right_rear;
   volatile int16_t throttle_left_rear;
   volatile int16_t servo_out;
+  //NEED TO WORK OUT THE VELOCITY UNITS SO THAT THEY ARE ALWAYS A 16 BIT INTEGER!! THEY COME IN OVER CAN AS A 32 BIT INTEGER. NEED TO WORK OUT UNITS OF TORQUE AS WELL.
+  volatile int16_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
+  volatile int16_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
+  volatile int16_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
+  volatile int16_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
 } reg_struct_t ;
 
 //Union type definition linking the above reg_struct type to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above reg_struct_t defines names and types
@@ -138,7 +143,11 @@ FlexCAN CANbus(1000000);
 /*loop CAN variables.*/
 uint8_t ret = 0;
 uint8_t error = NO_ERROR;
-
+//May do something different with the statusword of each node later but for now just storing it in a variable. This could be used in relation to the Teensy status byte stuff in the SPI protocol
+uint16_t statusword_1;//stores statusword of node 1
+uint16_t statusword_2;//stores statusword of node 2
+uint16_t statusword_3;//stores statusword of node 3
+uint16_t statusword_4;//stores statusword of node 4
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
