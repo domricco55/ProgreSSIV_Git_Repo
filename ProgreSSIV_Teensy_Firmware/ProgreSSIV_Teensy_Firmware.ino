@@ -541,29 +541,33 @@ void loop() {
         case 0x01A1: //If TxPDO1, node 1 (the statusword and motor velocity)
   
           statusword_1 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 1
-          registers.reg_map.velocity_FR = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1 (original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+          registers.reg_map.velocity_FR = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1. Units are in RPM.
+                                                                                     //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
           
         break;
   
         case 0x01A2: //If TxPDO1, node 1 (the statusword and motor velocity)
   
           statusword_2 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 2
-          registers.reg_map.velocity_FL = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2 (original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+          registers.reg_map.velocity_FL = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2. Units are in RPM.
+                                                                                     //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
           
         break;
   
         case 0x01A3: //If TxPDO1, node 1 (the statusword and motor velocity)
   
           statusword_3 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 3
-          registers.reg_map.velocity_RR = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3 (original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
-           
+          registers.reg_map.velocity_RR = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3. Units are in RPM.
+                                                                                     //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+          
         break;
   
         case 0x01A4: //If TxPDO1, node 1 (the statusword and motor velocity)
   
           statusword_4 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 4
-          registers.reg_map.velocity_RL = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4 (original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
-          
+          registers.reg_map.velocity_RL = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4. Units are in RPM.
+                                                                                     //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+            
         break;
   
         default:
