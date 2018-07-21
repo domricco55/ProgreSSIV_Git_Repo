@@ -54,7 +54,6 @@ typedef struct reg_struct {
   volatile uint8_t reset_imu;//Will re-run the bno055 initialization code
   //volatile uint8_t reset_teensy; //Not implemented yet but would set all initial conditions of the Teensy or perhaps hard reset the Teensy.
   volatile uint8_t dead_switch;
-  // Sensor/Data registers
   // IMU
   volatile int16_t euler_heading;
   volatile int16_t euler_roll;
@@ -74,11 +73,14 @@ typedef struct reg_struct {
   volatile int16_t throttle_right_rear;
   volatile int16_t throttle_left_rear;
   volatile int16_t servo_out;
-  //NEED TO WORK OUT THE VELOCITY UNITS SO THAT THEY ARE ALWAYS A 16 BIT INTEGER!! THEY COME IN OVER CAN AS A 32 BIT INTEGER. NEED TO WORK OUT UNITS OF TORQUE AS WELL.
+  //Velocity Units are in RPM and the data comes in from the MC's as 32 bit integers. This can be truncated to 16 bits because there is no way our motors will be spinning more than 32,768 rpm
   volatile int16_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
   volatile int16_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
   volatile int16_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
   volatile int16_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
+  //CAN Motor Controller Commands
+  volatile uint8_t quick_stop_command;//Not yet implemented but will need to be at some point.
+  volatile uint8_t shutdown_MCs;//Not yet implemented but will need to be at some point.
 } reg_struct_t ;
 
 //Union type definition linking the above reg_struct type to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above reg_struct_t defines names and types
@@ -230,7 +232,7 @@ void setup() {
   //Set some of the starting conditions of the registers
   //  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
   //  registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task
-  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
+  registers.reg_map.init_motor_controllers = 0;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
   registers.reg_map.print_registers = 1;//Controls whether the registers are printed at startup or not
   registers.reg_map.print_radio = 0;//Controls whether radio transeiver data is printing or not
   registers.reg_map.print_imu = 0;//Controls whether IMU data is printing or not
@@ -337,7 +339,7 @@ void loop() {
 
   /*init_motor_controllers register*/
   //Initialize the motor controllers if asked to do so by Master (non zero value sent to the init_motor_controllers register) and the motor_controllers_on flag is false
-  if (registers.reg_map.init_motor_controllers && !motor_controllers_on) {
+  if (registers.reg_map.init_motor_controllers) {
 
       ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
       
@@ -366,44 +368,45 @@ void loop() {
 
      ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
      
-     if (GENERAL_PRINT) {
-        Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     } 
+    if (GENERAL_PRINT) {
+      Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    } 
 
+    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
+    
+    if (GENERAL_PRINT) {
+      Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }
 
-     ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
-     
-     if (GENERAL_PRINT) {
-        Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-     }
+    delay(1); //Wait a little for the motor controllers to change state 
+    
+    //NEED TO REQUEST THE STATUSWORD OF EACH NODE HERE AND ENSURE THAT EACH IS IN NMT STATE OPERATIONAL (Bit 9 of statusword)
+    
+    ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
+    
+    if (GENERAL_PRINT) {
+      Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+      Serial.println();
+      Serial.println();
+    }
+    
+    delay(1); //Wait a little for the motor controllers to change state
+    
+    ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
+    
+    if (GENERAL_PRINT) {
+      Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+      Serial.println();
+      Serial.println();
+    }
+    
+    delay(1); //Wait a little for the motor controllers to change state 
 
-     delay(1); //Wait a little for the motor controllers to change state 
-
-     //NEED TO REQUEST THE STATUSWORD OF EACH NODE HERE AND ENSURE THAT EACH IS IN NMT STATE OPERATIONAL (Bit 9 of statusword)
-
-     ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
-
-     if (GENERAL_PRINT) {
-        Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-        Serial.println();
-        Serial.println();
-     }
-
-     delay(1); //Wait a little for the motor controllers to change state
-
-     ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
-
-     if (GENERAL_PRINT) {
-        Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-        Serial.println();
-        Serial.println();
-     }
-
-     delay(1); //Wait a little for the motor controllers to change state 
+    registers.reg_map.init_motor_controllers = 0; //Set to zero so the motor controllers can be initialized again and so that this code does not run continuously  
 
   }
 
@@ -538,28 +541,28 @@ void loop() {
         case 0x01A1: //If TxPDO1, node 1 (the statusword and motor velocity)
   
           statusword_1 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 1
-          velocity_FR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1
+          registers.reg_map.velocity_FR = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1 (original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
           
         break;
   
         case 0x01A2: //If TxPDO1, node 1 (the statusword and motor velocity)
   
           statusword_2 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 2
-          velocity_FL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2
+          registers.reg_map.velocity_FL = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2 (original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
           
         break;
   
         case 0x01A3: //If TxPDO1, node 1 (the statusword and motor velocity)
   
           statusword_3 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 3
-          velocity_RR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3
-          
+          registers.reg_map.velocity_RR = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3 (original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+           
         break;
   
         case 0x01A4: //If TxPDO1, node 1 (the statusword and motor velocity)
   
           statusword_4 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 4
-          velocity_RL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4
+          registers.reg_map.velocity_RL = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4 (original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
           
         break;
   
@@ -839,36 +842,42 @@ void spi_registers_print(void) { //This prints the name and address of each of t
   first_pointer = (uint32_t)&registers.reg_map;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
 
   //REFERENCE!! REPLACE EVERY TIME SOMETHING IS ADDED TO THE REGISTER MAP
-
-  //  volatile uint8_t print_registers;
-  //  volatile uint8_t begin_data_collection;
-  //  volatile uint8_t print_imu;
-  //  volatile uint8_t print_radio;
-  //  volatile uint8_t init_servo_radio;
-  //  volatile uint8_t init_motor_controllers;
-  //  volatile uint8_t reset_imu;
-  //  //volatile uint8_t reset_teensy; //Not implemented yet but would set all initial conditions of the Teensy or perhaps hard reset the Teensy.
-  //  volatile uint8_t dead_switch;
-  //// Sensor/Data registers
-  //  // IMU
-  //  volatile int16_t euler_heading;
-  //  volatile int16_t euler_roll;
-  //  volatile int16_t euler_pitch;
-  //  volatile int16_t accl_x;
-  //  volatile int16_t gyro_x;
-  //  volatile int16_t accl_y;
-  //  volatile int16_t gyro_y;
-  //  volatile int16_t accl_z;
-  //  volatile int16_t gyro_z;
-  //  //Servo and Radio
-  //  volatile int16_t radio_throttle;
-  //  volatile int16_t radio_steering;
-  //// Output/Actuation Registers
-  //  volatile int16_t throttle_right_front;
-  //  volatile int16_t throttle_left_front;
-  //  volatile int16_t throttle_right_rear;
-  //  volatile int16_t throttle_left_rear;
-  //  volatile int16_t servo_out;
+//  volatile uint8_t print_registers;
+//  volatile uint8_t begin_data_collection;
+//  volatile uint8_t print_imu;
+//  volatile uint8_t print_radio;
+//  volatile uint8_t init_servo_radio;
+//  volatile uint8_t init_motor_controllers;
+//  volatile uint8_t reset_imu;//Will re-run the bno055 initialization code
+//  //volatile uint8_t reset_teensy; //Not implemented yet but would set all initial conditions of the Teensy or perhaps hard reset the Teensy.
+//  volatile uint8_t dead_switch;
+//  // IMU
+//  volatile int16_t euler_heading;
+//  volatile int16_t euler_roll;
+//  volatile int16_t euler_pitch;
+//  volatile int16_t accl_x;
+//  volatile int16_t gyro_x;
+//  volatile int16_t accl_y;
+//  volatile int16_t gyro_y;
+//  volatile int16_t accl_z;
+//  volatile int16_t gyro_z;
+//  //Servo and Radio
+//  volatile int16_t radio_throttle;
+//  volatile int16_t radio_steering;
+//  // Output/Actuation Registers
+//  volatile int16_t throttle_right_front;
+//  volatile int16_t throttle_left_front;
+//  volatile int16_t throttle_right_rear;
+//  volatile int16_t throttle_left_rear;
+//  volatile int16_t servo_out;
+//  //Velocity Units are in RPM and the data comes in from the MC's as 32 bit integers. This can be truncated to 16 bits because there is no way our motors will be spinning more than 32,768 rpm
+//  volatile int16_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
+//  volatile int16_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
+//  volatile int16_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
+//  volatile int16_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
+//  //CAN Motor Controller Commands
+//  volatile uint8_t quick_stop_command;//Not yet implemented but will need to be at some point.
+//  volatile uint8_t shutdown_MCs;//Not yet implemented but will need to be at some point.
 
   next_pointer = (uint32_t)&registers.reg_map.print_registers - first_pointer;
   Serial << "print_registers: ";
@@ -1093,6 +1102,42 @@ void spi_registers_print(void) { //This prints the name and address of each of t
   Serial << "servo_out: ";
   Serial.println();
   Serial << " \t value = " << registers.reg_map.servo_out;
+  Serial.println();
+  Serial << " \t index = " << next_pointer;
+  Serial.println();
+  Serial.println();
+
+  next_pointer = (uint32_t)&registers.reg_map.velocity_FR - first_pointer;
+  Serial << "velocity_FR: ";
+  Serial.println();
+  Serial << " \t value = " << registers.reg_map.velocity_FR;
+  Serial.println();
+  Serial << " \t index = " << next_pointer;
+  Serial.println();
+  Serial.println();
+
+  next_pointer = (uint32_t)&registers.reg_map.velocity_FL - first_pointer;
+  Serial << "velocity_FL: ";
+  Serial.println();
+  Serial << " \t value = " << registers.reg_map.velocity_FL;
+  Serial.println();
+  Serial << " \t index = " << next_pointer;
+  Serial.println();
+  Serial.println();
+
+  next_pointer = (uint32_t)&registers.reg_map.velocity_RR - first_pointer;
+  Serial << "velocity_RR: ";
+  Serial.println();
+  Serial << " \t value = " << registers.reg_map.velocity_RR;
+  Serial.println();
+  Serial << " \t index = " << next_pointer;
+  Serial.println();
+  Serial.println();
+
+  next_pointer = (uint32_t)&registers.reg_map.velocity_RL - first_pointer;
+  Serial << "velocity_RL: ";
+  Serial.println();
+  Serial << " \t value = " << registers.reg_map.velocity_RL;
   Serial.println();
   Serial << " \t index = " << next_pointer;
   Serial.println();
