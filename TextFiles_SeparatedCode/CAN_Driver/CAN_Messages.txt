@@ -2,6 +2,14 @@
 
 /* NMT Messages (look at firmware specification documentation for the NMT state machine)*/
 
+
+	//reset nodes NMT command
+	msg.id = 0;
+	msg.ext = 0;
+	msg.len = 2;
+	msg.buf[0] = 0x81;
+	msg.buf[1] = 0; 
+  
 	//reset node coms
 	msg.id = 0;//CAN_id for NMT or network management
 	msg.ext = 0;//Default is 0...related to FlexCAN
