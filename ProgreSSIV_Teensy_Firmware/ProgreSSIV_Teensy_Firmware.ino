@@ -68,10 +68,10 @@ typedef struct reg_struct {
   volatile int16_t radio_throttle;
   volatile int16_t radio_steering;
   // Output/Actuation Registers
-  volatile int16_t throttle_right_front;
-  volatile int16_t throttle_left_front;
-  volatile int16_t throttle_right_rear;
-  volatile int16_t throttle_left_rear;
+  volatile int16_t throttle_front_right;
+  volatile int16_t throttle_front_left;
+  volatile int16_t throttle_rear_right;
+  volatile int16_t throttle_rear_left;
   volatile int16_t servo_out;
   //Velocity Units are in RPM and the data comes in from the MC's as 32 bit integers. This can be truncated to 16 bits because there is no way our motors will be spinning more than 32,768 rpm
   volatile int16_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
@@ -439,61 +439,56 @@ void loop() {
   //Write the servo value from servo_out register
   writeServo(registers.reg_map.servo_out);
 
-  // Dead man's switch.  If throttle is not at full(ish) forward the car should come to a halt. There is a dead switch already implemented in Simulink but that one is
-  //for redundancy.
-  if (registers.reg_map.dead_switch) {
-    if ( THR_in > 200 ) {
-
-      unsigned long current_time_motors = micros();
-      if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
-      {
+  unsigned long current_time_motors = micros();
+  if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
+  {
+    //Saturate all torque actuations so that the maximum torque demanded of the motors is the maximum continuous torque, or rated torque. 
+    saturate_torque(registers.reg_map.throttle_front_right);
+    saturate_torque(registers.reg_map.throttle_front_left);
+    saturate_torque(registers.reg_map.throttle_rear_right);
+    saturate_torque(registers.reg_map.throttle_rear_left);
     
-        RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_right_front);//Write the throttle_right_front register value to the motor controller
-        RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_left_front);//Write the throttle_left_front register value to the motor controller
-        RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
-        RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
-        
-        start_time_motors = current_time_motors;
-      }
-    }
-    else {
-
-      unsigned long current_time_motors = micros();
-      if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
-      {
-    
-        RxPDO2_torque_write(NODE_1, 0);
-        RxPDO2_torque_write(NODE_2, 0);
-        RxPDO2_torque_write(NODE_3, 0);
-        RxPDO2_torque_write(NODE_4, 0);
-        
-        //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
-        registers.reg_map.throttle_right_front = 0;
-        registers.reg_map.throttle_left_front = 0;
-        registers.reg_map.throttle_right_rear = 0;
-        registers.reg_map.throttle_left_rear = 0;
-        
-        start_time_motors = current_time_motors;
-        
-      }
-    }
-  }
-
-  //If the dead man's switch is turned off, just update the motor controllers immediately.
-  else {
-
-    unsigned long current_time_motors = micros();
-    if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
-    {
+    // Dead man's switch.  If throttle is not at full(ish) forward the car should come to a halt. There is a dead switch already implemented in Simulink but that one is
+    //for redundancy.
+    if (registers.reg_map.dead_switch) {
+      if ( THR_in > 200 ) {
   
-      RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_right_front);//Write the throttle_right_front register value to the motor controller
-      RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_left_front);//Write the throttle_left_front register value to the motor controller
-      RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_right_rear); //Write the throttle_right_rear register value to the motor controller
-      RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_left_rear); //Write the throttle_left_rear register value to the motor controller
-      
-      start_time_motors = current_time_motors;
+  
+          RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_front_right);//Write the throttle_front_right register value to the motor controller
+          RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_front_left);//Write the throttle_front_left register value to the motor controller
+          RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_rear_right); //Write the throttle_rear_right register value to the motor controller
+          RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_rear_left); //Write the throttle_rear_left register value to the motor controller
+          
+          start_time_motors = current_time_motors;
+      }
+      else {
+  
+          RxPDO2_torque_write(NODE_1, 0);
+          RxPDO2_torque_write(NODE_2, 0);
+          RxPDO2_torque_write(NODE_3, 0);
+          RxPDO2_torque_write(NODE_4, 0);
+          
+          //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
+          registers.reg_map.throttle_front_right = 0;
+          registers.reg_map.throttle_front_left = 0;
+          registers.reg_map.throttle_rear_right = 0;
+          registers.reg_map.throttle_rear_left = 0;
+          
+          start_time_motors = current_time_motors;
+      }
     }
-
+  
+    //If the dead man's switch is turned off, just update the motor controllers immediately.
+    else {
+    
+        RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_front_right);//Write the throttle_front_right register value to the motor controller
+        RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_front_left);//Write the throttle_front_left register value to the motor controller
+        RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_rear_right); //Write the throttle_rear_right register value to the motor controller
+        RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_rear_left); //Write the throttle_rear_left register value to the motor controller
+        
+        start_time_motors = current_time_motors;
+  
+    }
   }
 
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -869,10 +864,10 @@ void spi_registers_print(void) { //This prints the name and address of each of t
 //  volatile int16_t radio_throttle;
 //  volatile int16_t radio_steering;
 //  // Output/Actuation Registers
-//  volatile int16_t throttle_right_front;
-//  volatile int16_t throttle_left_front;
-//  volatile int16_t throttle_right_rear;
-//  volatile int16_t throttle_left_rear;
+//  volatile int16_t throttle_front_right;
+//  volatile int16_t throttle_front_left;
+//  volatile int16_t throttle_rear_right;
+//  volatile int16_t throttle_rear_left;
 //  volatile int16_t servo_out;
 //  //Velocity Units are in RPM and the data comes in from the MC's as 32 bit integers. This can be truncated to 16 bits because there is no way our motors will be spinning more than 32,768 rpm
 //  volatile int16_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
@@ -1066,37 +1061,37 @@ void spi_registers_print(void) { //This prints the name and address of each of t
   Serial.println();
 
 
-  next_pointer = (uint32_t)&registers.reg_map.throttle_right_front - first_pointer;
-  Serial << "throttle_right_front: ";
+  next_pointer = (uint32_t)&registers.reg_map.throttle_front_right - first_pointer;
+  Serial << "throttle_front_right: ";
   Serial.println();
-  Serial << " \t value = " << registers.reg_map.throttle_right_front;
-  Serial.println();
-  Serial << " \t index = " << next_pointer;
-  Serial.println();
-  Serial.println();
-
-  next_pointer = (uint32_t)&registers.reg_map.throttle_left_front - first_pointer;
-  Serial << "throttle_left_front: ";
-  Serial.println();
-  Serial << " \t value = " << registers.reg_map.throttle_left_front;
+  Serial << " \t value = " << registers.reg_map.throttle_front_right;
   Serial.println();
   Serial << " \t index = " << next_pointer;
   Serial.println();
   Serial.println();
 
-  next_pointer = (uint32_t)&registers.reg_map.throttle_right_rear - first_pointer;
-  Serial << "throttle_right_rear: ";
+  next_pointer = (uint32_t)&registers.reg_map.throttle_front_left - first_pointer;
+  Serial << "throttle_front_left: ";
   Serial.println();
-  Serial << " \t value = " << registers.reg_map.throttle_right_rear;
+  Serial << " \t value = " << registers.reg_map.throttle_front_left;
   Serial.println();
   Serial << " \t index = " << next_pointer;
   Serial.println();
   Serial.println();
 
-  next_pointer = (uint32_t)&registers.reg_map.throttle_left_rear - first_pointer;
-  Serial << "throttle_left_rear: ";
+  next_pointer = (uint32_t)&registers.reg_map.throttle_rear_right - first_pointer;
+  Serial << "throttle_rear_right: ";
   Serial.println();
-  Serial << " \t value = " << registers.reg_map.throttle_left_rear;
+  Serial << " \t value = " << registers.reg_map.throttle_rear_right;
+  Serial.println();
+  Serial << " \t index = " << next_pointer;
+  Serial.println();
+  Serial.println();
+
+  next_pointer = (uint32_t)&registers.reg_map.throttle_rear_left - first_pointer;
+  Serial << "throttle_rear_left: ";
+  Serial.println();
+  Serial << " \t value = " << registers.reg_map.throttle_rear_left;
   Serial.println();
   Serial << " \t index = " << next_pointer;
   Serial.println();
@@ -1203,5 +1198,21 @@ void print_radio_data(void) {
   Serial << "radio_throttle: " << registers.reg_map.radio_throttle;
   Serial.println();
   Serial.println();
+}
+
+int16_t saturate_torque(int16_t torque_command)
+{
+
+  if (torque_command > 1000){ //Torque command is in units of [MotorRatedTorque/1000] and we want the max user input torque to be the max continutous torque, i.e. the rated torque. 
+
+    torque_command = 1000; 
+    
+  }
+
+  if (torque_command < -1000){
+    torque_command = -1000;
+  }
+
+  return torque_command;
 }
 
