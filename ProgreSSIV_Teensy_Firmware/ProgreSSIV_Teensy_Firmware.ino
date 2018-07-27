@@ -521,10 +521,7 @@ void loop() {
 
             dead_switch_state_var = quick_stop_active;
 
-            Serial.println();
-            Serial.println(RxPDO1_controlword_write(QUICKSTOP_COMMAND)); //Send command for initiating a quick stop operation. This will send the MC's into the "quick stop active" state. Once quick stop operation is complete they will enter "switch on disabled' state
-            Serial.println("Quickstop Command Sent");
-            Serial.println();
+            RxPDO1_controlword_write(QUICKSTOP_COMMAND); //Send command for initiating a quick stop operation. This will send the MC's into the "quick stop active" state. Once quick stop operation is complete they will enter "switch on disabled' state
             
             RxPDO2_torque_write(NODE_1, 0);
             RxPDO2_torque_write(NODE_2, 0);
@@ -554,10 +551,7 @@ void loop() {
           current_time_quickstop = millis();
           if (current_time_quickstop - start_time_quickstop >= 2000){
 
-            Serial.println();
-            Serial.println(RxPDO1_controlword_write(DISABLE_VOLT_COMMAND)); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
-            Serial.println("Test Switch on Disabled");
-            Serial.println();
+            RxPDO1_controlword_write(DISABLE_VOLT_COMMAND)); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
             
             dead_switch_state_var = wait_for_switch_on_disabled;
             if(GENERAL_PRINT){
@@ -574,11 +568,8 @@ void loop() {
 
           if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b01000000){//If the statusword of each MC signals that the "Switch on disabled' state has been reached.
 
-            Serial.println();
-            Serial.println(RxPDO1_controlword_write(SHUTDOWN_COMMAND)); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "switch on disabled" state to the "ready to switch on" state. 
-            Serial.println("Test Switch on Disabled");
-            Serial.println();
-            
+            RxPDO1_controlword_write(SHUTDOWN_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "switch on disabled" state to the "ready to switch on" state. 
+
             dead_switch_state_var = wait_for_ready_to_switch_on;
             if(GENERAL_PRINT){
                 Serial.println();
