@@ -95,8 +95,8 @@
       paramMap.sections(1) = section;
       clear section
       
-      section.nData     = 39;
-      section.data(39)  = dumData; %prealloc
+      section.nData     = 30;
+      section.data(30)  = dumData; %prealloc
       
 	  ;% hfsubh0wqd.ConstantSteeringOffsetFromRadio
 	  section.data(1).logicalSrcIdx = 15;
@@ -118,141 +118,105 @@
 	  section.data(5).logicalSrcIdx = 19;
 	  section.data(5).dtTransOffset = 4;
 	
-	  ;% hfsubh0wqd.Step2_Time
+	  ;% hfsubh0wqd.ConstantThrottleOffsetFromRadio
 	  section.data(6).logicalSrcIdx = 20;
 	  section.data(6).dtTransOffset = 5;
 	
-	  ;% hfsubh0wqd.Step2_Y0
+	  ;% hfsubh0wqd.DeadSwitchValue_Value
 	  section.data(7).logicalSrcIdx = 21;
 	  section.data(7).dtTransOffset = 6;
 	
-	  ;% hfsubh0wqd.Step2_YFinal
+	  ;% hfsubh0wqd._Value
 	  section.data(8).logicalSrcIdx = 22;
 	  section.data(8).dtTransOffset = 7;
 	
-	  ;% hfsubh0wqd.Step3_Time
+	  ;% hfsubh0wqd.DeadSwitch_Threshold
 	  section.data(9).logicalSrcIdx = 23;
 	  section.data(9).dtTransOffset = 8;
 	
-	  ;% hfsubh0wqd.Step3_Y0
+	  ;% hfsubh0wqd.bitsmNm_Gain_n31nuftucu
 	  section.data(10).logicalSrcIdx = 24;
 	  section.data(10).dtTransOffset = 9;
 	
-	  ;% hfsubh0wqd.Step3_YFinal
+	  ;% hfsubh0wqd.bitsmNm_Gain_iz44z4guht
 	  section.data(11).logicalSrcIdx = 25;
 	  section.data(11).dtTransOffset = 10;
 	
-	  ;% hfsubh0wqd.Step4_Time
+	  ;% hfsubh0wqd.bitsmNm_Gain_jjrfnm553k
 	  section.data(12).logicalSrcIdx = 26;
 	  section.data(12).dtTransOffset = 11;
 	
-	  ;% hfsubh0wqd.Step4_Y0
+	  ;% hfsubh0wqd.bitsmNm_Gain_ljowsi2cmm
 	  section.data(13).logicalSrcIdx = 27;
 	  section.data(13).dtTransOffset = 12;
 	
-	  ;% hfsubh0wqd.Step4_YFinal
+	  ;% hfsubh0wqd.Compensatesfordirectionofspinwa
 	  section.data(14).logicalSrcIdx = 28;
 	  section.data(14).dtTransOffset = 13;
 	
-	  ;% hfsubh0wqd.ConstantThrottleOffsetFromRadio
+	  ;% hfsubh0wqd.Compensatesfordirect_jvqcwcozr3
 	  section.data(15).logicalSrcIdx = 29;
 	  section.data(15).dtTransOffset = 14;
 	
-	  ;% hfsubh0wqd.DeadSwitchValue_Value
+	  ;% hfsubh0wqd.AccelerationInttoDoubleScaleFac
 	  section.data(16).logicalSrcIdx = 30;
 	  section.data(16).dtTransOffset = 15;
 	
-	  ;% hfsubh0wqd._Value
+	  ;% hfsubh0wqd.GyroscopeInttoDoubleScaleFactor
 	  section.data(17).logicalSrcIdx = 31;
 	  section.data(17).dtTransOffset = 16;
 	
-	  ;% hfsubh0wqd.DeadSwitch_Threshold
+	  ;% hfsubh0wqd.AccelerationInttoDou_nsgzzd3dys
 	  section.data(18).logicalSrcIdx = 32;
 	  section.data(18).dtTransOffset = 17;
 	
-	  ;% hfsubh0wqd.bitsmNm_Gain_n31nuftucu
+	  ;% hfsubh0wqd.GyroscopeInttoDouble_leu0lmtkw5
 	  section.data(19).logicalSrcIdx = 33;
 	  section.data(19).dtTransOffset = 18;
 	
-	  ;% hfsubh0wqd.bitsmNm_Gain_iz44z4guht
+	  ;% hfsubh0wqd.AccelerationInttoDou_n25pvjipoq
 	  section.data(20).logicalSrcIdx = 34;
 	  section.data(20).dtTransOffset = 19;
 	
-	  ;% hfsubh0wqd.bitsmNm_Gain_jjrfnm553k
+	  ;% hfsubh0wqd.GyroscopeInttoDouble_fnfguslit0
 	  section.data(21).logicalSrcIdx = 35;
 	  section.data(21).dtTransOffset = 20;
 	
-	  ;% hfsubh0wqd.bitsmNm_Gain_ljowsi2cmm
+	  ;% hfsubh0wqd.EulerInttoDoubleScaleFactor_Gai
 	  section.data(22).logicalSrcIdx = 36;
 	  section.data(22).dtTransOffset = 21;
 	
-	  ;% hfsubh0wqd.Compensatesfordirectionofspinwa
+	  ;% hfsubh0wqd.EulerInttoDoubleScal_iiz5hgtpf2
 	  section.data(23).logicalSrcIdx = 37;
 	  section.data(23).dtTransOffset = 22;
 	
-	  ;% hfsubh0wqd.Compensatesfordirect_jvqcwcozr3
+	  ;% hfsubh0wqd.EulerInttoDoubleScal_g31zf1epte
 	  section.data(24).logicalSrcIdx = 38;
 	  section.data(24).dtTransOffset = 23;
 	
-	  ;% hfsubh0wqd.AccelerationInttoDoubleScaleFac
+	  ;% hfsubh0wqd.Constant1_Value
 	  section.data(25).logicalSrcIdx = 39;
 	  section.data(25).dtTransOffset = 24;
 	
-	  ;% hfsubh0wqd.GyroscopeInttoDoubleScaleFactor
+	  ;% hfsubh0wqd.Constant_Value
 	  section.data(26).logicalSrcIdx = 40;
 	  section.data(26).dtTransOffset = 25;
 	
-	  ;% hfsubh0wqd.AccelerationInttoDou_nsgzzd3dys
+	  ;% hfsubh0wqd.Constant2_Value
 	  section.data(27).logicalSrcIdx = 41;
 	  section.data(27).dtTransOffset = 26;
 	
-	  ;% hfsubh0wqd.GyroscopeInttoDouble_leu0lmtkw5
+	  ;% hfsubh0wqd.Constant4_Value
 	  section.data(28).logicalSrcIdx = 42;
 	  section.data(28).dtTransOffset = 27;
 	
-	  ;% hfsubh0wqd.AccelerationInttoDou_n25pvjipoq
+	  ;% hfsubh0wqd.Constant3_Value
 	  section.data(29).logicalSrcIdx = 43;
 	  section.data(29).dtTransOffset = 28;
 	
-	  ;% hfsubh0wqd.GyroscopeInttoDouble_fnfguslit0
+	  ;% hfsubh0wqd.Constant5_Value
 	  section.data(30).logicalSrcIdx = 44;
 	  section.data(30).dtTransOffset = 29;
-	
-	  ;% hfsubh0wqd.EulerInttoDoubleScaleFactor_Gai
-	  section.data(31).logicalSrcIdx = 45;
-	  section.data(31).dtTransOffset = 30;
-	
-	  ;% hfsubh0wqd.EulerInttoDoubleScal_iiz5hgtpf2
-	  section.data(32).logicalSrcIdx = 46;
-	  section.data(32).dtTransOffset = 31;
-	
-	  ;% hfsubh0wqd.EulerInttoDoubleScal_g31zf1epte
-	  section.data(33).logicalSrcIdx = 47;
-	  section.data(33).dtTransOffset = 32;
-	
-	  ;% hfsubh0wqd.Constant1_Value
-	  section.data(34).logicalSrcIdx = 48;
-	  section.data(34).dtTransOffset = 33;
-	
-	  ;% hfsubh0wqd.Constant_Value
-	  section.data(35).logicalSrcIdx = 49;
-	  section.data(35).dtTransOffset = 34;
-	
-	  ;% hfsubh0wqd.Constant2_Value
-	  section.data(36).logicalSrcIdx = 50;
-	  section.data(36).dtTransOffset = 35;
-	
-	  ;% hfsubh0wqd.Constant4_Value
-	  section.data(37).logicalSrcIdx = 51;
-	  section.data(37).dtTransOffset = 36;
-	
-	  ;% hfsubh0wqd.Constant3_Value
-	  section.data(38).logicalSrcIdx = 52;
-	  section.data(38).dtTransOffset = 37;
-	
-	  ;% hfsubh0wqd.Constant5_Value
-	  section.data(39).logicalSrcIdx = 53;
-	  section.data(39).dtTransOffset = 38;
 	
       nTotData = nTotData + section.nData;
       paramMap.sections(2) = section;
@@ -262,275 +226,275 @@
       section.data(68)  = dumData; %prealloc
       
 	  ;% hfsubh0wqd.euler_headingAddressNumber_Valu
-	  section.data(1).logicalSrcIdx = 54;
+	  section.data(1).logicalSrcIdx = 45;
 	  section.data(1).dtTransOffset = 0;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value
-	  section.data(2).logicalSrcIdx = 55;
+	  section.data(2).logicalSrcIdx = 46;
 	  section.data(2).dtTransOffset = 1;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value
-	  section.data(3).logicalSrcIdx = 56;
+	  section.data(3).logicalSrcIdx = 47;
 	  section.data(3).dtTransOffset = 2;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value
-	  section.data(4).logicalSrcIdx = 57;
+	  section.data(4).logicalSrcIdx = 48;
 	  section.data(4).dtTransOffset = 3;
 	
 	  ;% hfsubh0wqd.euler_rollAddressNumber_Value
-	  section.data(5).logicalSrcIdx = 58;
+	  section.data(5).logicalSrcIdx = 49;
 	  section.data(5).dtTransOffset = 4;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_pdh1mmrkaf
-	  section.data(6).logicalSrcIdx = 59;
+	  section.data(6).logicalSrcIdx = 50;
 	  section.data(6).dtTransOffset = 5;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_bjkzcm1v50
-	  section.data(7).logicalSrcIdx = 60;
+	  section.data(7).logicalSrcIdx = 51;
 	  section.data(7).dtTransOffset = 6;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_bzki1yseu2
-	  section.data(8).logicalSrcIdx = 61;
+	  section.data(8).logicalSrcIdx = 52;
 	  section.data(8).dtTransOffset = 7;
 	
 	  ;% hfsubh0wqd.euler_pitchAddressNumber_Value
-	  section.data(9).logicalSrcIdx = 62;
+	  section.data(9).logicalSrcIdx = 53;
 	  section.data(9).dtTransOffset = 8;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_nh5qfyju0z
-	  section.data(10).logicalSrcIdx = 63;
+	  section.data(10).logicalSrcIdx = 54;
 	  section.data(10).dtTransOffset = 9;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_g33fsjovlh
-	  section.data(11).logicalSrcIdx = 64;
+	  section.data(11).logicalSrcIdx = 55;
 	  section.data(11).dtTransOffset = 10;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_fcyoyjujtb
-	  section.data(12).logicalSrcIdx = 65;
+	  section.data(12).logicalSrcIdx = 56;
 	  section.data(12).dtTransOffset = 11;
 	
 	  ;% hfsubh0wqd.gyr_xAddressNumber_Value
-	  section.data(13).logicalSrcIdx = 66;
+	  section.data(13).logicalSrcIdx = 57;
 	  section.data(13).dtTransOffset = 12;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_j2wfmnih52
-	  section.data(14).logicalSrcIdx = 67;
+	  section.data(14).logicalSrcIdx = 58;
 	  section.data(14).dtTransOffset = 13;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_l24qi4amhg
-	  section.data(15).logicalSrcIdx = 68;
+	  section.data(15).logicalSrcIdx = 59;
 	  section.data(15).dtTransOffset = 14;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_abjhsc0f24
-	  section.data(16).logicalSrcIdx = 69;
+	  section.data(16).logicalSrcIdx = 60;
 	  section.data(16).dtTransOffset = 15;
 	
 	  ;% hfsubh0wqd.acc_xAddressNumber_Value
-	  section.data(17).logicalSrcIdx = 70;
+	  section.data(17).logicalSrcIdx = 61;
 	  section.data(17).dtTransOffset = 16;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_d1nmexi4u4
-	  section.data(18).logicalSrcIdx = 71;
+	  section.data(18).logicalSrcIdx = 62;
 	  section.data(18).dtTransOffset = 17;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_a4kbzdzszs
-	  section.data(19).logicalSrcIdx = 72;
+	  section.data(19).logicalSrcIdx = 63;
 	  section.data(19).dtTransOffset = 18;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_crbst3qg0d
-	  section.data(20).logicalSrcIdx = 73;
+	  section.data(20).logicalSrcIdx = 64;
 	  section.data(20).dtTransOffset = 19;
 	
 	  ;% hfsubh0wqd.gyr_yAddressNumber_Value
-	  section.data(21).logicalSrcIdx = 74;
+	  section.data(21).logicalSrcIdx = 65;
 	  section.data(21).dtTransOffset = 20;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_hhpzgdklhj
-	  section.data(22).logicalSrcIdx = 75;
+	  section.data(22).logicalSrcIdx = 66;
 	  section.data(22).dtTransOffset = 21;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_kfo5pj123x
-	  section.data(23).logicalSrcIdx = 76;
+	  section.data(23).logicalSrcIdx = 67;
 	  section.data(23).dtTransOffset = 22;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_llnlocx0jp
-	  section.data(24).logicalSrcIdx = 77;
+	  section.data(24).logicalSrcIdx = 68;
 	  section.data(24).dtTransOffset = 23;
 	
 	  ;% hfsubh0wqd.acc_yAddressNumber_Value
-	  section.data(25).logicalSrcIdx = 78;
+	  section.data(25).logicalSrcIdx = 69;
 	  section.data(25).dtTransOffset = 24;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_k55hriosiw
-	  section.data(26).logicalSrcIdx = 79;
+	  section.data(26).logicalSrcIdx = 70;
 	  section.data(26).dtTransOffset = 25;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_ewsrijoi1y
-	  section.data(27).logicalSrcIdx = 80;
+	  section.data(27).logicalSrcIdx = 71;
 	  section.data(27).dtTransOffset = 26;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_csq2nflakv
-	  section.data(28).logicalSrcIdx = 81;
+	  section.data(28).logicalSrcIdx = 72;
 	  section.data(28).dtTransOffset = 27;
 	
 	  ;% hfsubh0wqd.gyr_zAddressNumber_Value
-	  section.data(29).logicalSrcIdx = 82;
+	  section.data(29).logicalSrcIdx = 73;
 	  section.data(29).dtTransOffset = 28;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_iarfsgp4wp
-	  section.data(30).logicalSrcIdx = 83;
+	  section.data(30).logicalSrcIdx = 74;
 	  section.data(30).dtTransOffset = 29;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_h25nsb42dk
-	  section.data(31).logicalSrcIdx = 84;
+	  section.data(31).logicalSrcIdx = 75;
 	  section.data(31).dtTransOffset = 30;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_irei2yyusa
-	  section.data(32).logicalSrcIdx = 85;
+	  section.data(32).logicalSrcIdx = 76;
 	  section.data(32).dtTransOffset = 31;
 	
 	  ;% hfsubh0wqd.acc_zAddressNumber_Value
-	  section.data(33).logicalSrcIdx = 86;
+	  section.data(33).logicalSrcIdx = 77;
 	  section.data(33).dtTransOffset = 32;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_escjrdlkcn
-	  section.data(34).logicalSrcIdx = 87;
+	  section.data(34).logicalSrcIdx = 78;
 	  section.data(34).dtTransOffset = 33;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_ohr50x5o4g
-	  section.data(35).logicalSrcIdx = 88;
+	  section.data(35).logicalSrcIdx = 79;
 	  section.data(35).dtTransOffset = 34;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_g5ikrmq33j
-	  section.data(36).logicalSrcIdx = 89;
+	  section.data(36).logicalSrcIdx = 80;
 	  section.data(36).dtTransOffset = 35;
 	
 	  ;% hfsubh0wqd.radio_throttleAddressNumber_Val
-	  section.data(37).logicalSrcIdx = 90;
+	  section.data(37).logicalSrcIdx = 81;
 	  section.data(37).dtTransOffset = 36;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_blcwsn3mod
-	  section.data(38).logicalSrcIdx = 91;
+	  section.data(38).logicalSrcIdx = 82;
 	  section.data(38).dtTransOffset = 37;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_feo10nb4xc
-	  section.data(39).logicalSrcIdx = 92;
+	  section.data(39).logicalSrcIdx = 83;
 	  section.data(39).dtTransOffset = 38;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_p3y25qn4th
-	  section.data(40).logicalSrcIdx = 93;
+	  section.data(40).logicalSrcIdx = 84;
 	  section.data(40).dtTransOffset = 39;
 	
 	  ;% hfsubh0wqd.radio_steeringAddressNumber_Val
-	  section.data(41).logicalSrcIdx = 94;
+	  section.data(41).logicalSrcIdx = 85;
 	  section.data(41).dtTransOffset = 40;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_mwwrewolew
-	  section.data(42).logicalSrcIdx = 95;
+	  section.data(42).logicalSrcIdx = 86;
 	  section.data(42).dtTransOffset = 41;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_plp2fa3e20
-	  section.data(43).logicalSrcIdx = 96;
+	  section.data(43).logicalSrcIdx = 87;
 	  section.data(43).dtTransOffset = 42;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_feq0mqtkvh
-	  section.data(44).logicalSrcIdx = 97;
+	  section.data(44).logicalSrcIdx = 88;
 	  section.data(44).dtTransOffset = 43;
 	
 	  ;% hfsubh0wqd.velocity_RRAddressNumber_Value
-	  section.data(45).logicalSrcIdx = 98;
+	  section.data(45).logicalSrcIdx = 89;
 	  section.data(45).dtTransOffset = 44;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_iswfbqmgg0
-	  section.data(46).logicalSrcIdx = 99;
+	  section.data(46).logicalSrcIdx = 90;
 	  section.data(46).dtTransOffset = 45;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_og3vod555z
-	  section.data(47).logicalSrcIdx = 100;
+	  section.data(47).logicalSrcIdx = 91;
 	  section.data(47).dtTransOffset = 46;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_o4pefzbbdu
-	  section.data(48).logicalSrcIdx = 101;
+	  section.data(48).logicalSrcIdx = 92;
 	  section.data(48).dtTransOffset = 47;
 	
 	  ;% hfsubh0wqd.velocity_RLAddressNumber_Value
-	  section.data(49).logicalSrcIdx = 102;
+	  section.data(49).logicalSrcIdx = 93;
 	  section.data(49).dtTransOffset = 48;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_cvek4esgvd
-	  section.data(50).logicalSrcIdx = 103;
+	  section.data(50).logicalSrcIdx = 94;
 	  section.data(50).dtTransOffset = 49;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_lseyezibvx
-	  section.data(51).logicalSrcIdx = 104;
+	  section.data(51).logicalSrcIdx = 95;
 	  section.data(51).dtTransOffset = 50;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_o1yzfl3g0m
-	  section.data(52).logicalSrcIdx = 105;
+	  section.data(52).logicalSrcIdx = 96;
 	  section.data(52).dtTransOffset = 51;
 	
 	  ;% hfsubh0wqd.velocity_FRAddressNumber_Value
-	  section.data(53).logicalSrcIdx = 106;
+	  section.data(53).logicalSrcIdx = 97;
 	  section.data(53).dtTransOffset = 52;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_e4uo010ilu
-	  section.data(54).logicalSrcIdx = 107;
+	  section.data(54).logicalSrcIdx = 98;
 	  section.data(54).dtTransOffset = 53;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_ndppfky1ku
-	  section.data(55).logicalSrcIdx = 108;
+	  section.data(55).logicalSrcIdx = 99;
 	  section.data(55).dtTransOffset = 54;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_gqtbi3ry5p
-	  section.data(56).logicalSrcIdx = 109;
+	  section.data(56).logicalSrcIdx = 100;
 	  section.data(56).dtTransOffset = 55;
 	
 	  ;% hfsubh0wqd.velocity_FLAddressNumber_Value
-	  section.data(57).logicalSrcIdx = 110;
+	  section.data(57).logicalSrcIdx = 101;
 	  section.data(57).dtTransOffset = 56;
 	
 	  ;% hfsubh0wqd.uint8_t1_Value_fbwzrt0xsu
-	  section.data(58).logicalSrcIdx = 111;
+	  section.data(58).logicalSrcIdx = 102;
 	  section.data(58).dtTransOffset = 57;
 	
 	  ;% hfsubh0wqd.uint8_t2_Value_nlddlhtmy4
-	  section.data(59).logicalSrcIdx = 112;
+	  section.data(59).logicalSrcIdx = 103;
 	  section.data(59).dtTransOffset = 58;
 	
 	  ;% hfsubh0wqd.uint8_t3_Value_p5kni5nbh4
-	  section.data(60).logicalSrcIdx = 113;
+	  section.data(60).logicalSrcIdx = 104;
 	  section.data(60).dtTransOffset = 59;
 	
 	  ;% hfsubh0wqd.DeadSwitch_Value
-	  section.data(61).logicalSrcIdx = 114;
+	  section.data(61).logicalSrcIdx = 105;
 	  section.data(61).dtTransOffset = 60;
 	
 	  ;% hfsubh0wqd.TakeData_Value
-	  section.data(62).logicalSrcIdx = 115;
+	  section.data(62).logicalSrcIdx = 106;
 	  section.data(62).dtTransOffset = 61;
 	
 	  ;% hfsubh0wqd.ServoandRadioOn_Value
-	  section.data(63).logicalSrcIdx = 116;
+	  section.data(63).logicalSrcIdx = 107;
 	  section.data(63).dtTransOffset = 62;
 	
 	  ;% hfsubh0wqd.MotorControllersOn_Value
-	  section.data(64).logicalSrcIdx = 117;
+	  section.data(64).logicalSrcIdx = 108;
 	  section.data(64).dtTransOffset = 63;
 	
 	  ;% hfsubh0wqd.IMUReset_Value
-	  section.data(65).logicalSrcIdx = 118;
+	  section.data(65).logicalSrcIdx = 109;
 	  section.data(65).dtTransOffset = 64;
 	
 	  ;% hfsubh0wqd.PrinttheregistermapontheTeensy_
-	  section.data(66).logicalSrcIdx = 119;
+	  section.data(66).logicalSrcIdx = 110;
 	  section.data(66).dtTransOffset = 65;
 	
 	  ;% hfsubh0wqd.PrinttheimudataontheTeensy_Valu
-	  section.data(67).logicalSrcIdx = 120;
+	  section.data(67).logicalSrcIdx = 111;
 	  section.data(67).dtTransOffset = 66;
 	
 	  ;% hfsubh0wqd.Printtheradiotranceiverdataonth
-	  section.data(68).logicalSrcIdx = 121;
+	  section.data(68).logicalSrcIdx = 112;
 	  section.data(68).dtTransOffset = 67;
 	
       nTotData = nTotData + section.nData;
@@ -597,7 +561,7 @@
 	  section.data(4).logicalSrcIdx = 3;
 	  section.data(4).dtTransOffset = 3;
 	
-	  ;% bcbnz3pviq3.jzn5f0csdz
+	  ;% bcbnz3pviq3.liswtopjfr
 	  section.data(5).logicalSrcIdx = 4;
 	  section.data(5).dtTransOffset = 4;
 	
@@ -1784,8 +1748,8 @@
   ;%
 
 
-  targMap.checksum0 = 2449984981;
-  targMap.checksum1 = 271937281;
-  targMap.checksum2 = 248947612;
-  targMap.checksum3 = 236966218;
+  targMap.checksum0 = 129393984;
+  targMap.checksum1 = 1254126265;
+  targMap.checksum2 = 3090119952;
+  targMap.checksum3 = 1693147645;
 

@@ -340,17 +340,17 @@ void loop() {
       print_radio_data();
     }
 
-//    Serial.println();
-//    Serial.print (statusword_1, BIN);
-//    Serial.print ("  ");
-//    Serial.print (statusword_2, BIN);
-//    Serial.print ("  ");
-//    Serial.print (statusword_3, BIN);
-//    Serial.print ("  ");
-//    Serial.print (statusword_4, BIN);
-//    Serial.print ("  ");
-//    Serial.println();
-//    Serial.println();
+    Serial.println();
+    Serial.print (statusword_1, BIN);
+    Serial.print ("  ");
+    Serial.print (statusword_2, BIN);
+    Serial.print ("  ");
+    Serial.print (statusword_3, BIN);
+    Serial.print ("  ");
+    Serial.print (statusword_4, BIN);
+    Serial.print ("  ");
+    Serial.println();
+    Serial.println();
 
     start_time_print = current_time_print;
   }
@@ -551,7 +551,7 @@ void loop() {
           current_time_quickstop = millis();
           if (current_time_quickstop - start_time_quickstop >= 2000){
 
-            RxPDO1_controlword_write(DISABLE_VOLT_COMMAND)); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
+            RxPDO1_controlword_write(DISABLE_VOLT_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
             
             dead_switch_state_var = wait_for_switch_on_disabled;
             if(GENERAL_PRINT){
