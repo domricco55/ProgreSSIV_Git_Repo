@@ -15,6 +15,7 @@
 #define QUICKSTOP_COMMAND 0x000B //Controlword for Quick stop. Takes the Device Control state machine from the "Operation enabled" state to the "Quick stop active" state. The motors will decelerate to zero 
                                   //velocity at the quick stop deceleration value (index 0x6085). 
 #define RESET_FAULT_COMMAND 0x0080 //Controlword for reset fault. Takes the Device Control state machine from the "fault" state to the "Switch on disabled state"
+#define DISABLE_VOLT_COMMAND 0x0000 //Controlword for disabling voltage. Takes Device Control state machine form "quick stop active" to the "Switch on disabled state"
 
 #define NO_ERROR 0
 #define ERROR_CAN_WRITE 1

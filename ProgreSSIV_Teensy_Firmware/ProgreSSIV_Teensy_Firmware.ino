@@ -216,6 +216,7 @@ bool timing_init_flag = true; //This flag allows the timing variables to be init
 unsigned long start_time_print;
 unsigned long start_time_motors;
 unsigned long start_time_servo;
+unsigned long start_time_quickstop;
 //unsigned long start_time_voltage;//Need to add in the voltage monitoring feature of the motor controllers. FUTURE WORK
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -324,8 +325,8 @@ void loop() {
     registers.reg_map.print_registers = 0; //Clear the flag register so that the printing only occurs once. Master must write to this each time it wants the register map to print. 
   }
   
-  unsigned long current_time_print = micros();
-  if ((current_time_print - start_time_print) >= 100000)  //100ms => 10hz. All printing will happen at this frequency.
+  unsigned long current_time_print = millis();
+  if ((current_time_print - start_time_print) >= 2000)  //2000ms => 1/2 hz. All printing will happen at this frequency.
   {
     //If Master wants Teensy to print it will send a non-zero value to the address for the print command and its code will run
 
@@ -339,6 +340,19 @@ void loop() {
       print_radio_data();
     }
 
+//    Serial.println();
+//    Serial.print (statusword_1, BIN);
+//    Serial.print ("  ");
+//    Serial.print (statusword_2, BIN);
+//    Serial.print ("  ");
+//    Serial.print (statusword_3, BIN);
+//    Serial.print ("  ");
+//    Serial.print (statusword_4, BIN);
+//    Serial.print ("  ");
+//    Serial.println();
+//    Serial.println();
+
+    start_time_print = current_time_print;
   }
 
 
@@ -467,6 +481,7 @@ void loop() {
     if (registers.reg_map.dead_switch) {
       
       //State machine implemented if dead switch register is non-zero (dead switch behavior is desired). This state machine knows the "Device Control" state of each motor controller via each one's statusword. 
+      unsigned long current_time_quickstop;
       switch(dead_switch_state_var){
         
         case op_enabled_zero_torque:
@@ -505,46 +520,65 @@ void loop() {
           if ( THR_in < 200 ) { 
 
             dead_switch_state_var = quick_stop_active;
+
+            Serial.println();
+            Serial.println(RxPDO1_controlword_write(QUICKSTOP_COMMAND)); //Send command for initiating a quick stop operation. This will send the MC's into the "quick stop active" state. Once quick stop operation is complete they will enter "switch on disabled' state
+            Serial.println("Quickstop Command Sent");
+            Serial.println();
+            
+            RxPDO2_torque_write(NODE_1, 0);
+            RxPDO2_torque_write(NODE_2, 0);
+            RxPDO2_torque_write(NODE_3, 0);
+            RxPDO2_torque_write(NODE_4, 0);
+            
+            //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
+            registers.reg_map.throttle_front_right = 0;
+            registers.reg_map.throttle_front_left = 0;
+            registers.reg_map.throttle_rear_right = 0;
+            registers.reg_map.throttle_rear_left = 0;
+
+            start_time_quickstop = millis(); //Timing variable for waiting for quickstop to do its job is initiated here. 
+            
             if(GENERAL_PRINT){
               Serial.println();
               Serial.println(" Entering 'quick stop active' state" );
               Serial.println();
-            }            
+            }                 
           }
-          
   
         break;
   
         case quick_stop_active:
 
-          RxPDO1_controlword_write(QUICKSTOP_COMMAND); //Send command for initiating a quick stop operation. This will send the MC's into the "quick stop active" state. Once quick stop operation is complete they will enter "switch on disabled' state
-          
-          RxPDO2_torque_write(NODE_1, 0);
-          RxPDO2_torque_write(NODE_2, 0);
-          RxPDO2_torque_write(NODE_3, 0);
-          RxPDO2_torque_write(NODE_4, 0);
-          
-          //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
-          registers.reg_map.throttle_front_right = 0;
-          registers.reg_map.throttle_front_left = 0;
-          registers.reg_map.throttle_rear_right = 0;
-          registers.reg_map.throttle_rear_left = 0;
+          //Wait for quick stop to slow motors to zero and then send disable voltage command to send MCs into "Switch on disabled" state.
+          current_time_quickstop = millis();
+          if (current_time_quickstop - start_time_quickstop >= 2000){
 
-          dead_switch_state_var = wait_for_switch_on_disabled;
-          if(GENERAL_PRINT){
-              Serial.println();
-              Serial.println(" Entering 'wait for switch on disabled' state" );
-              Serial.println();
-          }  
+            Serial.println();
+            Serial.println(RxPDO1_controlword_write(DISABLE_VOLT_COMMAND)); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
+            Serial.println("Test Switch on Disabled");
+            Serial.println();
+            
+            dead_switch_state_var = wait_for_switch_on_disabled;
+            if(GENERAL_PRINT){
+                Serial.println();
+                Serial.println(" Entering 'wait for switch on disabled' state" );
+                Serial.println();
+            }
+            
+          }
   
         break;
         
         case wait_for_switch_on_disabled:
-        
-          if((statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b01000000) == 0b01000000){//If the statusword of each MC signals that the "Switch on disabled' state has been reached after the quickstop has been completed.
 
-            RxPDO1_controlword_write(SHUTDOWN_COMMAND); // Send shutdown command via a controlword write to each MC. Will prompt the MCs to go from the "switch on disabled" state to the "ready to switch on" state. 
+          if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b01000000){//If the statusword of each MC signals that the "Switch on disabled' state has been reached.
 
+            Serial.println();
+            Serial.println(RxPDO1_controlword_write(SHUTDOWN_COMMAND)); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "switch on disabled" state to the "ready to switch on" state. 
+            Serial.println("Test Switch on Disabled");
+            Serial.println();
+            
             dead_switch_state_var = wait_for_ready_to_switch_on;
             if(GENERAL_PRINT){
                 Serial.println();
@@ -552,13 +586,17 @@ void loop() {
                 Serial.println();
             }              
           }
+
         break;  
 
         case wait_for_ready_to_switch_on:
 
-          if((statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b00100001) == 0b00100001){//If the statusword of each MC signals that the "Switch on disabled' state has been reached after the quickstop has been completed.
+          if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b00100001){//If the statusword of each MC signals that the "Switch on disabled' state has been reached after the quickstop has been completed.
 
-            RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send enable operation command via a controlword write to each MC. Will prompt the MCs to go from the "ready to switch on" state to the "operation enabled" state. 
+            Serial.println();
+            Serial.println(RxPDO1_controlword_write(ENABLE_OP_COMMAND)); //Send enable operation command via a controlword write to each MC. Will prompt the MCs to go from the "ready to switch on" state to the "operation enabled" state. 
+            Serial.println("Test wait for ready to switch on");
+            Serial.println();
             
             dead_switch_state_var = op_enabled_zero_torque;
             if(GENERAL_PRINT){
