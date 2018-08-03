@@ -470,11 +470,11 @@ void loop() {
   unsigned long current_time_motors = micros();
   if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Interactions with motor controllers happen at this frequency. 
   {
-    //Saturate all torque actuations so that the maximum torque demanded of the motors is the maximum continuous torque, or rated torque. 
-    saturate_torque(registers.reg_map.throttle_front_right);
-    saturate_torque(registers.reg_map.throttle_front_left);
-    saturate_torque(registers.reg_map.throttle_rear_right);
-    saturate_torque(registers.reg_map.throttle_rear_left);
+    //Saturate all torque actuations so that the maximum torque demanded of the motors is the maximum continuous torque, or rated torque. Store the saturated values on the stack and use them for the code below. 
+    int16_t torque_actuate_FR = saturate_torque(registers.reg_map.throttle_front_right);
+    int16_t torque_actuate_FL = saturate_torque(registers.reg_map.throttle_front_left);
+    int16_t torque_actuate_RR = saturate_torque(registers.reg_map.throttle_rear_right);
+    int16_t torque_actuate_RL = saturate_torque(registers.reg_map.throttle_rear_left);
     
     // Dead man's switch.  If throttle is being pressed just about half way, then actuate the motor controllers. Otherwise run quickstop command code and proceed through state machine to return to operational state.
     // There is a dead switch already implemented in Simulink but that one is for redundancy mostly and does not have the quick stop behavior implemented here. 
@@ -512,10 +512,10 @@ void loop() {
   
         case op_enabled_actuate_torque:
         
-          RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_front_right);//Write the throttle_front_right register value to the motor controller
-          RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_front_left);//Write the throttle_front_left register value to the motor controller
-          RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_rear_right); //Write the throttle_rear_right register value to the motor controller
-          RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_rear_left); //Write the throttle_rear_left register value to the motor controller
+          RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
+          RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
+          RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
+          RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
 
           if ( THR_in < 200 ) { 
 
@@ -549,7 +549,7 @@ void loop() {
 
           //Wait for quick stop to slow motors to zero and then send disable voltage command to send MCs into "Switch on disabled" state.
           current_time_quickstop = millis();
-          if (current_time_quickstop - start_time_quickstop >= 2000){
+          if (current_time_quickstop - start_time_quickstop >= 3000){
 
             RxPDO1_controlword_write(DISABLE_VOLT_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
             
@@ -603,57 +603,13 @@ void loop() {
       }
     }
   
-//      if ( THR_in > 200 ) { //If throttle is being pressed (positive direction) about half way then allow the motor controllers to be actuated
-//  
-//  
-//        RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_front_right);//Write the throttle_front_right register value to the motor controller
-//        RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_front_left);//Write the throttle_front_left register value to the motor controller
-//        RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_rear_right); //Write the throttle_rear_right register value to the motor controller
-//        RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_rear_left); //Write the throttle_rear_left register value to the motor controller
-//      }
-//      else {  //If throttle not being pressed past 200, send quick stop command to motor controllers. This will send them immediately into the Quick Stop Active state. 
-//              //Once each motor controller has reached the "Switch on disabled" state, send the command to enter operation enabled state again. 
-//
-//        if (!quick_stop_flag){
-//
-//          RxPDO1_controlword_write(QUICKSTOP_COMMAND) //Send MCs into "Quick stop active" state so that they go to zero speed at the quick stop deceleration value set in EPOS Studio
-//          
-//          RxPDO2_torque_write(NODE_1, 0);
-//          RxPDO2_torque_write(NODE_2, 0);
-//          RxPDO2_torque_write(NODE_3, 0);
-//          RxPDO2_torque_write(NODE_4, 0);
-//          
-//          //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
-//          registers.reg_map.throttle_front_right = 0;
-//          registers.reg_map.throttle_front_left = 0;
-//          registers.reg_map.throttle_rear_right = 0;
-//          registers.reg_map.throttle_rear_left = 0;
-//
-//          if((statusword_1 && statusword_2 && statusword_3 && statusword_4 && ob01000000) == 0b01000000){ //If the statusword of each MC signals that the "Switch on disabled' state has been reached after the quickstop has been completed.
-//
-//            quick_stop_flag = true;
-//            
-//          }
-//        }
-//
-//        else{
-//          
-//          RxPDO1_controlword_write(SHUTDOWN_COMMAND)
-//          
-//        }
-//
-//
-//
-//      }
-//    }
-  
     //If the dead man's switch is turned off, just update the motor controllers immediately.
     else {
     
-        RxPDO2_torque_write(NODE_1, -registers.reg_map.throttle_front_right);//Write the throttle_front_right register value to the motor controller
-        RxPDO2_torque_write(NODE_2, registers.reg_map.throttle_front_left);//Write the throttle_front_left register value to the motor controller
-        RxPDO2_torque_write(NODE_3, -registers.reg_map.throttle_rear_right); //Write the throttle_rear_right register value to the motor controller
-        RxPDO2_torque_write(NODE_4, registers.reg_map.throttle_rear_left); //Write the throttle_rear_left register value to the motor controller
+        RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
+        RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
+        RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
+        RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
     }
 
     start_time_motors = current_time_motors;
