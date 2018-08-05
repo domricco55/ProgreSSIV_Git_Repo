@@ -81,6 +81,11 @@ typedef struct reg_struct {
   //CAN Motor Controller Commands
   volatile uint8_t quick_stop_command;//Not yet implemented but will need to be at some point.
   volatile uint8_t shutdown_MCs;//Not yet implemented but will need to be at some point.
+  //CAN Error Code Registers
+  volatile uint8_t node_1_error;//Store the error code for 
+  volatile uint8_t node_2_error;
+  volatile uint8_t node_3_error;
+  volatile uint8_t node_4_error;  
 } reg_struct_t ;
 
 //Union type definition linking the above reg_struct type to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above reg_struct_t defines names and types
@@ -162,6 +167,9 @@ enum dead_switch_state{
 };
 
 dead_switch_state dead_switch_state_var = op_enabled_zero_torque; //First state to be entered
+
+/* Motor Controller related flags*/
+bool MC_on_flag = false;//Flag to let the the quickstop state machine know that the motor controllers have been put in the operation enabled state by the init_motor_controllers code 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
@@ -433,7 +441,8 @@ void loop() {
     
     delay(1); //Wait a little for the motor controllers to change state 
 
-    registers.reg_map.init_motor_controllers = 0; //Set to zero so the motor controllers can be initialized again and so that this code does not run continuously  
+    registers.reg_map.init_motor_controllers = 0; //Set to zero so the motor controllers can be initialized again and so that this code does not run continuously
+    MC_on_flag = true;  
 
   }
 
@@ -466,63 +475,28 @@ void loop() {
   //Write the servo value from servo_out register
   writeServo(registers.reg_map.servo_out);
 
-  //Actuate the Motor Controllers if permitted by dead switch register and throttle value (and do so at 180 hz). 
-  unsigned long current_time_motors = micros();
-  if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Interactions with motor controllers happen at this frequency. 
-  {
-    //Saturate all torque actuations so that the maximum torque demanded of the motors is the maximum continuous torque, or rated torque. Store the saturated values on the stack and use them for the code below. 
-    int16_t torque_actuate_FR = saturate_torque(registers.reg_map.throttle_front_right);
-    int16_t torque_actuate_FL = saturate_torque(registers.reg_map.throttle_front_left);
-    int16_t torque_actuate_RR = saturate_torque(registers.reg_map.throttle_rear_right);
-    int16_t torque_actuate_RL = saturate_torque(registers.reg_map.throttle_rear_left);
-    
-    // Dead man's switch.  If throttle is being pressed just about half way, then actuate the motor controllers. Otherwise run quickstop command code and proceed through state machine to return to operational state.
-    // There is a dead switch already implemented in Simulink but that one is for redundancy mostly and does not have the quick stop behavior implemented here. 
-    if (registers.reg_map.dead_switch) {
+  //if the motor controllers have been turned on run this code. If the dead_switch register is active, run the dead switch state machine code else just actuate the motors with the throttle register value.  
+  if(MC_on_flag){
+    unsigned long current_time_motors = micros();
+    if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Interactions with motor controllers happen at this frequency. 
+    {
+      //Saturate all torque actuations so that the maximum torque demanded of the motors is the maximum continuous torque, or rated torque. Store the saturated values on the stack and use them for the code below. 
+      int16_t torque_actuate_FR = saturate_torque(registers.reg_map.throttle_front_right);
+      int16_t torque_actuate_FL = saturate_torque(registers.reg_map.throttle_front_left);
+      int16_t torque_actuate_RR = saturate_torque(registers.reg_map.throttle_rear_right);
+      int16_t torque_actuate_RL = saturate_torque(registers.reg_map.throttle_rear_left);
       
-      //State machine implemented if dead switch register is non-zero (dead switch behavior is desired). This state machine knows the "Device Control" state of each motor controller via each one's statusword. 
-      unsigned long current_time_quickstop;
-      switch(dead_switch_state_var){
+      // Dead man's switch.  If throttle is being pressed just about half way, then actuate the motor controllers. Otherwise run quickstop command code and proceed through state machine to return to operational state.
+      // There is a dead switch already implemented in Simulink but that one is for redundancy mostly and does not have the quick stop behavior implemented here. 
+      if (registers.reg_map.dead_switch) {
         
-        case op_enabled_zero_torque:
-        
-          //Write zero torque values and clear the throttle registers. 
-          RxPDO2_torque_write(NODE_1, 0);
-          RxPDO2_torque_write(NODE_2, 0);
-          RxPDO2_torque_write(NODE_3, 0);
-          RxPDO2_torque_write(NODE_4, 0);
+        //State machine implemented if dead switch register is non-zero (dead switch behavior is desired). This state machine knows the "Device Control" state of each motor controller via each one's statusword. 
+        unsigned long current_time_quickstop;
+        switch(dead_switch_state_var){
           
-          //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
-          registers.reg_map.throttle_front_right = 0;
-          registers.reg_map.throttle_front_left = 0;
-          registers.reg_map.throttle_rear_right = 0;
-          registers.reg_map.throttle_rear_left = 0;
-
-          if ( THR_in >= 200 ) { 
-
-            dead_switch_state_var = op_enabled_actuate_torque;
-            if(GENERAL_PRINT){
-              Serial.println();
-              Serial.println(" Entering 'Operation Enabled Actuate Torque' state" );
-              Serial.println();
-            }
-          }
-  
-        break;
-  
-        case op_enabled_actuate_torque:
-        
-          RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
-          RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
-          RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
-          RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
-
-          if ( THR_in < 200 ) { 
-
-            dead_switch_state_var = quick_stop_active;
-
-            RxPDO1_controlword_write(QUICKSTOP_COMMAND); //Send command for initiating a quick stop operation. This will send the MC's into the "quick stop active" state. Once quick stop operation is complete they will enter "switch on disabled' state
-            
+          case op_enabled_zero_torque:
+          
+            //Write zero torque values and clear the throttle registers. 
             RxPDO2_torque_write(NODE_1, 0);
             RxPDO2_torque_write(NODE_2, 0);
             RxPDO2_torque_write(NODE_3, 0);
@@ -533,87 +507,125 @@ void loop() {
             registers.reg_map.throttle_front_left = 0;
             registers.reg_map.throttle_rear_right = 0;
             registers.reg_map.throttle_rear_left = 0;
-
-            start_time_quickstop = millis(); //Timing variable for waiting for quickstop to do its job is initiated here. 
-            
-            if(GENERAL_PRINT){
-              Serial.println();
-              Serial.println(" Entering 'quick stop active' state" );
-              Serial.println();
-            }                 
-          }
   
-        break;
+            if ( THR_in >= 200 ) { 
   
-        case quick_stop_active:
-
-          //Wait for quick stop to slow motors to zero and then send disable voltage command to send MCs into "Switch on disabled" state.
-          current_time_quickstop = millis();
-          if (current_time_quickstop - start_time_quickstop >= 3000){
-
-            RxPDO1_controlword_write(DISABLE_VOLT_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
-            
-            dead_switch_state_var = wait_for_switch_on_disabled;
-            if(GENERAL_PRINT){
+              dead_switch_state_var = op_enabled_actuate_torque;
+              if(GENERAL_PRINT){
                 Serial.println();
-                Serial.println(" Entering 'wait for switch on disabled' state" );
+                Serial.println(" Entering 'Operation Enabled Actuate Torque' state" );
                 Serial.println();
+              }
             }
-            
-          }
-  
-        break;
-        
-        case wait_for_switch_on_disabled:
-
-          if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b01000000){//If the statusword of each MC signals that the "Switch on disabled' state has been reached.
-
-            RxPDO1_controlword_write(SHUTDOWN_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "switch on disabled" state to the "ready to switch on" state. 
-
-            dead_switch_state_var = wait_for_ready_to_switch_on;
-            if(GENERAL_PRINT){
-                Serial.println();
-                Serial.println(" Entering 'wait for ready to switch on' state" );
-                Serial.println();
-            }              
-          }
-
-        break;  
-
-        case wait_for_ready_to_switch_on:
-
-          if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b00100001){//If the statusword of each MC signals that the "Switch on disabled' state has been reached after the quickstop has been completed.
-
-            Serial.println();
-            Serial.println(RxPDO1_controlword_write(ENABLE_OP_COMMAND)); //Send enable operation command via a controlword write to each MC. Will prompt the MCs to go from the "ready to switch on" state to the "operation enabled" state. 
-            Serial.println("Test wait for ready to switch on");
-            Serial.println();
-            
-            dead_switch_state_var = op_enabled_zero_torque;
-            if(GENERAL_PRINT){
-                Serial.println();
-                Serial.println(" Entering 'operation enabled zero torque' state" );
-                Serial.println();
-            }   
-            
-          }
-  
-        break;     
-
-      }
-    }
-  
-    //If the dead man's switch is turned off, just update the motor controllers immediately.
-    else {
     
-        RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
-        RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
-        RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
-        RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
+          break;
+    
+          case op_enabled_actuate_torque:
+          
+            RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
+            RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
+            RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
+            RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
+  
+            if ( THR_in < 200 ) { 
+  
+              dead_switch_state_var = quick_stop_active;
+  
+              RxPDO1_controlword_write(QUICKSTOP_COMMAND); //Send command for initiating a quick stop operation. This will send the MC's into the "quick stop active" state. Once quick stop operation is complete they will enter "switch on disabled' state
+              
+              RxPDO2_torque_write(NODE_1, 0);
+              RxPDO2_torque_write(NODE_2, 0);
+              RxPDO2_torque_write(NODE_3, 0);
+              RxPDO2_torque_write(NODE_4, 0);
+              
+              //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
+              registers.reg_map.throttle_front_right = 0;
+              registers.reg_map.throttle_front_left = 0;
+              registers.reg_map.throttle_rear_right = 0;
+              registers.reg_map.throttle_rear_left = 0;
+  
+              start_time_quickstop = millis(); //Timing variable for waiting for quickstop to do its job is initiated here. 
+              
+              if(GENERAL_PRINT){
+                Serial.println();
+                Serial.println(" Entering 'quick stop active' state" );
+                Serial.println();
+              }                 
+            }
+    
+          break;
+    
+          case quick_stop_active:
+  
+            //Wait for quick stop to slow motors to zero and then send disable voltage command to send MCs into "Switch on disabled" state.
+            current_time_quickstop = millis();
+            if (current_time_quickstop - start_time_quickstop >= 3000){
+  
+              RxPDO1_controlword_write(DISABLE_VOLT_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
+              
+              dead_switch_state_var = wait_for_switch_on_disabled;
+              if(GENERAL_PRINT){
+                  Serial.println();
+                  Serial.println(" Entering 'wait for switch on disabled' state" );
+                  Serial.println();
+              }
+              
+            }
+    
+          break;
+          
+          case wait_for_switch_on_disabled:
+  
+            if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b01000000){//If the statusword of each MC signals that the "Switch on disabled' state has been reached.
+  
+              RxPDO1_controlword_write(SHUTDOWN_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "switch on disabled" state to the "ready to switch on" state. 
+  
+              dead_switch_state_var = wait_for_ready_to_switch_on;
+              if(GENERAL_PRINT){
+                  Serial.println();
+                  Serial.println(" Entering 'wait for ready to switch on' state" );
+                  Serial.println();
+              }              
+            }
+  
+          break;  
+  
+          case wait_for_ready_to_switch_on:
+  
+            if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b00100001){//If the statusword of each MC signals that the "Switch on disabled' state has been reached after the quickstop has been completed.
+  
+              Serial.println();
+              Serial.println(RxPDO1_controlword_write(ENABLE_OP_COMMAND)); //Send enable operation command via a controlword write to each MC. Will prompt the MCs to go from the "ready to switch on" state to the "operation enabled" state. 
+              Serial.println("Test wait for ready to switch on");
+              Serial.println();
+              
+              dead_switch_state_var = op_enabled_zero_torque;
+              if(GENERAL_PRINT){
+                  Serial.println();
+                  Serial.println(" Entering 'operation enabled zero torque' state" );
+                  Serial.println();
+              }   
+              
+            }
+    
+          break;     
+  
+        }
+      }
+    
+      //If the dead man's switch is turned off, just update the motor controllers immediately.
+      else {
+      
+          RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
+          RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
+          RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
+          RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
+      }
+  
+      start_time_motors = current_time_motors;
     }
-
-    start_time_motors = current_time_motors;
   }
+  
 
 
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -650,51 +662,16 @@ void loop() {
     //Gather the steering and throttle inputs from the RADIO
     registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
     registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
-
-    //Read a single process data object from the CAN read register if it is available. One should be available INFREQUENTLY because the inhibit time for each of them is 5.5 ms...very long with respect to this prgrams run time
-    CAN_message_t msg;// Struct defined in FlexCAN
-    msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
-    if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
-    {
-      switch(msg.id){
-  
-        case 0x01A1: //If TxPDO1, node 1 (the statusword and motor velocity)
-  
-          statusword_1 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 1 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
-          registers.reg_map.velocity_FR = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1. Units are in RPM.
-                                                                                     //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
-          
-        break;
-  
-        case 0x01A2: //If TxPDO1, node 1 (the statusword and motor velocity)
-  
-          statusword_2 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 2 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
-          registers.reg_map.velocity_FL = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2. Units are in RPM.
-                                                                                     //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
-          
-        break;
-  
-        case 0x01A3: //If TxPDO1, node 1 (the statusword and motor velocity)
-  
-          statusword_3 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 3 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
-          registers.reg_map.velocity_RR = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3. Units are in RPM.
-                                                                                     //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
-          
-        break;
-  
-        case 0x01A4: //If TxPDO1, node 1 (the statusword and motor velocity)
-  
-          statusword_4 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 4 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
-          registers.reg_map.velocity_RL = (int16_t)((msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4. Units are in RPM.
-                                                                                     //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
-            
-        break;
-  
-        default:
-        break;
-      }
-    }
   }
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/* FILTER INCOMING CAN MESSAGES. This code will grab the latest sensor values and store them in the registers if collecting_data is true. */
+
+  try_CAN_msg_filter();//Function in this script that checks for an available CAN message from the FlexCAN buffer and interprets it accordingly. Motor Controller wheel velocities, 
+                        //statuswords, error messages, boot up messages, and so on are gathered here. This function also sets flags used in Motor Controller related state machines.  
+  
+  
 }
 
 /* END OF MAIN LOOP*/
@@ -1336,5 +1313,88 @@ int16_t saturate_torque(int16_t torque_command)
   }
 
   return torque_command;
+}
+
+void try_CAN_msg_filter(void){
+
+  //Read a single message from the CAN read register if it is available. Filter it according to COB-id and internal data and update the Teensy memory associated with that data or set a flag accordingly.
+  CAN_message_t msg;// Struct defined in FlexCAN
+  msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
+  if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
+  {
+    switch(msg.id){
+
+      case 0x01A1: //If TxPDO1, node 1 (the motor velocity)
+
+        registers.reg_map.velocity_FR = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 1. Units are in RPM.
+                                                                                   //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+        
+      break;
+
+      case 0x01A2: //If TxPDO1, node 1 (the motor velocity)
+
+        statusword_2 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 2 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+        registers.reg_map.velocity_FL = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 2. Units are in RPM.
+                                                                                   //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+        
+      break;
+
+      case 0x01A3: //If TxPDO1, node 1 (the motor velocity)
+
+        statusword_3 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 3 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+        registers.reg_map.velocity_RR = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 3. Units are in RPM.
+                                                                                   //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+        
+      break;
+
+      case 0x01A4: //If TxPDO1, node 1 (the motor velocity)
+
+        statusword_4 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 4 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+        registers.reg_map.velocity_RL = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 4. Units are in RPM.
+                                                                                   //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+          
+      break;
+
+      case 0x02A1: //If TxPDO2, node 1 (the statusword)
+
+        statusword_1 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 1 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+          
+      break;
+
+      case 0x02A2: //If TxPDO2, node 2 (the statusword)
+
+        statusword_2 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 2 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+          
+      break;
+
+      case 0x02A3: //If TxPDO2, node 3 (the statusword)
+
+        statusword_3 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 3 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+          
+      break;
+
+      case 0x02A4: //If TxPDO2, node 4 (the statusword )
+
+        statusword_4 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 4 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+      break;
+
+//        case 0x581,0x582,0x583,0x584: //If Service Data Object from one of the nodes
+//
+//          //filter_SDO(); //This function will interpret the Service Data Object and act occordingly
+//
+//        break;
+//
+//        case 0x701, 0x702, 0x703, 0x704; //If Network Management Boot Up message
+//        
+//        break;
+      
+      default:
+      break;
+    }
+  } 
 }
 
