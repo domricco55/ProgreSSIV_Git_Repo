@@ -6,7 +6,7 @@
 /*********************************/
 
 #include "flexCAN.h"
-#include "ProgreSSIV_MC_Driver.h"
+#include "ProgreSSIV_CAN_driver.h"
 #include <string.h>
 
 #define CONFIGURATION_PRINT 1
@@ -529,7 +529,7 @@ uint8_t set_TxPDO1_inhibit_time()
   {
     msg.id = 0x600 + node_id;//SDO COB-id for the node
     msg.len = 6;
-    msg.buf[0] = 0x2B;//Command specifier for writing 2 bytes
+    msg.buf[0] = 0x2B;//Command specifier for writing 2 bytes to the nodes object dictionary
     msg.buf[2] = 0x18;//High byte of TxPDO1 Parameter Index
     msg.buf[1] = 0x00;//Low byte of TxPDO1 Parameter Index
     msg.buf[3] = 0x03;//Sub-index of TxPDO1 Parameter Object, the INHIBIT TIME
@@ -710,6 +710,69 @@ uint8_t set_TxPDO1_inhibit_time()
 //
 //}
 
+
+/* This function will send out an SDO read request message to the "Error register" object of each node. The SDO confirmation from each node will have a command specifier of 0x4F (read dictionary object reply) 
+ *  and an object index of 0x1001 (same as used in the request message below). In your main script there should be a function that checks for an SDO confirmation message and extracts the error message byte appropriately. 
+ *  See EPOS4 Firmware Specification pgs 6-59 for information on the error register object.  
+*/
+uint8_t request_error_registers()
+{
+
+  CAN_message_t msg;
+  uint8_t write_error_count = 0;
+
+  //Set the TxPDO1 inhibit time for each node
+  for( uint8_t node_id = 1; node_id <=4; node_id++ )
+  {
+    msg.id = 0x600 + node_id;//SDO COB-id for the node
+    msg.len = 6;
+    msg.buf[0] = 0x40;//Command specifier for read dictionary object request
+    msg.buf[2] = 0x10;//High byte of error register object index
+    msg.buf[1] = 0x01;//Low byte of error register object index
+    msg.buf[3] = 0x00;//No sub-index
+//    msg.buf[4] = 0x00;//Empty data (junk)
+//    msg.buf[5] = 0x00;//Empty data (junk)
+//    msg.buf[6] = 0x00;//Empty data (junk)
+//    msg.buf[7] = 0x00;//Empty data (junk)
+    //The data sent does not matter for a read request 
+    
+    msg.timeout = 0;//If this is set to zero, write blocking will not occur - the write function will try to send out the message immediately and return a 0 if unsuccessful
+    if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+    {
+      write_error_count++;
+      if (DYNAMIC_PRINT)
+      {
+          Serial.println();
+          Serial.print("error CAN write during request_error_registers function call, node ");
+          Serial.println(node_id);
+          Serial.println();
+          delay(500);
+      }
+    }
+  }
+
+  if(write_error_count = 0){
+    if (DYNAMIC_PRINT)
+    {
+        Serial.println();
+        Serial.println("successful CAN writes during request_error_registers function call");
+        Serial.println();
+        delay(500);
+    }
+  }
+
+  else{
+    if(DYNAMIC_PRINT)
+    {
+        Serial.println();
+        Serial.println("at least one CAN write error occured during the request_error_registers function call ");
+        Serial.println();
+        delay(500);
+    }
+  }
+  return (4-write_error_count);
+}
+
 /* ---------------------------------------------------------RECEIVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS------------------------------------------------------------------------------------------------------*/
 
 //These messages should only be sent while nodes are in the NMT Slave state "Operational" and represent normal data transfer that happens on a pre-defined and consistent basis while the motor controllers 
@@ -726,7 +789,7 @@ uint8_t set_TxPDO1_inhibit_time()
 uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1 message that updates the node's controlword object
 {
   CAN_message_t msg;
-  uint8_t error_count = 0;
+  uint8_t write_error_count = 0;
   uint8_t command_HB = (uint8_t)(control_command >> 8); //Grab the high byte of the controlword value
   uint8_t command_LB = (uint8_t)(control_command); //Grab the low byte of the controlword value
 
@@ -742,7 +805,7 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1
     msg.timeout = 0;//If this is set to zero, write blocking will not occur - the write function will try to send out the message immediately and return a 0 if unsuccessful
     if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
     {
-      error_count++;
+      write_error_count++;
       if (DYNAMIC_PRINT)
       {
           Serial.println();
@@ -754,7 +817,7 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1
     }
   }
 
-  if(error_count = 0){
+  if(write_error_count = 0){
     if (DYNAMIC_PRINT)
     {
         Serial.println();
@@ -763,7 +826,17 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1
         delay(500);
     }
   }
-  return (4-error_count);
+  
+  else{
+    if(DYNAMIC_PRINT)
+    {
+        Serial.println();
+        Serial.println("at least one CAN write error occured during the request_error_registers function call ");
+        Serial.println();
+        delay(500);  
+    }  
+  }
+  return (4-write_error_count);
 }
 
 /*
@@ -807,6 +880,7 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO
         delay(500);
     }
   }
+
   
   return ret;
 }

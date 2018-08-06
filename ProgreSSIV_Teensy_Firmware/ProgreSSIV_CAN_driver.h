@@ -34,6 +34,7 @@ uint8_t stop_remote_nodes();
 uint8_t enter_pre_operational();
 /*SERVICE DATA OBJECT FUNCTIONS*/
 uint8_t set_torque_operating_mode();
+uint8_t request_error_registers();
 //uint8_t set_velocity_units();//I dont think you can actually set the velocity units :(
 uint8_t set_TxPDO1_inhibit_time();
 /*RECIEVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS*/
