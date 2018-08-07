@@ -422,7 +422,7 @@ uint8_t set_torque_operating_mode()
 
 ///* This function will send out an SDO write message to the "SI unit velocity" object of each node and wait a maximum of 1 second for a confirmation message from each node to return. 
 // *  The units to be set are 1 deci-rpm per bit so that the maximum allowable speed of about 3200 rpm can fit in a 16 bit signed integer. See EPOS4 Firmware Specification pg 2-16 (System Units)
-// *  and pg 6-177
+// *  and pg 6-177 TURNS OUT YOU CANT CHANGE THE VELOCITY UNITS...IM ALMOST CERTAIN OF THIS
 //*/
 //uint8_t set_velocity_units()
 //{
@@ -610,7 +610,7 @@ uint8_t set_TxPDO1_inhibit_time()
   return ret;//Probably want to have returned wether or not the confirmation SDO was recieved or not
 }
 
-uint8_t statusword_request()//This function requests the statusword of a node through SDO read request and confirmation.
+uint8_t request_statusword()//This function requests the statusword of a node through SDO read request and confirmation.
 {
   CAN_message_t msg;
   uint8_t write_error_count = 0;
@@ -637,7 +637,7 @@ uint8_t statusword_request()//This function requests the statusword of a node th
       if (CONFIGURATION_PRINT)
       {
           Serial.println();
-          Serial.print("error CAN write during the statusword_request function call, node ");
+          Serial.print("error CAN write during the request_statusword function call, node ");
           Serial.println(node_id);
           Serial.println();
           delay(500);
@@ -649,7 +649,7 @@ uint8_t statusword_request()//This function requests the statusword of a node th
     if (CONFIGURATION_PRINT)
     {
         Serial.println();
-        Serial.println("successful CAN writes during the statusword_request function call");
+        Serial.println("successful CAN writes during the request_statusword function call");
         Serial.println();
         delay(500);
     }
@@ -659,7 +659,7 @@ uint8_t statusword_request()//This function requests the statusword of a node th
     if(CONFIGURATION_PRINT)
     {
         Serial.println();
-        Serial.println("at least one CAN write error occured during the statusword_request function call ");
+        Serial.println("at least one CAN write error occured during the request_statusword function call ");
         Serial.println();
         delay(500);
     }

@@ -437,10 +437,10 @@ void loop() {
 
     delay(5); //Wait a little for the motor controllers to change state 
 
-    ret = statusword_request();
+    ret = request_statusword();
 
     if (GENERAL_PRINT) {
-      Serial <<"statusword_request function call successfully wrote this many SDO's:  "  << ret;
+      Serial <<"request_statusword function call successfully wrote this many SDO's:  "  << ret;
       Serial.println();
       Serial.println();
     }
@@ -456,10 +456,10 @@ void loop() {
 //
 //    delay(1); //Wait a little for the motor controllers to change state 
 //
-//    statusword_request();
+//    request_statusword();
 //      
 //    if (GENERAL_PRINT) {
-//      Serial <<"statusword_request function call successfully wrote this many SDO's:  "  << ret;
+//      Serial <<"request_statusword function call successfully wrote this many SDO's:  "  << ret;
 //      Serial.println();
 //      Serial.println();
 //    }
@@ -474,10 +474,10 @@ void loop() {
 //
 //    delay(1); //Wait a little for the motor controllers to change state 
 //
-//    statusword_request();
+//    request_statusword();
 //
 //    if (GENERAL_PRINT) {
-//      Serial <<"statusword_request function call successfully wrote this many SDO's:  "  << ret;
+//      Serial <<"request_statusword function call successfully wrote this many SDO's:  "  << ret;
 //      Serial.println();
 //      Serial.println();
 //    } 
