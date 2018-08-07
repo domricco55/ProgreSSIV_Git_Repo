@@ -10,7 +10,7 @@
 #include <string.h>
 
 #define CONFIGURATION_PRINT 1
-#define DYNAMIC_PRINT 0
+#define DYNAMIC_PRINT 1
 
 extern FlexCAN CANbus;
 
@@ -188,6 +188,51 @@ uint8_t reset_communications()
   return ret; //May want to change what each of these functions returns
 }
 
+/*This function sends the Network Management (NMT) message for "Enter Pre-Operational". It will send the message that signals every node to enter the Pre-Operational state (from either
+ * the Operational or Stopped states) of the NMT Slave state machine. There will be no messages broadcast as a direct response to this command but bit 9 of the Statusword in each nodes 
+ * object dictionary will have been cleared as a result. Can check the Statusword for confirmation. In this state, SDO messages, Emergency objects, and NMT messages are permitted. 
+ * See EPOS4 Communication Guide section 3.3.3.5, NMT Services (NMT SLave state machine info) and EPOS4 Firmware Specification pg6-161 (Statusword).
+*/
+uint8_t enter_pre_operational()
+{
+  CAN_message_t msg;
+  uint8_t ret = 0;
+
+  //Enter Pre-Operational state CAN Message
+  msg.id = 0;//COB-id for NMT or network management
+  msg.ext = 0;
+  msg.len = 2;
+  msg.buf[0] = 0x80; //Command Specifier for "Enter Pre-Operational"
+  msg.buf[1] = 0;//when set to zero, all slaves will be started
+ 
+
+  msg.timeout = 1000;//Milliseconds before giving up on broadcasting CAN message
+  if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  {
+    ret = ERROR_CAN_WRITE;
+    if (CONFIGURATION_PRINT)
+    {
+        Serial.println();
+        Serial.println("error CAN write during enter_pre_operational function call");
+        Serial.println();
+        delay(500);
+    }
+    
+  }
+  else{
+    ret = NO_ERROR;
+    if (CONFIGURATION_PRINT)
+    {
+        Serial.println();
+        Serial.println("successful CAN write during enter_pre_operational function call");
+        Serial.println();
+        delay(500);
+    }
+  }
+  return ret;
+
+}
+
 /*This function sends the Network Management (NMT) message for Starting Remote Nodes. It will send the message that signals every node to enter the Operational state of the NMT Slave state machine.
  * There will be no messages broadcast as a direct response to this command but bit 9 of the Statusword in each nodes object dictionary will have been set as a result. Can check the Statusword 
  * for confirmation. See EPOS4 Communication Guide section 3.3.3.5, NMT Services (NMT SLave state machine info) and EPOS4 Firmware Specification pg6-161 (Statusword).
@@ -276,50 +321,6 @@ uint8_t stop_remote_nodes()
 }
 
 
-/*This function sends the Network Management (NMT) message for "Enter Pre-Operational". It will send the message that signals every node to enter the Pre-Operational state (from either
- * the Operational or Stopped states) of the NMT Slave state machine. There will be no messages broadcast as a direct response to this command but bit 9 of the Statusword in each nodes 
- * object dictionary will have been cleared as a result. Can check the Statusword for confirmation. In this state, SDO messages, Emergency objects, and NMT messages are permitted. 
- * See EPOS4 Communication Guide section 3.3.3.5, NMT Services (NMT SLave state machine info) and EPOS4 Firmware Specification pg6-161 (Statusword).
-*/
-uint8_t enter_pre_operational()
-{
-  CAN_message_t msg;
-  uint8_t ret = 0;
-
-  //Enter Pre-Operational state CAN Message
-  msg.id = 0;//COB-id for NMT or network management
-  msg.ext = 0;
-  msg.len = 2;
-  msg.buf[0] = 0x80; //Command Specifier for "Enter Pre-Operational"
-  msg.buf[1] = 0;//when set to zero, all slaves will be started
- 
-
-  msg.timeout = 1000;//Milliseconds before giving up on broadcasting CAN message
-  if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
-  {
-    ret = ERROR_CAN_WRITE;
-    if (CONFIGURATION_PRINT)
-    {
-        Serial.println();
-        Serial.println("error CAN write during enter_pre_operational function call");
-        Serial.println();
-        delay(500);
-    }
-    
-  }
-  else{
-    ret = NO_ERROR;
-    if (CONFIGURATION_PRINT)
-    {
-        Serial.println();
-        Serial.println("successful CAN write during enter_pre_operational function call");
-        Serial.println();
-        delay(500);
-    }
-  }
-  return ret;
-
-}
 
 /* ---------------------------------------------------------SERVICE DATA OBJECT FUNCTIONS----------------------------------------------------------------------------------------------------------------------*/
 
@@ -372,7 +373,8 @@ uint8_t set_torque_operating_mode()
           if(CONFIGURATION_PRINT)
           {
             Serial.println();
-            Serial.println("A read message timeout has occured during the set_torque_operating_mode call.");
+            Serial.print("A read message timeout has occured during the set_torque_operating_mode call, node: ");
+            Serial.print(node_id);
             Serial.println();
           }
             
@@ -608,107 +610,63 @@ uint8_t set_TxPDO1_inhibit_time()
   return ret;//Probably want to have returned wether or not the confirmation SDO was recieved or not
 }
 
-//uint8_t SDO_test_statusword(uint8_t node_id, uint8_t expected_status_LB)//This function requests the statusword of a node through SDO read request and confirmation. It then tests that the status of the drive is as expected. 
-//{
-//  CAN_message_t msg;
-//  uint8_t statusword_LB; //Temporary variable for handling the statusword of each node. 
-//  uint8_t error = NO_ERROR; 
-//  uint8_t status_confirmation = NOT_CORRECT;
-//
-//  //Send a statusword request to the node and wait for the SDO confirmation (will contain the nodes statusword). Mostly for debugging purposes. 
-//  msg.id = 0x600 + node_id;
-//  msg.len = 8;// Message length is 8 because I think I'm supposed to send 4 empty bytes during an SDO read request. Not certain this is necessary though.
-//  msg.buf[0] = 0x40;// Command Code for object dictionary read of 2 bytes
-//  msg.buf[2] = 0x60;
-//  msg.buf[1] = 0x41;
-//  msg.buf[3] = 0;//Sub-index
-//  msg.buf[4] = 0;//Empty data (junk)
-//  msg.buf[5] = 0;//Empty data (junk)
-//  msg.buf[6] = 0;//Empty data (junk)
-//  msg.buf[7] = 0;//Empty data (junk)
-//  
-//  msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
-//  if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
-//  {
-//    error = ERROR_CAN_WRITE;
-//    if (CONFIGURATION_PRINT)
-//    {
-//        Serial.println();
-//        Serial.println("error CAN write during SDO_test_statusword function call");
-//        Serial.println();
-//        delay(500);
-//    }
-//    
-//  }
-//  else
-//  {
-//    error = NO_ERROR;
-//    if (CONFIGURATION_PRINT)
-//    {
-//        Serial.println();
-//        Serial.println("successful CAN write during SDO_test_statusword function call");
-//        Serial.println();
-//        delay(500);
-//    }
-//  }
-//
-//  if(error == NO_ERROR)//If the CAN write was successful
-//  {
-//
-//    //The following code will filter out any message that is not an SDO confirmation resulting from the statusword request SDO written above
-//    for(uint8_t index = 1; index <= 1 ; index++)
-//    {
-//
-//      msg.timeout = 1000;//Milliseconds before giving up on reading a CAN message
-//      if (CANbus.read(msg) == 0){//If the read message timeout was reached and a message was not available to read
-//  
-//        if(CONFIGURATION_PRINT)
-//        {
-//          Serial.println();
-//          Serial.println("A read message timeout has occured during the SDO_test_statusword call.");
-//          Serial.println();
-//        }
-//          
-//      } 
-//  
-//      else{
-//
-//        if((msg.buf[2] << 8 | msg.buf[1]) == 0x6041 && msg.id == 0x580 + node_id){ //If the returned message was an SDO response (COB-id of 0x580 + node id) and the OD main index was that of the statusword object (index of 0x6041)
-//          if (CONFIGURATION_PRINT)
-//          {
-//            Serial.println();
-//            Serial.print("Message read during SDO_test_statusword function call, node ");//MAY WANT TO CHANGE THIS PRINT STATEMENT TO BETTER REFLECT WHAT'S HAPPENING
-//            Serial.print(node_id);
-//            Serial.println(":");
-//            Serial.println();
-//            print_CAN_message(msg);
-//          }
-//
-//          statusword_LB = msg.buf[3]; //Get the Low Byte of the statusword (Device control status). 
-////
-////          if (statusword & expected_status_LB == expected_status_LB){
-////
-////            status_confirmation = CORRECT;//If the statusword was what you expected, 
-////          
-////          }
-//          
-//          
-//        }
-//
-//        else{// Else the recieved message was not an SDO confirmation 
-//
-//          index--; //Decrement the index so that the loop runs again and checks for the next read message
-//          Serial.print("A non-sdo-confirmation message was recieved during the SDO_test_statusword function call and was ignored. The COB-id was: ");
-//          Serial.println(msg.id, HEX);
-//          
-//        }
-//      }
-//    }
-//  }  
-//
-//  return error;//Probably want to have returned whether or not the confirmation SDO was recieved or not
-//
-//}
+uint8_t statusword_request()//This function requests the statusword of a node through SDO read request and confirmation.
+{
+  CAN_message_t msg;
+  uint8_t write_error_count = 0;
+  
+  for(uint8_t node_id = 1; node_id <=4; node_id++)
+  {
+    
+    //Send a statusword request to the node and wait for the SDO confirmation (will contain the nodes statusword). Mostly for debugging purposes. 
+    msg.id = 0x600 + node_id;
+    msg.len = 8;// Message length is 8 because I think I'm supposed to send 4 empty bytes during an SDO read request. Not certain this is necessary though.
+    msg.buf[0] = 0x40;// Command Specifier for object dictionary read of 2 bytes
+    msg.buf[2] = 0x60;
+    msg.buf[1] = 0x41;
+    msg.buf[3] = 0;//Sub-index
+    msg.buf[4] = 0;//Empty data (junk)
+    msg.buf[5] = 0;//Empty data (junk)
+    msg.buf[6] = 0;//Empty data (junk)
+    msg.buf[7] = 0;//Empty data (junk)
+
+    msg.timeout = 0;//If this is set to zero, write blocking will not occur - the write function will try to send out the message immediately and return a 0 if unsuccessful
+    if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+    {
+      write_error_count++;
+      if (CONFIGURATION_PRINT)
+      {
+          Serial.println();
+          Serial.print("error CAN write during the statusword_request function call, node ");
+          Serial.println(node_id);
+          Serial.println();
+          delay(500);
+      }
+    }
+  }
+  
+  if(write_error_count == 0){
+    if (CONFIGURATION_PRINT)
+    {
+        Serial.println();
+        Serial.println("successful CAN writes during the statusword_request function call");
+        Serial.println();
+        delay(500);
+    }
+  }
+  
+  else{
+    if(CONFIGURATION_PRINT)
+    {
+        Serial.println();
+        Serial.println("at least one CAN write error occured during the statusword_request function call ");
+        Serial.println();
+        delay(500);
+    }
+  }
+
+  return (4-write_error_count);
+}
 
 
 /* This function will send out an SDO read request message to the "Error register" object of each node. The SDO confirmation from each node will have a command specifier of 0x4F (read dictionary object reply) 
@@ -751,7 +709,7 @@ uint8_t request_error_registers()
     }
   }
 
-  if(write_error_count = 0){
+  if(write_error_count == 0){
     if (DYNAMIC_PRINT)
     {
         Serial.println();
@@ -875,7 +833,8 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO
     if (DYNAMIC_PRINT)
     {
         Serial.println();
-        Serial.println("successful CAN write during RxPDO2_torque_write function call");
+        Serial.print("successful CAN write during RxPDO2_torque_write function call, a value of: ");
+        Serial.println(throttle);
         Serial.println();
         delay(500);
     }
@@ -883,6 +842,21 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO
 
   
   return ret;
+}
+
+void read_available_message()
+{
+  CAN_message_t msg;
+  msg.timeout = 0;
+  if(CANbus.read(msg)){
+    if(CONFIGURATION_PRINT)
+      {
+      Serial.println();
+      Serial.println("A CAN message was recieved during the read_available_messages function call ");
+      Serial.println();
+      print_CAN_message(msg);
+    }
+  }
 }
 
 void print_CAN_message(CAN_message_t msg)

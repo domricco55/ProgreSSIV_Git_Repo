@@ -148,11 +148,7 @@ FlexCAN CANbus(1000000);
 /*loop CAN variables.*/
 uint8_t ret = 0;
 uint8_t error = NO_ERROR;
-//May do something different with the statusword of each node later but for now just storing it in a variable. This could be used in relation to the Teensy status byte stuff in the SPI protocol
-uint16_t statusword_1;//stores statusword of node 1
-uint16_t statusword_2;//stores statusword of node 2
-uint16_t statusword_3;//stores statusword of node 3
-uint16_t statusword_4;//stores statusword of node 4
+
 
 /* Dead switch state machine setup */
 enum dead_switch_state{
@@ -327,7 +323,7 @@ void loop() {
 
   /*print command registers (ONLY USE THIS FOR DEBUGGING AND NOT FOR DYNAMIC OPERATION, MAY CAUSE BUGS TO OCCUR OTHERWISE)*/
   
-  //Print the entire register map
+  //Print the entire register map whenever the register prompts this to happen 
   if (registers.reg_map.print_registers) {
     spi_registers_print();
     registers.reg_map.print_registers = 0; //Clear the flag register so that the printing only occurs once. Master must write to this each time it wants the register map to print. 
@@ -360,14 +356,26 @@ void loop() {
 //    Serial.println();
 //    Serial.println();
 
+//    Serial.println();
+//    Serial.print (registers.reg_map.node_errors[0], BIN);
+//    Serial.print ("  ");
+//    Serial.print (registers.reg_map.node_errors[1], BIN);
+//    Serial.print ("  ");
+//    Serial.print (registers.reg_map.node_errors[2], BIN);
+//    Serial.print ("  ");
+//    Serial.print (registers.reg_map.node_errors[3], BIN);
+//    Serial.print ("  ");
+//    Serial.println();
+//    Serial.println();
+
     Serial.println();
-    Serial.print (registers.reg_map.node_errors[0], BIN);
+    Serial.print (registers.reg_map.node_statuswords[0], BIN);
     Serial.print ("  ");
-    Serial.print (registers.reg_map.node_errors[1], BIN);
+    Serial.print (registers.reg_map.node_statuswords[1], BIN);
     Serial.print ("  ");
-    Serial.print (registers.reg_map.node_errors[2], BIN);
+    Serial.print (registers.reg_map.node_statuswords[2], BIN);
     Serial.print ("  ");
-    Serial.print (registers.reg_map.node_errors[3], BIN);
+    Serial.print (registers.reg_map.node_statuswords[3], BIN);
     Serial.print ("  ");
     Serial.println();
     Serial.println();
@@ -387,72 +395,150 @@ void loop() {
   /*init_motor_controllers register*/
   //Initialize the motor controllers if asked to do so by Master (non zero value sent to the init_motor_controllers register) and the motor_controllers_on flag is false
   if (registers.reg_map.init_motor_controllers) {
+    MC_on_flag = false;  
 
-      ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+    //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
+    unsigned long start_time_CAN_check = millis();
+    unsigned long current_time_CAN_check = millis();
+    while(current_time_CAN_check - start_time_CAN_check <= 1000 )
+    {
+
+    read_available_message(); 
+    current_time_CAN_check = millis();
+    
+    }
+    
+    ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
       
-      if (GENERAL_PRINT) {
-        Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-      }
+    if (GENERAL_PRINT) {
+      Serial.println();
+      Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }
 
-     ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
-     
-     if (GENERAL_PRINT) {
-        Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-      }
-
-     ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
-
-     if (GENERAL_PRINT) {
-        Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-      }      
-
-
-     ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
+    ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
      
     if (GENERAL_PRINT) {
-      Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
       Serial.println();
       Serial.println();
-    } 
-
-    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
-    
+    }
+ 
+    ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+     
     if (GENERAL_PRINT) {
-      Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial <<"enter_pre_operational function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
       Serial.println();
       Serial.println();
     }
 
-    delay(1); //Wait a little for the motor controllers to change state 
-    
-    //NEED TO REQUEST THE STATUSWORD OF EACH NODE HERE AND ENSURE THAT EACH IS IN NMT STATE OPERATIONAL (Bit 9 of statusword)
-    
-    ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
-    
-    if (GENERAL_PRINT) {
-      Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-      Serial.println();
-      Serial.println();
-    }
-    
-    delay(1); //Wait a little for the motor controllers to change state
-    
-    ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
-    
-    if (GENERAL_PRINT) {
-      Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-      Serial.println();
-      Serial.println();
-    }
-    
-    delay(1); //Wait a little for the motor controllers to change state 
+    delay(5); //Wait a little for the motor controllers to change state 
 
+    ret = statusword_request();
+
+    if (GENERAL_PRINT) {
+      Serial <<"statusword_request function call successfully wrote this many SDO's:  "  << ret;
+      Serial.println();
+      Serial.println();
+    }
+    
+//    ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+//    
+//    if (GENERAL_PRINT) {
+//        Serial.println();
+//        Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//        Serial.println();
+//        Serial.println();
+//      }
+//
+//    delay(1); //Wait a little for the motor controllers to change state 
+//
+//    statusword_request();
+//      
+//    if (GENERAL_PRINT) {
+//      Serial <<"statusword_request function call successfully wrote this many SDO's:  "  << ret;
+//      Serial.println();
+//      Serial.println();
+//    }
+//
+//    ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
+//     
+//    if (GENERAL_PRINT) {
+//      Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//      Serial.println();
+//      Serial.println();
+//    } 
+//
+//    delay(1); //Wait a little for the motor controllers to change state 
+//
+//    statusword_request();
+//
+//    if (GENERAL_PRINT) {
+//      Serial <<"statusword_request function call successfully wrote this many SDO's:  "  << ret;
+//      Serial.println();
+//      Serial.println();
+//    } 
+//    
+//    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
+//    
+//
+//    if (GENERAL_PRINT) {
+//      Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//      Serial.println();
+//      Serial.println();
+//    }
+
+    while(true){
+      try_CAN_msg_filter();
+      unsigned long current_time_print = millis();
+      if ((current_time_print - start_time_print) >= 2000)  //2000ms => 1/2 hz. All printing will happen at this frequency.
+      {
+    
+    
+        Serial.println();
+        Serial.print (registers.reg_map.node_statuswords[0], BIN);
+        Serial.print ("  ");
+        Serial.print (registers.reg_map.node_statuswords[1], BIN);
+        Serial.print ("  ");
+        Serial.print (registers.reg_map.node_statuswords[2], BIN);
+        Serial.print ("  ");
+        Serial.print (registers.reg_map.node_statuswords[3], BIN);
+        Serial.print ("  ");
+        Serial.println();
+        Serial.println();
+    
+        start_time_print = current_time_print;
+      }
+      
+    }
+
+//    delay(1); //Wait a little for the motor controllers to change state 
+//    
+//    //NEED TO REQUEST THE STATUSWORD OF EACH NODE HERE AND ENSURE THAT EACH IS IN NMT STATE OPERATIONAL (Bit 9 of statusword)
+//    
+//    ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
+//    
+//    if (GENERAL_PRINT) {
+//      Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+//      Serial.println();
+//      Serial.println();
+//    }
+//    
+//    delay(1); //Wait a little for the motor controllers to change state
+//    
+//    ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
+//    
+//    if (GENERAL_PRINT) {
+//      Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+//      Serial.println();
+//      Serial.println();
+//    }
+//    
+//    delay(1); //Wait a little for the motor controllers to change state 
+//
     registers.reg_map.init_motor_controllers = 0; //Set to zero so the motor controllers can be initialized again and so that this code does not run continuously
     MC_on_flag = true;  
 
@@ -487,156 +573,156 @@ void loop() {
   //Write the servo value from servo_out register
   writeServo(registers.reg_map.servo_out);
 
-  //if the motor controllers have been turned on run this code. If the dead_switch register is active, run the dead switch state machine code else just actuate the motors with the throttle register value.  
-  if(MC_on_flag){
-    unsigned long current_time_motors = micros();
-    if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Interactions with motor controllers happen at this frequency. 
-    {
-      //Saturate all torque actuations so that the maximum torque demanded of the motors is the maximum continuous torque, or rated torque. Store the saturated values on the stack and use them for the code below. 
-      int16_t torque_actuate_FR = saturate_torque(registers.reg_map.throttle_front_right);
-      int16_t torque_actuate_FL = saturate_torque(registers.reg_map.throttle_front_left);
-      int16_t torque_actuate_RR = saturate_torque(registers.reg_map.throttle_rear_right);
-      int16_t torque_actuate_RL = saturate_torque(registers.reg_map.throttle_rear_left);
-      
-      // Dead man's switch.  If throttle is being pressed just about half way, then actuate the motor controllers. Otherwise run quickstop command code and proceed through state machine to return to operational state.
-      // There is a dead switch already implemented in Simulink but that one is for redundancy mostly and does not have the quick stop behavior implemented here. 
-      if (registers.reg_map.dead_switch) {
-        
-        //State machine implemented if dead switch register is non-zero (dead switch behavior is desired). This state machine knows the "Device Control" state of each motor controller via each one's statusword. 
-        unsigned long current_time_quickstop;
-        switch(dead_switch_state_var){
-          
-          case op_enabled_zero_torque:
-          
-            //Write zero torque values and clear the throttle registers. 
-            RxPDO2_torque_write(NODE_1, 0);
-            RxPDO2_torque_write(NODE_2, 0);
-            RxPDO2_torque_write(NODE_3, 0);
-            RxPDO2_torque_write(NODE_4, 0);
-            
-            //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
-            registers.reg_map.throttle_front_right = 0;
-            registers.reg_map.throttle_front_left = 0;
-            registers.reg_map.throttle_rear_right = 0;
-            registers.reg_map.throttle_rear_left = 0;
-  
-            if ( THR_in >= 200 ) { 
-  
-              dead_switch_state_var = op_enabled_actuate_torque;
-              if(GENERAL_PRINT){
-                Serial.println();
-                Serial.println(" Entering 'Operation Enabled Actuate Torque' state" );
-                Serial.println();
-              }
-            }
-    
-          break;
-    
-          case op_enabled_actuate_torque:
-          
-            RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
-            RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
-            RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
-            RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
-  
-            if ( THR_in < 200 ) { 
-  
-              dead_switch_state_var = quick_stop_active;
-  
-              RxPDO1_controlword_write(QUICKSTOP_COMMAND); //Send command for initiating a quick stop operation. This will send the MC's into the "quick stop active" state. Once quick stop operation is complete they will enter "switch on disabled' state
-              
-              RxPDO2_torque_write(NODE_1, 0);
-              RxPDO2_torque_write(NODE_2, 0);
-              RxPDO2_torque_write(NODE_3, 0);
-              RxPDO2_torque_write(NODE_4, 0);
-              
-              //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
-              registers.reg_map.throttle_front_right = 0;
-              registers.reg_map.throttle_front_left = 0;
-              registers.reg_map.throttle_rear_right = 0;
-              registers.reg_map.throttle_rear_left = 0;
-  
-              start_time_quickstop = millis(); //Timing variable for waiting for quickstop to do its job is initiated here. 
-              
-              if(GENERAL_PRINT){
-                Serial.println();
-                Serial.println(" Entering 'quick stop active' state" );
-                Serial.println();
-              }                 
-            }
-    
-          break;
-    
-          case quick_stop_active:
-  
-            //Wait for quick stop to slow motors to zero and then send disable voltage command to send MCs into "Switch on disabled" state.
-            current_time_quickstop = millis();
-            if (current_time_quickstop - start_time_quickstop >= 3000){
-  
-              RxPDO1_controlword_write(DISABLE_VOLT_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
-              
-              dead_switch_state_var = wait_for_switch_on_disabled;
-              if(GENERAL_PRINT){
-                  Serial.println();
-                  Serial.println(" Entering 'wait for switch on disabled' state" );
-                  Serial.println();
-              }
-              
-            }
-    
-          break;
-          
-          case wait_for_switch_on_disabled:
-  
-            if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b01000000){//If the statusword of each MC signals that the "Switch on disabled' state has been reached.
-  
-              RxPDO1_controlword_write(SHUTDOWN_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "switch on disabled" state to the "ready to switch on" state. 
-  
-              dead_switch_state_var = wait_for_ready_to_switch_on;
-              if(GENERAL_PRINT){
-                  Serial.println();
-                  Serial.println(" Entering 'wait for ready to switch on' state" );
-                  Serial.println();
-              }              
-            }
-  
-          break;  
-  
-          case wait_for_ready_to_switch_on:
-  
-            if(statusword_1 && statusword_2 && statusword_3 && statusword_4 && 0b00100001){//If the statusword of each MC signals that the "Switch on disabled' state has been reached after the quickstop has been completed.
-  
-              Serial.println();
-              Serial.println(RxPDO1_controlword_write(ENABLE_OP_COMMAND)); //Send enable operation command via a controlword write to each MC. Will prompt the MCs to go from the "ready to switch on" state to the "operation enabled" state. 
-              Serial.println("Test wait for ready to switch on");
-              Serial.println();
-              
-              dead_switch_state_var = op_enabled_zero_torque;
-              if(GENERAL_PRINT){
-                  Serial.println();
-                  Serial.println(" Entering 'operation enabled zero torque' state" );
-                  Serial.println();
-              }   
-              
-            }
-    
-          break;     
-  
-        }
-      }
-    
-      //If the dead man's switch is turned off, just update the motor controllers immediately.
-      else {
-      
-          RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
-          RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
-          RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
-          RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
-      }
-  
-      start_time_motors = current_time_motors;
-    }
-  }
+//  //if the motor controllers have been turned on run this code. If the dead_switch register is active, run the dead switch state machine code else just actuate the motors with the throttle register value.  
+//  if(MC_on_flag){
+//    unsigned long current_time_motors = micros();
+//    if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Interactions with motor controllers happen at this frequency. 
+//    {
+//      //Saturate all torque actuations so that the maximum torque demanded of the motors is the maximum continuous torque, or rated torque. Store the saturated values on the stack and use them for the code below. 
+//      int16_t torque_actuate_FR = saturate_torque(registers.reg_map.throttle_front_right);
+//      int16_t torque_actuate_FL = saturate_torque(registers.reg_map.throttle_front_left);
+//      int16_t torque_actuate_RR = saturate_torque(registers.reg_map.throttle_rear_right);
+//      int16_t torque_actuate_RL = saturate_torque(registers.reg_map.throttle_rear_left);
+//      
+//      // Dead man's switch.  If throttle is being pressed just about half way, then actuate the motor controllers. Otherwise run quickstop command code and proceed through state machine to return to operational state.
+//      // There is a dead switch already implemented in Simulink but that one is for redundancy mostly and does not have the quick stop behavior implemented here. 
+//      if (registers.reg_map.dead_switch) {
+//        
+//        //State machine implemented if dead switch register is non-zero (dead switch behavior is desired). This state machine knows the "Device Control" state of each motor controller via each one's statusword. 
+//        unsigned long current_time_quickstop;
+//        switch(dead_switch_state_var){
+//          
+//          case op_enabled_zero_torque:
+//          
+//            //Write zero torque values and clear the throttle registers. 
+//            RxPDO2_torque_write(NODE_1, 0);
+//            RxPDO2_torque_write(NODE_2, 0);
+//            RxPDO2_torque_write(NODE_3, 0);
+//            RxPDO2_torque_write(NODE_4, 0);
+//            
+//            //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
+//            registers.reg_map.throttle_front_right = 0;
+//            registers.reg_map.throttle_front_left = 0;
+//            registers.reg_map.throttle_rear_right = 0;
+//            registers.reg_map.throttle_rear_left = 0;
+//  
+//            if ( THR_in >= 200 ) { 
+//  
+//              dead_switch_state_var = op_enabled_actuate_torque;
+//              if(GENERAL_PRINT){
+//                Serial.println();
+//                Serial.println(" Entering 'Operation Enabled Actuate Torque' state" );
+//                Serial.println();
+//              }
+//            }
+//    
+//          break;
+//    
+//          case op_enabled_actuate_torque:
+//          
+//            RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
+//            RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
+//            RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
+//            RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
+//            
+//            if ( THR_in < 200 ) { 
+//  
+//              dead_switch_state_var = quick_stop_active;
+//  
+//              RxPDO1_controlword_write(QUICKSTOP_COMMAND); //Send command for initiating a quick stop operation. This will send the MC's into the "quick stop active" state. Once quick stop operation is complete they will enter "switch on disabled' state
+//              
+//              RxPDO2_torque_write(NODE_1, 0);
+//              RxPDO2_torque_write(NODE_2, 0);
+//              RxPDO2_torque_write(NODE_3, 0);
+//              RxPDO2_torque_write(NODE_4, 0);
+//              
+//              //Write zeros to the registers so that next time the trigger is pressed, the actuation is zero unless overriden by the Master device.
+//              registers.reg_map.throttle_front_right = 0;
+//              registers.reg_map.throttle_front_left = 0;
+//              registers.reg_map.throttle_rear_right = 0;
+//              registers.reg_map.throttle_rear_left = 0;
+//  
+//              start_time_quickstop = millis(); //Timing variable for waiting for quickstop to do its job is initiated here. 
+//              
+//              if(GENERAL_PRINT){
+//                Serial.println();
+//                Serial.println(" Entering 'quick stop active' state" );
+//                Serial.println();
+//              }                 
+//            }
+//    
+//          break;
+//    
+//          case quick_stop_active:
+//  
+//            //Wait for quick stop to slow motors to zero and then send disable voltage command to send MCs into "Switch on disabled" state.
+//            current_time_quickstop = millis();
+//            if (current_time_quickstop - start_time_quickstop >= 3000){
+//  
+//              RxPDO1_controlword_write(DISABLE_VOLT_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "quick stop active" state to the "switch on disabled" state. 
+//              
+//              dead_switch_state_var = wait_for_switch_on_disabled;
+//              if(GENERAL_PRINT){
+//                  Serial.println();
+//                  Serial.println(" Entering 'wait for switch on disabled' state" );
+//                  Serial.println();
+//              }
+//              
+//            }
+//    
+//          break;
+//          
+//          case wait_for_switch_on_disabled:
+//  
+//            if(registers.reg_map.node_statuswords[0] && registers.reg_map.node_statuswords[1] && registers.reg_map.node_statuswords[2] && registers.reg_map.node_statuswords[3] && 0b01000000){//If the statusword of each MC signals that the "Switch on disabled' state has been reached.
+//  
+//              RxPDO1_controlword_write(SHUTDOWN_COMMAND); // Send disable voltage command via a controlword write to each MC. Will prompt the MCs to go from the "switch on disabled" state to the "ready to switch on" state. 
+//  
+//              dead_switch_state_var = wait_for_ready_to_switch_on;
+//              if(GENERAL_PRINT){
+//                  Serial.println();
+//                  Serial.println(" Entering 'wait for ready to switch on' state" );
+//                  Serial.println();
+//              }              
+//            }
+//  
+//          break;  
+//  
+//          case wait_for_ready_to_switch_on:
+//  
+//            if(registers.reg_map.node_statuswords[0] && registers.reg_map.node_statuswords[1] && registers.reg_map.node_statuswords[2] && registers.reg_map.node_statuswords[3] && 0b00100001){//If the statusword of each MC signals that the "Switch on disabled' state has been reached after the quickstop has been completed.
+//  
+//              Serial.println();
+//              Serial.println(RxPDO1_controlword_write(ENABLE_OP_COMMAND)); //Send enable operation command via a controlword write to each MC. Will prompt the MCs to go from the "ready to switch on" state to the "operation enabled" state. 
+//              Serial.println("Test wait for ready to switch on");
+//              Serial.println();
+//              
+//              dead_switch_state_var = op_enabled_zero_torque;
+//              if(GENERAL_PRINT){
+//                  Serial.println();
+//                  Serial.println(" Entering 'operation enabled zero torque' state" );
+//                  Serial.println();
+//              }   
+//              
+//            }
+//    
+//          break;     
+//  
+//        }
+//      }
+//    
+//      //If the dead man's switch is turned off, just update the motor controllers immediately.
+//      else {
+//      
+//          RxPDO2_torque_write(NODE_1, -torque_actuate_FR);//Write the saturated throttle_front_right register value to the motor controller
+//          RxPDO2_torque_write(NODE_2, torque_actuate_FL);//Write the saturated throttle_front_left register value to the motor controller
+//          RxPDO2_torque_write(NODE_3, -torque_actuate_RR); //Write the saturated throttle_rear_right register value to the motor controller
+//          RxPDO2_torque_write(NODE_4, torque_actuate_RL); //Write the saturated throttle_rear_left register value to the motor controller
+//      }
+//  
+//      start_time_motors = current_time_motors;
+//    }
+//  }
   
 
 
@@ -678,24 +764,24 @@ void loop() {
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* CAN MESSAGE RELATED. This code will grab the latest sensor values and store them in the registers if collecting_data is true. */
+///* CAN MESSAGE RELATED. This code will grab the latest sensor values and store them in the registers if collecting_data is true. */
 
   try_CAN_msg_filter();//Function in this script that checks for an available CAN message from the FlexCAN buffer and interprets it accordingly. Motor Controller wheel velocities, 
                         //statuswords, error messages, boot up messages, and so on are gathered here. This function also sets flags used in Motor Controller related state machines.  
   
-  unsigned long current_time_error_check = millis();
-  if (current_time_error_check - start_time_error_check >= 2000){ //Send out an error register SDO read request at 1/2 Hz(arbitrary frequency - pretty slow in comparison to other processes)
-
-    ret = request_error_registers();
-
-    if (GENERAL_PRINT) {
-      Serial <<"request_error_registers function call successfully wrote this many SDO's:  "  << ret;
-      Serial.println();
-      Serial.println();
-    }
-
-    start_time_error_check = current_time_error_check;
-  }
+//  unsigned long current_time_error_check = millis();
+//  if (current_time_error_check - start_time_error_check >= 2000){ //Send out an error register SDO read request at 1/2 Hz(arbitrary frequency - pretty slow in comparison to other processes)
+//
+//    ret = request_error_registers();
+//
+////    if (GENERAL_PRINT) {
+////      Serial <<"request_error_registers function call successfully wrote this many SDO's:  "  << ret;
+////      Serial.println();
+////      Serial.println();
+////    }
+//
+//    start_time_error_check = current_time_error_check;
+//  }
 }
 
 /* END OF MAIN LOOP*/
@@ -1423,77 +1509,89 @@ int16_t saturate_torque(int16_t torque_command)
   return torque_command;
 }
 
-void try_CAN_msg_filter(void){
+void try_CAN_msg_filter()
+{
 
   //Read a single message from the CAN read register if it is available. Filter it according to COB-id and internal data and update the Teensy memory associated with that data or set a flag accordingly.
   CAN_message_t msg;// Struct defined in FlexCAN
   msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
   if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
   {
+    Serial.println("TRY_CAN_MSG_FILTER READ OCCURED");
     switch(msg.id){
-
-      case 0x01A1: //If TxPDO1, node 1 (the motor velocity)
-
+      
+      
+      case 0x1A1: //If TxPDO1, node 1 (the motor velocity)
+      
+        
         registers.reg_map.velocity_FR = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 1. Units are in RPM.
                                                                                    //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
         
       break;
 
-      case 0x01A2: //If TxPDO1, node 1 (the motor velocity)
+      case 0x1A2: //If TxPDO1, node 1 (the motor velocity)
 
         registers.reg_map.velocity_FL = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 2. Units are in RPM.
                                                                                    //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
         
       break;
 
-      case 0x01A3: //If TxPDO1, node 1 (the motor velocity)
+      case 0x1A3: //If TxPDO1, node 1 (the motor velocity)
 
         registers.reg_map.velocity_RR = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 3. Units are in RPM.
                                                                                    //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
         
       break;
 
-      case 0x01A4: //If TxPDO1, node 1 (the motor velocity)
+      case 0x1A4: //If TxPDO1, node 1 (the motor velocity)
 
         registers.reg_map.velocity_RL = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 4. Units are in RPM.
                                                                                    //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
           
       break;
 
-      case 0x02A1: //If TxPDO2, node 1 (the statusword)
+      case 0x2A1: //If TxPDO2, node 1 (the statusword)
+      
+//        Serial.println("Recieved a PDO statusword update");  
+//        Serial.println();
+//        Serial.println(msg.id, HEX);
+//        Serial.println();  
+//        Serial.println(msg.buf[0], HEX);
+//        Serial.println();  
 
-        statusword_1 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 1 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
-
-          
-      break;
-
-      case 0x02A2: //If TxPDO2, node 2 (the statusword)
-
-        statusword_2 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 2 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
-
-          
-      break;
-
-      case 0x02A3: //If TxPDO2, node 3 (the statusword)
-
-        statusword_3 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 3 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+        registers.reg_map.node_statuswords[0] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 1 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
 
           
       break;
 
-      case 0x02A4: //If TxPDO2, node 4 (the statusword )
+      case 0x2A2: //If TxPDO2, node 2 (the statusword)
+      
+        
+        registers.reg_map.node_statuswords[1] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 2 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
 
-        statusword_4 = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 4 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+          
+      break;
+
+      case 0x2A3: //If TxPDO2, node 3 (the statusword)
+      
+        registers.reg_map.node_statuswords[2] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 3 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+          
+      break;
+
+      case 0x2A4: //If TxPDO2, node 4 (the statusword )
+
+        registers.reg_map.node_statuswords[3] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 4 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
 
       break;
 
-      case 0x0581: case 0x0582: case 0x0583: case 0x0584: //If Service Data Object from one of the nodes
+      case 0x581: case 0x582: case 0x583: case 0x0584: //If Service Data Object from one of the nodes
 
         filter_SDO(&msg); //This function will interpret the Service Data Object and act occordingly. A pointer to the CAN message object is passed in
 
       break;
 
-      case 0x0701: case 0x0702: case 0x0703: case 0x0704://If Network Management (NMT) Boot Up message
+      case 0x701: case 0x702: case 0x703: case 0x704://If Network Management (NMT) Boot Up message
       
       break;
       
@@ -1508,6 +1606,7 @@ void filter_SDO(CAN_message_t *msg){
   
   int16_t object_index = (msg->buf[2] << 8 | msg->buf[1]); //Concatinate the high and low byte of the object dictionairy index of the recieved SDO message
   int8_t command_specifier = msg->buf[0]; //Grab the command specifier of the recieved SDO message
+  uint8_t node_id;
   
   switch (object_index){
 
@@ -1517,6 +1616,15 @@ void filter_SDO(CAN_message_t *msg){
 
     case 0x6041: //Statusword object dictionary index
 
+        node_id = msg->id & 0x000F; //the last byte of the COB-id is the node id
+        registers.reg_map.node_statuswords[node_id] = msg->buf[4]; //The first data byte of the SDO return message is the LSB of the Statusword for the node
+        
+        Serial.println("Recieved an SDO statusword response");  
+        Serial.println();
+        Serial.println(msg->id, HEX);
+        Serial.println();  
+        Serial.println(msg->buf[0], HEX);
+        Serial.println();  
     break;
 
     case 0x6060: //Modes of operation object dictionary index
@@ -1527,7 +1635,7 @@ void filter_SDO(CAN_message_t *msg){
     
       if(command_specifier == 0x4F){//If the command specifier indicates that the message was a read dictionary object reply of 1 byte
         
-        uint8_t node_id = msg->id & 0x000F; //the last byte of the COB-id is the node id
+        node_id = msg->id & 0x000F; //the last byte of the COB-id is the node id
         registers.reg_map.node_errors[node_id] = msg->buf[4]; //The first data byte of the SDO return message 
         //error_flag = true;  
         
