@@ -11,6 +11,43 @@
 #include "output_handler.h"
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*Register Union for testing CAN interaction with SPI registers*/
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+
+///* Spi Register Setup*/
+////Create a register struct to define data that will be read from, and written to over SPI. Values are volatile because the register map is being accessed during an interrupt
+////service routine
+typedef struct __attribute__ ((__packed__)) reg_struct {
+  volatile int16_t throttle_front_right;
+  volatile int16_t throttle_front_left;
+  volatile int16_t throttle_rear_right;
+  volatile int16_t throttle_rear_left;
+  //Velocity Units are in RPM and the data comes in from the MC's as 32 bit integers. This can be truncated to 16 bits because there is no way our motors will be spinning more than 32,768 rpm
+  volatile int16_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
+  volatile int16_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
+  volatile int16_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
+  volatile int16_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
+  //CAN Error Code Registers
+  volatile uint8_t node_errors[4];//Array of node error messages
+  //CAN Statusword Registers 
+  volatile uint8_t node_statuswords[4];//Array of node statuswords
+} reg_struct_t ;
+
+//Union type definition linking the above reg_struct type to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above reg_struct_t defines names and types
+//of variables that will be stored in the memory, or the "registers". The registers will be 128 bytes of memory that can be accessed in two different ways, one through the name as defined in the struct and
+//another by simply indexing an array
+typedef union __attribute__ ((__packed__)) reg_union {
+
+  volatile uint8_t bytes[128];//Allocate 128 bytes of memory. The registers ARE these bytes.
+
+  reg_struct_t reg_map; //Maps the 128 registers to data names and types as defined in the reg_struct above.
+
+} reg_union_t;
+
+reg_union_t registers;//Instantiate the register union (the registers will be filled with zeros by default)
+
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus preparation (From ProgreSSIV_MC_Driver)*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -144,13 +181,14 @@ void loop() {
       Serial.println();
     } 
 
-//    while(true )
-//    {
-////
-////      read_available_message(); 
-////      delay(10);
-//    
-//   }
+
+    ret = request_statusword(); //Send out an expedited statusword read request to all nodes
+     
+    if (GENERAL_PRINT) {
+      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    } 
 
 //    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
 //    
@@ -219,21 +257,22 @@ void loop() {
      
     CAN_Test_Flag = false;
     }
-  }
+
+  try_CAN_msg_filter();
 
 ///* BELOW IS CODE THAT WOULD RUN CONTINUOUSLY AS PART OF A TASK IN THE MAIN TEENSY FIRMWARE*/
-//
-//  //Initialize all timing variables for the loop. 
-//  if (timing_init_flag) {
-//    // Initialize the Timing Variables so that there is a start time
-//    start_time_motors = micros();
-//    start_time_servo = millis();
-//    start_time_print = millis();
-//    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
-//    //start_time_voltage = millis();
-//    timing_init_flag = false;
-//  }
-//  
+
+  //Initialize all timing variables for the loop. 
+  if (timing_init_flag) {
+    // Initialize the Timing Variables so that there is a start time
+    start_time_motors = micros();
+    start_time_servo = millis();
+    start_time_print = millis();
+    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
+    //start_time_voltage = millis();
+    timing_init_flag = false;
+  }
+  
 
 
 //  unsigned long current_time_motors = micros();
@@ -267,13 +306,31 @@ void loop() {
 //    }
 //  }
 
+    unsigned long current_time_print = millis();
+    if ((current_time_print - start_time_print) >= 5000)  //5,000 ms => 1/5hz. Print the values very slowly
+    {
+      Serial.println();
+      Serial.print("Statusword 1 = 0x");
+      Serial.println(registers.reg_map.node_statuswords[1], HEX);
+      Serial.print("tatusword 1 = 0x");
+      Serial.println(registers.reg_map.node_statuswords[2], HEX);
+      Serial.print("tatusword 1 = 0x");
+      Serial.println(registers.reg_map.node_statuswords[3], HEX);
+      Serial.print("tatusword 1 = 0x");
+      Serial.println(registers.reg_map.node_statuswords[4], HEX);
+      Serial.println();
+      start_time_print = current_time_print;
+    }
+  }
+/* END OF MAIN LOOP*/
+
+
 void try_CAN_msg_filter()
 {
 
   //Read a single message from the CAN read register if it is available. Filter it according to COB-id and internal data and update the Teensy memory associated with that data or set a flag accordingly.
-  CAN_message_t msg;// Struct defined in FlexCAN
-  msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
-  if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
+  CAN_message_t msg;// Struct defined in FlexCAN 
+  if(Can0.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
   {
     Serial.println("TRY_CAN_MSG_FILTER READ OCCURED");
     switch(msg.id){
@@ -373,10 +430,13 @@ void filter_SDO(CAN_message_t *msg){
         
         Serial.println("Recieved an SDO statusword response");  
         Serial.println();
-        Serial.println(msg->id, HEX);
-        Serial.println();  
+        Serial.print("The COB-id was: ");
+        Serial.print(msg->id, HEX);
+        Serial.println(); 
+        Serial.print("The command specifier was: "); 
         Serial.println(msg->buf[0], HEX);
-        Serial.println();  
+        Serial.println();
+        print_CAN_message(*msg);  
     break;
 
     case 0x6060: //Modes of operation object dictionary index
@@ -400,7 +460,7 @@ void filter_SDO(CAN_message_t *msg){
   
 }
 
-/* END OF MAIN LOOP*/
+
 
 
 

@@ -33,8 +33,8 @@ uint8_t stop_remote_nodes();
 uint8_t enter_pre_operational();
 /*SERVICE DATA OBJECT FUNCTIONS*/
 uint8_t set_torque_operating_mode();
-//uint8_t set_velocity_units();//I dont think you can actually set the velocity units :(
 uint8_t set_TxPDO1_inhibit_time();
+uint8_t request_statusword();
 /*RECIEVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS*/
 uint8_t RxPDO1_controlword_write(uint16_t control_command);
 uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle);

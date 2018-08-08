@@ -396,13 +396,15 @@ uint8_t set_TxPDO1_inhibit_time()
   for( uint8_t node_id = 1; node_id <=4; node_id++ )
   {
     msg.id = 0x600 + node_id;//SDO COB-id for the node
-    msg.len = 6;
+    msg.ext = 0;//Signigies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+    msg.rtr = 0;//Remote Transmit Request bit is low
+    msg.len = 5;
     msg.buf[0] = 0x2B;//Command specifier for writing 2 bytes
     msg.buf[2] = 0x18;//High byte of TxPDO1 Parameter Index
     msg.buf[1] = 0x00;//Low byte of TxPDO1 Parameter Index
     msg.buf[3] = 0x03;//Sub-index of TxPDO1 Parameter Object, the INHIBIT TIME
     msg.buf[5] = 0x00;//High byte of data is zero
-    msg.buf[4] = 0x37;//Low byte of data - 55 multiples of 100uS produces an inhibit time of 0.0055 seconds or 180hz
+    msg.buf[4] = 0x37;//Low byte of data -> 55 multiples of 100uS produces an inhibit time of 0.0055 seconds or 180hz
     
     if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
     {
@@ -470,13 +472,15 @@ uint8_t set_TxPDO1_inhibit_time()
 uint8_t request_statusword()//This function requests the statusword of a node through SDO read request and confirmation.
 {
   CAN_message_t msg;
-  uint8_t write_error_count = 0;
+  uint8_t ret = 0;
   
   for(uint8_t node_id = 1; node_id <=4; node_id++)
   {
     
     //Send a statusword request to the node and wait for the SDO confirmation (will contain the nodes statusword). Mostly for debugging purposes. 
     msg.id = 0x600 + node_id;
+    msg.ext = 0;//Signigies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+    msg.rtr = 0;//Remote Transmit Request bit is 
     msg.len = 8;// Message length is 8 because I think I'm supposed to send 4 empty bytes during an SDO read request. Not certain this is necessary though.
     msg.buf[0] = 0x40;// Command Specifier for object dictionary read of 2 bytes
     msg.buf[2] = 0x60;
@@ -487,42 +491,29 @@ uint8_t request_statusword()//This function requests the statusword of a node th
     msg.buf[6] = 0;//Empty data (junk)
     msg.buf[7] = 0;//Empty data (junk)
 
-    msg.timeout = 0;//If this is set to zero, write blocking will not occur - the write function will try to send out the message immediately and return a 0 if unsuccessful
-    if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+   if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
     {
-      write_error_count++;
+      ret = ERROR_CAN_WRITE;
       if (CONFIGURATION_PRINT)
       {
           Serial.println();
-          Serial.print("error CAN write during the request_statusword function call, node ");
+          Serial.print("error CAN write during set_TxPDO1_inhibit_time function call, node: ");
           Serial.println(node_id);
           Serial.println();
-          delay(500);
-      }
+                
+      } 
     }
   }
-  
-  if(write_error_count == 0){
+  if(ret == NO_ERROR){
     if (CONFIGURATION_PRINT)
     {
         Serial.println();
-        Serial.println("successful CAN writes during the request_statusword function call");
+        Serial.println("All CAN writes were successful during the request_statusword function call");
         Serial.println();
         delay(500);
     }
   }
-  
-  else{
-    if(CONFIGURATION_PRINT)
-    {
-        Serial.println();
-        Serial.println("at least one CAN write error occured during the request_statusword function call ");
-        Serial.println();
-        delay(500);
-    }
-  }
-
-  return (4-write_error_count);
+  return ret;
 }
 
 /* ---------------------------------------------------------RECEIVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS------------------------------------------------------------------------------------------------------*/
