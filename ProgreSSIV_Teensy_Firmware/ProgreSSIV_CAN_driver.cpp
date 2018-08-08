@@ -406,7 +406,7 @@ uint8_t set_torque_operating_mode()
     }  
   }
 
-    if(ret = NO_ERROR){
+    if(ret == NO_ERROR){
         if (CONFIGURATION_PRINT)
         {
             Serial.println();

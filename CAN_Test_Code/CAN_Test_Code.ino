@@ -14,7 +14,6 @@
 /*CAN bus preparation (From ProgreSSIV_MC_Driver)*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-FlexCAN CANbus(1000000);
 
 /*loop CAN variables.*/
 uint8_t ret = 0;
@@ -80,7 +79,7 @@ void setup() {
   }
 
   /*Startup CAN network (this is a FlexCAN function)*/
-  CANbus.begin();
+  Can0.begin(1000000); //void FlexCAN::begin (uint32_t baud, const CAN_filter_t &mask, uint8_t txAlt, uint8_t rxAlt)
 
 //  /* Also going to do a little servo testing here*/
 //  initPWMin();
@@ -92,113 +91,52 @@ void setup() {
   when using delays and try to have tasks run quickly.*/
 void loop() {
 
+//    //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
+//    unsigned long start_time_CAN_check = millis();
+//    unsigned long current_time_CAN_check = millis();
+//    while(current_time_CAN_check - start_time_CAN_check <=1)
+//    {
+//      read_available_message(); 
+//      current_time_CAN_check = millis();
+//    }
+
   /* MOTOR CONTROLLER STARTUP CODE, WILL ONLY BE RUN ONCE*/
   if(CAN_Test_Flag){
 
-      
-      //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
-      unsigned long start_time_CAN_check = millis();
-      unsigned long current_time_CAN_check = millis();
-      while(current_time_CAN_check - start_time_CAN_check <=1000)
-      {
-//         read_available_message(); 
-//       delay(0);
-        current_time_CAN_check = millis();
-      }
-
-delay(1000);
-////      //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
-//      start_time_CAN_check = millis();
-//      current_time_CAN_check = millis();
-//      while(current_time_CAN_check - start_time_CAN_check <=1000)
-//      {
-//  
-////        read_available_message(); 
-//        delay(100);
-//        current_time_CAN_check = millis();
-//      }
-//      
-////      //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
-//      start_time_CAN_check = millis();
-//      current_time_CAN_check = millis();
-//      while(current_time_CAN_check - start_time_CAN_check <=1000)
-//      {
-//  
-////        read_available_message(); 
-//        delay(100);
-//        current_time_CAN_check = millis();
-//      }
-////      //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
-//      start_time_CAN_check = millis();
-//      current_time_CAN_check = millis();
-//      while(current_time_CAN_check - start_time_CAN_check <=1000)
-//      {
-//  
-////        read_available_message(); 
-//        delay(100);
-//        current_time_CAN_check = millis();
-//      }
-
-
-//
-//      for(uint8_t tries = 0; tries <= 50; tries++)
-//      {
-//        read_available_message(); 
-//        
-//      }
-
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);
-delay(100);      
-      
-      ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
-      
-      if (GENERAL_PRINT) {
-        Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-      }
-      
-//      delay(1000);
-
-     ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
-     
-     if (GENERAL_PRINT) {
-        Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-      }    
-        
-    ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
-     
+    ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+    
     if (GENERAL_PRINT) {
-      Serial.println();
-      Serial <<"enter_pre_operational function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
       Serial.println();
       Serial.println();
     }
 
-     ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+    ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+    
+    if (GENERAL_PRINT) {
+      Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }    
+      
+    ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+    
+    if (GENERAL_PRINT) {
+    Serial.println();
+    Serial <<"enter_pre_operational function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+    Serial.println();
+    Serial.println();
+    }
+    
+    ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+    
+    if (GENERAL_PRINT) {
+      Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }
 
-     if (GENERAL_PRINT) {
-        Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-      }
-
-     ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
+    ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
      
     if (GENERAL_PRINT) {
       Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
@@ -296,8 +234,6 @@ delay(100);
 //    timing_init_flag = false;
 //  }
 //  
-//  /* Update the servo with the radio value. */
-//  writeServo(ST_in);
 
 
 //  unsigned long current_time_motors = micros();
@@ -309,47 +245,6 @@ delay(100);
 //    RxPDO2_torque_write(NODE_3, -THR_in);
 //    RxPDO2_torque_write(NODE_4, THR_in);
 //    start_time_motors = current_time_motors;
-//  }
-
-//  //Read a single process data object if it is available. One should be available INFREQUENTLY because the inhibit time for each of them is 5.5 ms...very long with respect to this prgrams run time
-//  CAN_message_t msg;// Struct defined in FlexCAN
-//  msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
-//  if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
-//  {
-//    switch(msg.id){
-//
-//      case 0x01A1: //If TxPDO1, node 1 (the statusword and motor velocity)
-//
-//        statusword_1 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 1
-//        velocity_FR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1
-//        
-//      break;
-//
-//      case 0x01A2: //If TxPDO1, node 1 (the statusword and motor velocity)
-//
-//        statusword_2 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 2
-//        velocity_FL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2
-//        
-//      break;
-//
-//      case 0x01A3: //If TxPDO1, node 1 (the statusword and motor velocity)
-//
-//        statusword_3 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 3
-//        velocity_RR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3
-//        
-//      break;
-//
-//      case 0x01A4: //If TxPDO1, node 1 (the statusword and motor velocity)
-//
-//        statusword_4 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 4
-//        velocity_RL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4
-//        
-//      break;
-//
-//      default:
-//      break;
-//    }
-//    
 //  }
 
 //  if (GENERAL_PRINT)
@@ -371,6 +266,140 @@ delay(100);
 //      start_time_print = current_time_print;
 //    }
 //  }
+
+void try_CAN_msg_filter()
+{
+
+  //Read a single message from the CAN read register if it is available. Filter it according to COB-id and internal data and update the Teensy memory associated with that data or set a flag accordingly.
+  CAN_message_t msg;// Struct defined in FlexCAN
+  msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
+  if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
+  {
+    Serial.println("TRY_CAN_MSG_FILTER READ OCCURED");
+    switch(msg.id){
+      
+      
+      case 0x1A1: //If TxPDO1, node 1 (the motor velocity)
+      
+        
+        registers.reg_map.velocity_FR = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 1. Units are in RPM.
+                                                                                   //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+        
+      break;
+
+      case 0x1A2: //If TxPDO1, node 1 (the motor velocity)
+
+        registers.reg_map.velocity_FL = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 2. Units are in RPM.
+                                                                                   //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+        
+      break;
+
+      case 0x1A3: //If TxPDO1, node 1 (the motor velocity)
+
+        registers.reg_map.velocity_RR = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 3. Units are in RPM.
+                                                                                   //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+        
+      break;
+
+      case 0x1A4: //If TxPDO1, node 1 (the motor velocity)
+
+        registers.reg_map.velocity_RL = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 4. Units are in RPM.
+                                                                                   //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
+          
+      break;
+
+      case 0x2A1: //If TxPDO2, node 1 (the statusword)
+      
+
+        registers.reg_map.node_statuswords[0] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 1 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+          
+      break;
+
+      case 0x2A2: //If TxPDO2, node 2 (the statusword)
+      
+        
+        registers.reg_map.node_statuswords[1] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 2 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+          
+      break;
+
+      case 0x2A3: //If TxPDO2, node 3 (the statusword)
+      
+        registers.reg_map.node_statuswords[2] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 3 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+          
+      break;
+
+      case 0x2A4: //If TxPDO2, node 4 (the statusword )
+
+        registers.reg_map.node_statuswords[3] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 4 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+
+      break;
+
+      case 0x581: case 0x582: case 0x583: case 0x0584: //If Service Data Object from one of the nodes
+
+        filter_SDO(&msg); //This function will interpret the Service Data Object and act occordingly. A pointer to the CAN message object is passed in
+
+      break;
+
+      case 0x701: case 0x702: case 0x703: case 0x704://If Network Management (NMT) Boot Up message
+      
+      break;
+      
+      default:
+      break;
+    }
+  } 
+}
+
+void filter_SDO(CAN_message_t *msg){
+
+  
+  int16_t object_index = (msg->buf[2] << 8 | msg->buf[1]); //Concatinate the high and low byte of the object dictionairy index of the recieved SDO message
+  int8_t command_specifier = msg->buf[0]; //Grab the command specifier of the recieved SDO message
+  uint8_t node_id;
+  
+  switch (object_index){
+
+    case 0x6040: //Controlword object dictionary index
+
+    break;
+
+    case 0x6041: //Statusword object dictionary index
+
+        node_id = msg->id & 0x000F; //the last byte of the COB-id is the node id
+        registers.reg_map.node_statuswords[node_id] = msg->buf[4]; //The first data byte of the SDO return message is the LSB of the Statusword for the node
+        
+        Serial.println("Recieved an SDO statusword response");  
+        Serial.println();
+        Serial.println(msg->id, HEX);
+        Serial.println();  
+        Serial.println(msg->buf[0], HEX);
+        Serial.println();  
+    break;
+
+    case 0x6060: //Modes of operation object dictionary index
+
+    break;
+
+    case 0x1001: //Error register object dictionary index
+    
+      if(command_specifier == 0x4F){//If the command specifier indicates that the message was a read dictionary object reply of 1 byte
+        
+        node_id = msg->id & 0x000F; //the last byte of the COB-id is the node id
+        registers.reg_map.node_errors[node_id] = msg->buf[4]; //The first data byte of the SDO return message 
+        //error_flag = true;  
+        
+      }
+
+
+    break;
+    
+  }
+  
+}
+
 /* END OF MAIN LOOP*/
 
 

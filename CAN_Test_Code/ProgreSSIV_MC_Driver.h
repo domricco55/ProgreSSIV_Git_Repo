@@ -41,6 +41,7 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle);
 /*General message handling*/
 void read_available_message();
 void print_CAN_message(CAN_message_t msg);
+uint8_t CAN_wait(uint16_t timeout);
 
 #endif
 
