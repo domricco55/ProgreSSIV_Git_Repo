@@ -344,7 +344,7 @@ uint8_t set_torque_operating_mode()
     msg.buf[3] = 0; //Sub-index
     msg.buf[4] = TORQUE_MODE; //Pound defined earlier. To set torque mode, write a 10
     
-    msg.timeout = 1000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
+    msg.timeout = 10000000;//Milliseconds before giving up on sending out a message. The write will fail if there was no buffer available before 1000 milliseconds - plenty of time.
     if (CANbus.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
     {
       ret = ERROR_CAN_WRITE;
@@ -353,7 +353,7 @@ uint8_t set_torque_operating_mode()
           Serial.println();
           Serial.println("error CAN write during set_torque_operating_mode function call");
           Serial.println();
-          delay(500);
+//          delay(500);
       }
       
     }
@@ -371,7 +371,8 @@ uint8_t set_torque_operating_mode()
           if(PRINT)
           {
             Serial.println();
-            Serial.println("A read message timeout has occured during the set_torque_operating_mode call.");
+            Serial.print("A read message timeout has occured during the set_torque_operating_mode call, node: ");
+            Serial.println(node_id);
             Serial.println();
           }
             
@@ -808,6 +809,29 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO
   }
   
   return ret;
+}
+
+void read_available_message()
+{
+  CAN_message_t msg;
+  msg.timeout = 0;
+  //uint8_t ret = CANbus.read(msg);
+  uint8_t ret = 0;
+
+  if(CANbus.available()){
+    ret = CANbus.read(msg);
+  }
+  if(ret){
+    if(PRINT)
+      {
+      Serial.println();
+      Serial.println("A CAN message was recieved during the read_available_messages function call ");
+      Serial.println();
+      print_CAN_message(msg);
+    }
+  }
+
+//  Serial.println(ret);
 }
 
 void print_CAN_message(CAN_message_t msg)

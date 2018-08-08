@@ -38,7 +38,8 @@ uint8_t set_TxPDO1_inhibit_time();
 /*RECIEVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS*/
 uint8_t RxPDO1_controlword_write(uint16_t control_command);
 uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle);
-
+/*General message handling*/
+void read_available_message();
 void print_CAN_message(CAN_message_t msg);
 
 #endif

@@ -83,8 +83,8 @@ void setup() {
   CANbus.begin();
 
 //  /* Also going to do a little servo testing here*/
-  initPWMin();
-  initServo();
+//  initPWMin();
+//  initServo();
 
 }
 
@@ -94,7 +94,75 @@ void loop() {
 
   /* MOTOR CONTROLLER STARTUP CODE, WILL ONLY BE RUN ONCE*/
   if(CAN_Test_Flag){
-    
+
+      
+      //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
+      unsigned long start_time_CAN_check = millis();
+      unsigned long current_time_CAN_check = millis();
+      while(current_time_CAN_check - start_time_CAN_check <=1000)
+      {
+//         read_available_message(); 
+//       delay(0);
+        current_time_CAN_check = millis();
+      }
+
+delay(1000);
+////      //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
+//      start_time_CAN_check = millis();
+//      current_time_CAN_check = millis();
+//      while(current_time_CAN_check - start_time_CAN_check <=1000)
+//      {
+//  
+////        read_available_message(); 
+//        delay(100);
+//        current_time_CAN_check = millis();
+//      }
+//      
+////      //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
+//      start_time_CAN_check = millis();
+//      current_time_CAN_check = millis();
+//      while(current_time_CAN_check - start_time_CAN_check <=1000)
+//      {
+//  
+////        read_available_message(); 
+//        delay(100);
+//        current_time_CAN_check = millis();
+//      }
+////      //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
+//      start_time_CAN_check = millis();
+//      current_time_CAN_check = millis();
+//      while(current_time_CAN_check - start_time_CAN_check <=1000)
+//      {
+//  
+////        read_available_message(); 
+//        delay(100);
+//        current_time_CAN_check = millis();
+//      }
+
+
+//
+//      for(uint8_t tries = 0; tries <= 50; tries++)
+//      {
+//        read_available_message(); 
+//        
+//      }
+
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);
+delay(100);      
+      
       ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
       
       if (GENERAL_PRINT) {
@@ -102,6 +170,8 @@ void loop() {
         Serial.println();
         Serial.println();
       }
+      
+//      delay(1000);
 
      ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
      
@@ -109,7 +179,16 @@ void loop() {
         Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
         Serial.println();
         Serial.println();
-      }
+      }    
+        
+    ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+     
+    if (GENERAL_PRINT) {
+      Serial.println();
+      Serial <<"enter_pre_operational function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }
 
      ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
 
@@ -117,8 +196,7 @@ void loop() {
         Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
         Serial.println();
         Serial.println();
-      }      
-
+      }
 
      ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
      
@@ -128,38 +206,47 @@ void loop() {
       Serial.println();
     } 
 
-    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
-    
-    if (GENERAL_PRINT) {
-      Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    }
+//    while(true )
+//    {
+////
+////      read_available_message(); 
+////      delay(10);
+//    
+//   }
 
-    delay(1); //Wait a little for the motor controllers to change state 
+//    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
+//    
+//    if (GENERAL_PRINT) {
+//      Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//      Serial.println();
+////      Serial.println();
+////    }
+//
+//    delay(1); //Wait a little for the motor controllers to change state 
     
     //NEED TO REQUEST THE STATUSWORD OF EACH NODE HERE AND ENSURE THAT EACH IS IN NMT STATE OPERATIONAL (Bit 9 of statusword)
     
-    ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
-    
-    if (GENERAL_PRINT) {
-      Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-      Serial.println();
-      Serial.println();
-    }
-    
-    delay(1); //Wait a little for the motor controllers to change state
-    
-    ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
-    
-    if (GENERAL_PRINT) {
-      Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-      Serial.println();
-      Serial.println();
-    }
-    
-    delay(1); //Wait a little for the motor controllers to change state 
+//    ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
+//    
+//    if (GENERAL_PRINT) {
+//      Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+//      Serial.println();
+//      Serial.println();
+//    }
+//    
+//    delay(1); //Wait a little for the motor controllers to change state
+//    
+//    ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
+//    
+//    if (GENERAL_PRINT) {
+//      Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+//      Serial.println();
+//      Serial.println();
+//    }
+//    
+//    delay(1); //Wait a little for the motor controllers to change state 
 
+    
 //// NOW JUST TURNING THINGS OFF SO THAT I CAN READ THE STARTUP MESSAGES HERE BUT ALSO COMMUNICATE THROUGH EPOS STUDIO AFTERWARD
 //
 //     ret = RxPDO1_controlword_write(QUICK_STOP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Quick Stop Active" state 
@@ -193,23 +280,24 @@ void loop() {
 //     delay(1); //Wait a little for the motor controllers to change state 
      
     CAN_Test_Flag = false;
+    }
   }
 
-/* BELOW IS CODE THAT WOULD RUN CONTINUOUSLY AS PART OF A TASK IN THE MAIN TEENSY FIRMWARE*/
-
-  //Initialize all timing variables for the loop. 
-  if (timing_init_flag) {
-    // Initialize the Timing Variables so that there is a start time
-    start_time_motors = micros();
-    start_time_servo = millis();
-    start_time_print = millis();
-    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
-    //start_time_voltage = millis();
-    timing_init_flag = false;
-  }
-  
-  /* Update the servo with the radio value. */
-  writeServo(ST_in);
+///* BELOW IS CODE THAT WOULD RUN CONTINUOUSLY AS PART OF A TASK IN THE MAIN TEENSY FIRMWARE*/
+//
+//  //Initialize all timing variables for the loop. 
+//  if (timing_init_flag) {
+//    // Initialize the Timing Variables so that there is a start time
+//    start_time_motors = micros();
+//    start_time_servo = millis();
+//    start_time_print = millis();
+//    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
+//    //start_time_voltage = millis();
+//    timing_init_flag = false;
+//  }
+//  
+//  /* Update the servo with the radio value. */
+//  writeServo(ST_in);
 
 
 //  unsigned long current_time_motors = micros();
@@ -223,46 +311,46 @@ void loop() {
 //    start_time_motors = current_time_motors;
 //  }
 
-  //Read a single process data object if it is available. One should be available INFREQUENTLY because the inhibit time for each of them is 5.5 ms...very long with respect to this prgrams run time
-  CAN_message_t msg;// Struct defined in FlexCAN
-  msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
-  if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
-  {
-    switch(msg.id){
-
-      case 0x01A1: //If TxPDO1, node 1 (the statusword and motor velocity)
-
-        statusword_1 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 1
-        velocity_FR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1
-        
-      break;
-
-      case 0x01A2: //If TxPDO1, node 1 (the statusword and motor velocity)
-
-        statusword_2 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 2
-        velocity_FL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2
-        
-      break;
-
-      case 0x01A3: //If TxPDO1, node 1 (the statusword and motor velocity)
-
-        statusword_3 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 3
-        velocity_RR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3
-        
-      break;
-
-      case 0x01A4: //If TxPDO1, node 1 (the statusword and motor velocity)
-
-        statusword_4 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 4
-        velocity_RL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4
-        
-      break;
-
-      default:
-      break;
-    }
-    
-  }
+//  //Read a single process data object if it is available. One should be available INFREQUENTLY because the inhibit time for each of them is 5.5 ms...very long with respect to this prgrams run time
+//  CAN_message_t msg;// Struct defined in FlexCAN
+//  msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
+//  if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
+//  {
+//    switch(msg.id){
+//
+//      case 0x01A1: //If TxPDO1, node 1 (the statusword and motor velocity)
+//
+//        statusword_1 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 1
+//        velocity_FR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 1
+//        
+//      break;
+//
+//      case 0x01A2: //If TxPDO1, node 1 (the statusword and motor velocity)
+//
+//        statusword_2 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 2
+//        velocity_FL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 2
+//        
+//      break;
+//
+//      case 0x01A3: //If TxPDO1, node 1 (the statusword and motor velocity)
+//
+//        statusword_3 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 3
+//        velocity_RR = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 3
+//        
+//      break;
+//
+//      case 0x01A4: //If TxPDO1, node 1 (the statusword and motor velocity)
+//
+//        statusword_4 = (uint16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the statusword value from TxPDO1 node 4
+//        velocity_RL = (int32_t)((msg.buf[5] << 24) | (msg.buf[4] << 16) | (msg.buf[3] << 8) | msg.buf[2]); // This is extracting the velocity reading from TxPDO1 node 4
+//        
+//      break;
+//
+//      default:
+//      break;
+//    }
+//    
+//  }
 
 //  if (GENERAL_PRINT)
 //  {
@@ -285,7 +373,6 @@ void loop() {
 //  }
 /* END OF MAIN LOOP*/
 
-}
 
 
 

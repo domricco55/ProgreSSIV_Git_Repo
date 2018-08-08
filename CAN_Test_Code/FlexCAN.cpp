@@ -266,5 +266,3 @@ int FlexCAN::write(const CAN_message_t &msg)
   return 1;
 }
 
-
-
