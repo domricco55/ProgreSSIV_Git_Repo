@@ -12,6 +12,7 @@
 #define CONFIGURATION_PRINT 1
 #define DYNAMIC_PRINT 0
 
+
 /* ---------------------------------------------------------NETWORK MANAGEMENT (NMT) FUNCTIONS----------------------------------------------------------------------------------------------------------------------*/
 
 /* This function sends out a Netword Management (NMT) broadcast to all nodes signaling them to reset (same effect as turning on and off the supply voltage).
@@ -32,23 +33,38 @@ uint8_t reset_nodes()
   msg.buf[0] = 0x81;//Command specifier for NMT command "Reset Nodes"
   msg.buf[1] = 0;//Entering a Zero here means send to all nodes (otherwise it would be the node id here)
 
+  Can0.clearStats(); //Want to look at the stats of this message alone
+  
+  if(CONFIGURATION_PRINT){
+    
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    Serial.println();
+  }
+    
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
     {
+
         Serial.println();
-        Serial.println("error CAN write during reset_nodes() function call");
+        Serial.println("------------------------------------------------------------");
+        Serial.println();
+        Serial.println("error CAN write during reset_nodes() function call. The CAN statistics are: ");
         Serial.println();
     }
     
   }
   else{
+    
     ret = NO_ERROR;
     if (CONFIGURATION_PRINT)
     { 
+
         Serial.println();
-        Serial.println("Successful CAN write during reset_nodes() function call");
+        Serial.println("Successful CAN write during reset_nodes() function call. The CAN statistics are: ");
         Serial.println();
     }
   }
@@ -59,7 +75,7 @@ uint8_t reset_nodes()
     uint8_t index = 0;
     while(index<4)
     {    
-      if(CAN_read_wait(5000)) //Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the CAN_read_wait function
+      if(CAN_read_wait(2000)) //Wait this long for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the CAN_read_wait function
       {
   
         Can0.read(msg);
@@ -71,6 +87,8 @@ uint8_t reset_nodes()
             {
             Serial.println();
             Serial.println("An NMT boot up confirmation has been recieved during the reset_nodes function call. The recieved message is: ");
+            Serial.print("  Time message was recieved: ");
+            Serial.println(msg.timestamp);
             Serial.println();
             print_CAN_message(msg);
             }
@@ -78,6 +96,7 @@ uint8_t reset_nodes()
         else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
   
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
+          Serial.println();
           Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The COB-id was: ");
           Serial.println(msg.id, HEX);
           Serial.println();
@@ -92,6 +111,17 @@ uint8_t reset_nodes()
       }   
       index++;
     }
+  }
+
+  if(CONFIGURATION_PRINT){
+    
+    print_CAN_statistics();
+    Serial.print("Overrun flag after function call: ");   
+    Serial.println(msg.flags.overrun);
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    
   }
 
   return ret; //May want to change what each of these functions returns
@@ -116,14 +146,20 @@ uint8_t reset_communications()
   msg.buf[0] = 0x82;//Command specifier for NMT command "Reset Communication"
   msg.buf[1] = 0;//Entering a Zero here means send to all nodes (otherwise it would be the node id here)
 
+  Can0.clearStats(); //Want to look at the stats of this message alone
+    
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
     {
+
         Serial.println();
-        Serial.println("error CAN write during reset_communications() function call");
+        Serial.println("------------------------------------------------------------");
         Serial.println();
+        Serial.println("error CAN write during reset_communications() function call. The CAN statistics are: ");
+        Serial.println();
+
     }
     
   }
@@ -131,8 +167,9 @@ uint8_t reset_communications()
     ret = NO_ERROR;
     if (CONFIGURATION_PRINT)
     { 
+
         Serial.println();
-        Serial.println("Successful CAN write during reset_communications() function call");
+        Serial.println("Successful CAN write during reset_communications() function call. The CAN statistics are: ");
         Serial.println();
     }
   }
@@ -144,7 +181,7 @@ uint8_t reset_communications()
     while(index<4)
     {
       
-      if(CAN_read_wait(1000)) //Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the CAN_read_wait  function
+      if(CAN_read_wait(10)) //Wait this long for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the CAN_read_wait  function
       {
   
         Can0.read(msg);
@@ -154,8 +191,11 @@ uint8_t reset_communications()
           
           if(CONFIGURATION_PRINT)
             {
+    
             Serial.println();
             Serial.println("An NMT boot up confirmation has been recieved during the reset_communications() function call. The recieved message is: ");
+            Serial.print("  Time message was recieved: ");
+            Serial.println(msg.timestamp);
             Serial.println();
             print_CAN_message(msg);
             }
@@ -163,7 +203,8 @@ uint8_t reset_communications()
         else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
   
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
-          Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The COB-id was: ");
+          Serial.println();
+          Serial.print("A non-boot up message was recieved during the reset__communications function call and was ignored. The COB-id was: ");
           Serial.println(msg.id, HEX);
           Serial.println();
           
@@ -176,6 +217,17 @@ uint8_t reset_communications()
       }      
       index++;
     }
+  }
+
+  if(CONFIGURATION_PRINT){
+    
+    print_CAN_statistics();
+    Serial.print("Overrun flag after function call: ");
+    Serial.println(msg.flags.overrun);
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    
   }
 
   return ret; //May want to change what each of these functions returns
@@ -198,14 +250,25 @@ uint8_t enter_pre_operational()
   msg.len = 2;
   msg.buf[0] = 0x80; //Command Specifier for "Enter Pre-Operational"
   msg.buf[1] = 0;//when set to zero, all slaves will be started
- 
+
+  Can0.clearStats(); //Want to look at the stats of this message alone
+
+  if(CONFIGURATION_PRINT){
+    
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    Serial.println();
+  }
+    
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
     {
+
         Serial.println();
-        Serial.println("error CAN write during enter_pre_operational function call");
+        Serial.println("error CAN write during enter_pre_operational() function call. The CAN statistics are: ");
         Serial.println();
     }
     
@@ -215,12 +278,23 @@ uint8_t enter_pre_operational()
     if (CONFIGURATION_PRINT)
     {
         Serial.println();
-        Serial.println("successful CAN write during enter_pre_operational function call");
+        Serial.println("successful CAN write during enter_pre_operational() function call");
         Serial.println();
     }
   }
+  
+  if(CONFIGURATION_PRINT){
+    
+    print_CAN_statistics();
+    Serial.print("Overrun flag after function call: ");
+    Serial.println(msg.flags.overrun);
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    
+  }
+  
   return ret;
-
 }
 
 /*This function sends the Network Management (NMT) message for Starting Remote Nodes. It will send the message that signals every node to enter the Operational state of the NMT Slave state machine.
@@ -238,15 +312,25 @@ uint8_t start_remote_nodes()
 	msg.buf[0] = 0x01; //Command Specifier for "start_remote_node"
 	msg.buf[1] = 0;//when set to zero, all slaves will react to the command
  
-
+  Can0.clearStats(); //Want to look at the stats of this message alone
+  
+  if(CONFIGURATION_PRINT){
+    
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    Serial.println();
+  }
+  
   //   msg.timeout = 1000;//Milliseconds before giving up on broadcasting CAN message
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
     {
+
         Serial.println();
-        Serial.println("error CAN write during start_remote_nodes function call");
+        Serial.println("error CAN write during start_remote_nodes() function call. The CAN statistics are: ");
         Serial.println();
     }
     
@@ -256,10 +340,22 @@ uint8_t start_remote_nodes()
     if (CONFIGURATION_PRINT)
     {
         Serial.println();
-        Serial.println("successful CAN write during start_remote_nodes function call");
+        Serial.println("successful CAN write during start_remote_nodes() function call");
         Serial.println();
     }
   }
+
+  if(CONFIGURATION_PRINT){
+    
+    print_CAN_statistics();
+    Serial.print("Overrun flag after function call: ");
+    Serial.println(msg.flags.overrun);
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    
+  }
+  
   return ret;
 }
 
@@ -320,6 +416,16 @@ uint8_t set_torque_operating_mode()
   CAN_message_t msg;
   uint8_t ret = NO_ERROR;
 
+  if(CONFIGURATION_PRINT){
+    
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    Serial.println();
+  } 
+  
+  Can0.clearStats(); //Want to look at the stats of this message alone
+  
   //Send out 4 SDO's, one for each node to request a write to each's Operating Mode Object. Configures each to Torque mode
   for( uint8_t node_id = 1; node_id <=4; node_id++ )
   {
@@ -332,20 +438,20 @@ uint8_t set_torque_operating_mode()
     msg.buf[1] = 0x60; //Low byte of index for Modes of Operation dictionary object 
     msg.buf[3] = 0; //Sub-index
     msg.buf[4] = TORQUE_MODE; //Pound defined earlier. To set torque mode, write a 10
-    
+          
     if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
-      ret = ERROR_CAN_WRITE;
       if (CONFIGURATION_PRINT)
       {
+  
           Serial.println();
-          Serial.println("error CAN write during set_torque_operating_mode function call");
-          Serial.println();        
-      }
-      
+          Serial.println("error CAN write during set_torque_operating_mode() function call. The CAN statistics are: ");
+          Serial.println();
+      } 
     }
 
     else{
+      
       //The following code will filter out any message that is not an SDO confirmation resulting from the Set Torque Operating Mode SDO written above
       uint8_t index = 0;
       while(index<1)
@@ -376,6 +482,15 @@ uint8_t set_torque_operating_mode()
             
           } 
         }
+
+        else{
+          if (CONFIGURATION_PRINT){
+            Serial.println();
+            Serial.println("A read message timeout has occured during the set_torque_operating_mode() function call.");
+            Serial.println();
+          }
+        }
+        
         index++;
       }
     }
@@ -385,11 +500,23 @@ uint8_t set_torque_operating_mode()
     if (CONFIGURATION_PRINT)
     {
         Serial.println();
-        Serial.println("All CAN writes were successful during the set_torque_operating_mode function call");
+        Serial.println("All CAN writes were successful during the set_torque_operating_mode() function call");
         Serial.println();
         delay(500);
     }
   }
+
+  if(CONFIGURATION_PRINT){
+
+    print_CAN_statistics();
+    Serial.print("Overrun flag after function call: ");    
+    Serial.println(msg.flags.overrun);
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+
+  }
+  
   return ret;//Probably want to have returned whether or not the confirmation SDO was recieved or not
 }
 
@@ -401,7 +528,17 @@ uint8_t set_TxPDO1_inhibit_time()
 {
   CAN_message_t msg;
   uint8_t ret = NO_ERROR;
-
+  
+  if(CONFIGURATION_PRINT){
+    
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    Serial.println();
+  } 
+  
+  Can0.clearStats(); //Want to look at the stats of this message alone
+  
   //Set the TxPDO1 inhibit time for each node
   for( uint8_t node_id = 1; node_id <=4; node_id++ )
   {
@@ -430,6 +567,7 @@ uint8_t set_TxPDO1_inhibit_time()
     }
 
     else{
+        
       //The following code will filter out any message that is not an SDO confirmation resulting from the set TxPDO1 inhibit time SDO written above
       uint8_t index = 0;
       while(index<1)
@@ -460,6 +598,15 @@ uint8_t set_TxPDO1_inhibit_time()
             Serial.println();
           } 
         }
+
+        else{
+          if (CONFIGURATION_PRINT){
+            Serial.println();
+            Serial.println("A read message timeout has occured during the set_TxPDO1_inhibit_time() function call.");
+            Serial.println();
+          }
+        }
+        
         index++;
       }
     }
@@ -474,6 +621,18 @@ uint8_t set_TxPDO1_inhibit_time()
         delay(500);
     }
   }
+  
+  if(CONFIGURATION_PRINT){
+
+    print_CAN_statistics();
+    Serial.print("Overrun flag after function call: ");
+    Serial.println(msg.flags.overrun);
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+
+  }  
+  
   return ret;//Probably want to have returned whether or not the confirmation SDO was recieved or not
 }
 
@@ -522,6 +681,16 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
         delay(500);
     }
   }
+
+  if(CONFIGURATION_PRINT){
+
+    print_CAN_statistics();
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+
+  }  
+  
   return ret;
 }
     
@@ -692,25 +861,25 @@ void print_CAN_message(CAN_message_t msg)
 {
 
   Serial.println();
-  Serial.print("ID: ");
+  Serial.print("  ID: ");
   Serial.println(msg.id, HEX);
-  Serial.print("Length: ");
+  Serial.print("  Length: ");
   Serial.println(msg.len);
-  Serial.print("Byte[0]: ");
+  Serial.print("  Byte[0]: ");
   Serial.println(msg.buf[0], HEX);
-  Serial.print("Byte[1]: ");
+  Serial.print("  Byte[1]: ");
   Serial.println(msg.buf[1], HEX);
-  Serial.print("Byte[2]: ");
+  Serial.print("  Byte[2]: ");
   Serial.println(msg.buf[2], HEX);
-  Serial.print("Byte[3]: ");
+  Serial.print("  Byte[3]: ");
   Serial.println(msg.buf[3], HEX);
-  Serial.print("Byte[4]: ");
+  Serial.print("  Byte[4]: ");
   Serial.println(msg.buf[4], HEX);
-  Serial.print("Byte[5]: ");
+  Serial.print("  Byte[5]: ");
   Serial.println(msg.buf[5], HEX);
-  Serial.print("Byte[6]: ");
+  Serial.print("  Byte[6]: ");
   Serial.println(msg.buf[6], HEX);
-  Serial.print("Byte[7]: ");
+  Serial.print("  Byte[7]: ");
   Serial.println(msg.buf[7], HEX);
   Serial.println();
   
@@ -742,4 +911,20 @@ uint8_t CAN_write_wait(uint16_t timeout_millis, CAN_message_t &msg){
   return 1;
 }
 
+void print_CAN_statistics(){
+  
+    my_CAN_stats = Can0.getStats();
+    Serial.println();
+    Serial.print("Stats enabled parameter: ");
+    Serial.println(my_CAN_stats.enabled);
+    Serial.print("Stats ringRxFramesLost: ");
+    Serial.println(my_CAN_stats.ringRxFramesLost);
+    Serial.print("Stats ringRxmax: ");
+    Serial.println(my_CAN_stats.ringRxMax);  
+    Serial.print("Stats ringRxHighWater: ");
+    Serial.println(my_CAN_stats.ringRxHighWater);
+    Serial.print("Stats ringTxHighWater: ");
+    Serial.println(my_CAN_stats.ringTxHighWater);
+    Serial.println();
+}
 

@@ -44,6 +44,10 @@ void read_available_message();
 void print_CAN_message(CAN_message_t msg);
 uint8_t CAN_read_wait(unsigned long int timeout_millis);
 uint8_t CAN_write_wait(uint16_t timeout_millis, CAN_message_t &msg);
+void print_CAN_statistics();
+
+/* Variables*/
+extern CAN_stats_t my_CAN_stats;
 
 #endif
 
