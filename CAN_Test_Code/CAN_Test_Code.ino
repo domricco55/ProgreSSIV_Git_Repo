@@ -1,4 +1,4 @@
-
+ 
 /**
    CAN_Test_Code.ino - Dominic Riccoboni
 
@@ -62,13 +62,13 @@ int32_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
 uint16_t statusword_1;//stores statusword of node 1
 uint16_t statusword_2;//stores statusword of node 2
 uint16_t statusword_3;//stores statusword of node 3
-uint16_t statusword_4;//stores statusword of node 4
+uint16_t statusword_4;//stores statusword of node 4 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* Steering and Throttle (both for the radio) variable instantiation. These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code*/
+/* Steering and Throttle (both from the radio) variable instantiation. These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code*/
 volatile int16_t THR_in; // instantiate variable for throttle input value (ranges from ~-500 to 500)
 volatile int16_t ST_in;  // instantiate variable for steering input value (ranges from ~-500 to 500)
 
@@ -99,6 +99,7 @@ bool timing_init_flag = true; //This flag allows the timing variables to be init
 unsigned long start_time_motors;
 unsigned long start_time_servo;
 unsigned long start_time_print;
+unsigned long start_time_error_check;
 //unsigned long start_time_voltage;//Need to add in the voltage monitoring feature of the motor controllers. FUTURE WORK
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -117,10 +118,11 @@ void setup() {
 
   /*Startup CAN network (this is a FlexCAN function)*/
   Can0.begin(1000000); //void FlexCAN::begin (uint32_t baud, const CAN_filter_t &mask, uint8_t txAlt, uint8_t rxAlt)
-
+  Can0.startStats();//Function in FlexCAN that provides CAN statistic gathering 
+   
 //  /* Also going to do a little servo testing here*/
-//  initPWMin();
-//  initServo();
+  initPWMin();
+  initServo();
 
 }
 
@@ -128,18 +130,21 @@ void setup() {
   when using delays and try to have tasks run quickly.*/
 void loop() {
 
-//    //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
-//    unsigned long start_time_CAN_check = millis();
-//    unsigned long current_time_CAN_check = millis();
-//    while(current_time_CAN_check - start_time_CAN_check <=1)
-//    {
-//      read_available_message(); 
-//      current_time_CAN_check = millis();
-//    }
+    //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
+    unsigned long start_time_CAN_check = millis();
+    unsigned long current_time_CAN_check = millis();
+    while(current_time_CAN_check - start_time_CAN_check <=1)
+    {
+      read_available_message(); 
+      current_time_CAN_check = millis();
+    }
 
   /* MOTOR CONTROLLER STARTUP CODE, WILL ONLY BE RUN ONCE*/
   if(CAN_Test_Flag){
-
+    
+    Can0.setNumTxBoxes(1); //Set the number of transmit mailboxes. There are 16 mailboxes available in the CAN hardware. Anything not used for transmitting will be used for receiving. If set to 1, strict in order transmission occurs.
+                           //It is being set to zero during configuration so that commands are sent out in the order they are supposed to.
+  
     ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
     
     if (GENERAL_PRINT) {
@@ -148,13 +153,17 @@ void loop() {
       Serial.println();
     }
 
+    delay(1);
+
     ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
     
     if (GENERAL_PRINT) {
       Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
       Serial.println();
       Serial.println();
-    }    
+    }
+
+    delay(1);
       
     ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
     
@@ -164,6 +173,8 @@ void loop() {
     Serial.println();
     Serial.println();
     }
+
+    delay(1);
     
     ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
     
@@ -173,6 +184,8 @@ void loop() {
       Serial.println();
     }
 
+    delay(1);
+
     ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
      
     if (GENERAL_PRINT) {
@@ -181,8 +194,9 @@ void loop() {
       Serial.println();
     } 
 
+    delay(1);
 
-    ret = request_statusword(); //Send out an expedited statusword read request to all nodes
+    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
      
     if (GENERAL_PRINT) {
       Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
@@ -190,6 +204,10 @@ void loop() {
       Serial.println();
     } 
 
+    delay(1);
+    
+    //request_statuswords();
+    
 //    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
 //    
 //    if (GENERAL_PRINT) {
@@ -255,10 +273,43 @@ void loop() {
 //      
 //     delay(1); //Wait a little for the motor controllers to change state 
      
-    CAN_Test_Flag = false;
-    }
+        
+      Serial.println();
+      Serial.println("------------------------------------------------------------");
+      for(uint8_t index = 0; index <= 15; index++){
+        
+          Serial.println();
+          Serial.print("Number of available recieve frames prior to write: ");
+          Serial.println(Can0.available());
+          
+          CAN_message_t msg;//Instantiate a CAN message type object.
+          request_error_registers(msg); //Send out an expedited error register read request to all nodes
+          
+          Serial.print("Overrun Flag: ");
+          Serial.println(msg.flags.overrun);
+          Serial.print("Length of message written: ");
+          Serial.println(msg.len);
+          Serial.println();
+          
+          delay(100);
+      
+          try_CAN_msg_filter();
+          try_CAN_msg_filter();
+          try_CAN_msg_filter();
+          try_CAN_msg_filter();
 
-  try_CAN_msg_filter();
+          Serial.println();
+          Serial.print("Number of available receive frames after try_CAN_message_filter: ");
+          Serial.println(Can0.available());
+          Serial.println();
+          
+          Serial.println("------------------------------------------------------------");
+            
+      }
+      
+      CAN_Test_Flag = false;
+    }
+  
 
 ///* BELOW IS CODE THAT WOULD RUN CONTINUOUSLY AS PART OF A TASK IN THE MAIN TEENSY FIRMWARE*/
 
@@ -268,12 +319,37 @@ void loop() {
     start_time_motors = micros();
     start_time_servo = millis();
     start_time_print = millis();
+    start_time_error_check = millis();
     //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
     //start_time_voltage = millis();
     timing_init_flag = false;
   }
-  
 
+  unsigned long current_time_error_check = millis();
+  if ((current_time_error_check - start_time_error_check) >= 2000) 
+  {
+    
+//    request_error_registers(); //Send out an expedited error register read request to all nodes 
+//    //request_statuswords();
+    CAN_stats_t my_CAN_stats = Can0.getStats();
+    Serial.println();
+    Serial.print("Stats enabled parameter: ");
+    Serial.println(my_CAN_stats.enabled);
+    Serial.print("Stats ringRxFramesLost: ");
+    Serial.println(my_CAN_stats.ringRxFramesLost);
+    Serial.print("Stats ringRxmax: ");
+    Serial.println(my_CAN_stats.ringRxMax);  
+    Serial.print("Stats ringRxHighWater: ");
+    Serial.println(my_CAN_stats.ringRxHighWater);
+    Serial.print("Stats ringTxHighWater: ");
+    Serial.println(my_CAN_stats.ringTxHighWater);
+    Serial.println();
+
+    
+    start_time_error_check = current_time_error_check;
+  }
+    
+  try_CAN_msg_filter();
 
 //  unsigned long current_time_motors = micros();
 //  if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
@@ -305,22 +381,45 @@ void loop() {
 //      start_time_print = current_time_print;
 //    }
 //  }
-
+//
     unsigned long current_time_print = millis();
     if ((current_time_print - start_time_print) >= 5000)  //5,000 ms => 1/5hz. Print the values very slowly
     {
       Serial.println();
       Serial.print("Statusword 1 = 0x");
       Serial.println(registers.reg_map.node_statuswords[1], HEX);
-      Serial.print("tatusword 1 = 0x");
+      Serial.print("Statusword 1 = 0x");
       Serial.println(registers.reg_map.node_statuswords[2], HEX);
-      Serial.print("tatusword 1 = 0x");
+      Serial.print("Statusword 1 = 0x");
       Serial.println(registers.reg_map.node_statuswords[3], HEX);
-      Serial.print("tatusword 1 = 0x");
+      Serial.print("Statusword 1 = 0x");
       Serial.println(registers.reg_map.node_statuswords[4], HEX);
       Serial.println();
+
+      Serial.println();
+      Serial.print("Error 1 = 0x");
+      Serial.println(registers.reg_map.node_errors[1], HEX);
+      Serial.print("Error 2 = 0x");
+      Serial.println(registers.reg_map.node_errors[2], HEX);
+      Serial.print("Error 3 = 0x");
+      Serial.println(registers.reg_map.node_errors[3], HEX);
+      Serial.print("Error 4 = 0x");
+      Serial.println(registers.reg_map.node_errors[4], HEX);
+      Serial.println();
+      
       start_time_print = current_time_print;
     }
+
+//    unsigned long current_time_servo = millis();
+//    if ((current_time_servo - start_time_servo) >= 50) 
+//    {
+//      writeServo(ST_in);
+//      Serial.println(ST_in);
+//      start_time_servo = current_time_servo;
+//    }
+
+
+     
   }
 /* END OF MAIN LOOP*/
 
@@ -413,8 +512,8 @@ void try_CAN_msg_filter()
 void filter_SDO(CAN_message_t *msg){
 
   
-  int16_t object_index = (msg->buf[2] << 8 | msg->buf[1]); //Concatinate the high and low byte of the object dictionairy index of the recieved SDO message
-  int8_t command_specifier = msg->buf[0]; //Grab the command specifier of the recieved SDO message
+  uint16_t object_index = (msg->buf[2] << 8 | msg->buf[1]); //Concatinate the high and low byte of the object dictionairy index of the recieved SDO message
+  uint8_t command_specifier = msg->buf[0]; //Grab the command specifier of the recieved SDO message
   uint8_t node_id;
   
   switch (object_index){
@@ -434,7 +533,9 @@ void filter_SDO(CAN_message_t *msg){
         Serial.print(msg->id, HEX);
         Serial.println(); 
         Serial.print("The command specifier was: "); 
-        Serial.println(msg->buf[0], HEX);
+        Serial.println(command_specifier, HEX);
+        Serial.print("The object index was: "); 
+        Serial.println(object_index, HEX);
         Serial.println();
         print_CAN_message(*msg);  
     break;
@@ -445,13 +546,25 @@ void filter_SDO(CAN_message_t *msg){
 
     case 0x1001: //Error register object dictionary index
     
-      if(command_specifier == 0x4F){//If the command specifier indicates that the message was a read dictionary object reply of 1 byte
+      //if(command_specifier == 0x4B){//If the command specifier indicates that the message was a read dictionary object reply of 1 byte
         
         node_id = msg->id & 0x000F; //the last byte of the COB-id is the node id
         registers.reg_map.node_errors[node_id] = msg->buf[4]; //The first data byte of the SDO return message 
         //error_flag = true;  
+
+        Serial.println("Recieved an SDO error register response");  
+        Serial.println();
+        Serial.print("The COB-id was: ");
+        Serial.print(msg->id, HEX);
+        Serial.println(); 
+        Serial.print("The command specifier was: "); 
+        Serial.println(command_specifier, HEX);
+        Serial.print("The object index was: "); 
+        Serial.println(object_index, HEX);
+        Serial.println();
+        print_CAN_message(*msg);  
         
-      }
+     // }
 
 
     break;

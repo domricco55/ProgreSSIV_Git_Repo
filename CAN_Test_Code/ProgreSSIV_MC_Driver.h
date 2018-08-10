@@ -34,14 +34,16 @@ uint8_t enter_pre_operational();
 /*SERVICE DATA OBJECT FUNCTIONS*/
 uint8_t set_torque_operating_mode();
 uint8_t set_TxPDO1_inhibit_time();
-uint8_t request_statusword();
+uint8_t request_statuswords();
+void request_error_registers( CAN_message_t &msg);
 /*RECIEVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS*/
 uint8_t RxPDO1_controlword_write(uint16_t control_command);
 uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle);
 /*General message handling*/
 void read_available_message();
 void print_CAN_message(CAN_message_t msg);
-uint8_t CAN_wait(uint16_t timeout);
+uint8_t CAN_read_wait(unsigned long int timeout_millis);
+uint8_t CAN_write_wait(uint16_t timeout_millis, CAN_message_t &msg);
 
 #endif
 

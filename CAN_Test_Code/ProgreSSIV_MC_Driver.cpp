@@ -10,7 +10,7 @@
 #include <string.h>
 
 #define CONFIGURATION_PRINT 1
-#define DYNAMIC_PRINT 1
+#define DYNAMIC_PRINT 0
 
 /* ---------------------------------------------------------NETWORK MANAGEMENT (NMT) FUNCTIONS----------------------------------------------------------------------------------------------------------------------*/
 
@@ -32,7 +32,7 @@ uint8_t reset_nodes()
   msg.buf[0] = 0x81;//Command specifier for NMT command "Reset Nodes"
   msg.buf[1] = 0;//Entering a Zero here means send to all nodes (otherwise it would be the node id here)
 
-  if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
@@ -59,7 +59,7 @@ uint8_t reset_nodes()
     uint8_t index = 0;
     while(index<4)
     {    
-      if(CAN_wait(1000)) //Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the function
+      if(CAN_read_wait(5000)) //Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the CAN_read_wait function
       {
   
         Can0.read(msg);
@@ -80,9 +80,16 @@ uint8_t reset_nodes()
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
           Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The COB-id was: ");
           Serial.println(msg.id, HEX);
+          Serial.println();
           
-        } 
+        }
       }
+
+      else{
+        Serial.println();
+        Serial.println("A read message timeout has occured during the reset_nodes function call");
+        Serial.println();
+      }   
       index++;
     }
   }
@@ -109,7 +116,7 @@ uint8_t reset_communications()
   msg.buf[0] = 0x82;//Command specifier for NMT command "Reset Communication"
   msg.buf[1] = 0;//Entering a Zero here means send to all nodes (otherwise it would be the node id here)
 
-  if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
@@ -136,10 +143,8 @@ uint8_t reset_communications()
     uint8_t index = 0;
     while(index<4)
     {
-
-      CAN_wait(1000); //Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the function
       
-      if(CAN_wait)
+      if(CAN_read_wait(1000)) //Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the CAN_read_wait  function
       {
   
         Can0.read(msg);
@@ -160,9 +165,15 @@ uint8_t reset_communications()
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
           Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The COB-id was: ");
           Serial.println(msg.id, HEX);
+          Serial.println();
           
         } 
       }
+      else{
+        Serial.println();
+        Serial.println("A read message timeout has occured during the reset_communications function call");
+        Serial.println();
+      }      
       index++;
     }
   }
@@ -188,7 +199,7 @@ uint8_t enter_pre_operational()
   msg.buf[0] = 0x80; //Command Specifier for "Enter Pre-Operational"
   msg.buf[1] = 0;//when set to zero, all slaves will be started
  
-  if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
@@ -229,7 +240,7 @@ uint8_t start_remote_nodes()
  
 
   //   msg.timeout = 1000;//Milliseconds before giving up on broadcasting CAN message
-  if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
@@ -271,7 +282,7 @@ uint8_t stop_remote_nodes()
  
 
   //   msg.timeout = 1000;//Milliseconds before giving up on broadcasting CAN message
-  if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (CONFIGURATION_PRINT)
@@ -322,7 +333,7 @@ uint8_t set_torque_operating_mode()
     msg.buf[3] = 0; //Sub-index
     msg.buf[4] = TORQUE_MODE; //Pound defined earlier. To set torque mode, write a 10
     
-    if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+    if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
       ret = ERROR_CAN_WRITE;
       if (CONFIGURATION_PRINT)
@@ -339,10 +350,8 @@ uint8_t set_torque_operating_mode()
       uint8_t index = 0;
       while(index<1)
       {
-  
-        CAN_wait(1000); //Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the function
         
-        if(CAN_wait)
+        if(CAN_read_wait(1000))//Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the CAN_read_wait  function
         {
     
           Can0.read(msg);
@@ -363,6 +372,7 @@ uint8_t set_torque_operating_mode()
             index--; //Decrement the index so that the loop runs again and checks for the next read message
             Serial.print("A non-sdo-confirmation message was recieved during the set_torque_operating_mode function call and was ignored. The COB-id was: ");
             Serial.println(msg.id, HEX);
+            Serial.println();
             
           } 
         }
@@ -406,7 +416,7 @@ uint8_t set_TxPDO1_inhibit_time()
     msg.buf[5] = 0x00;//High byte of data is zero
     msg.buf[4] = 0x37;//Low byte of data -> 55 multiples of 100uS produces an inhibit time of 0.0055 seconds or 180hz
     
-    if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+    if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
       ret = ERROR_CAN_WRITE;
       if (CONFIGURATION_PRINT)
@@ -424,10 +434,8 @@ uint8_t set_TxPDO1_inhibit_time()
       uint8_t index = 0;
       while(index<1)
       {
-  
-        CAN_wait(1000); //Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the function
         
-        if(CAN_wait)
+        if(CAN_read_wait(1000))//Wait 1000 ms for a CAN message to appear, if one does not appear then a timeout occured and a zero is returned by the CAN_read_wait  function
         {
     
           Can0.read(msg);
@@ -449,7 +457,7 @@ uint8_t set_TxPDO1_inhibit_time()
             index--; //Decrement the index so that the loop runs again and checks for the next read message
             Serial.print("A non-sdo-confirmation message was recieved during the set_TxPDO1_inhibit_time function call and was ignored. The COB-id was: ");
             Serial.println(msg.id, HEX);
-            
+            Serial.println();
           } 
         }
         index++;
@@ -469,7 +477,7 @@ uint8_t set_TxPDO1_inhibit_time()
   return ret;//Probably want to have returned whether or not the confirmation SDO was recieved or not
 }
 
-uint8_t request_statusword()//This function requests the statusword of a node through SDO read request and confirmation.
+uint8_t request_statuswords()//This function requests the statusword of a node through SDO read request and confirmation.
 {
   CAN_message_t msg;
   uint8_t ret = 0;
@@ -490,14 +498,15 @@ uint8_t request_statusword()//This function requests the statusword of a node th
     msg.buf[5] = 0;//Empty data (junk)
     msg.buf[6] = 0;//Empty data (junk)
     msg.buf[7] = 0;//Empty data (junk)
-
-   if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+    //Must send zeros on a read request 
+    
+   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
       ret = ERROR_CAN_WRITE;
       if (CONFIGURATION_PRINT)
       {
           Serial.println();
-          Serial.print("error CAN write during set_TxPDO1_inhibit_time function call, node: ");
+          Serial.print("error CAN write during request_statusword function call, node: ");
           Serial.println(node_id);
           Serial.println();
                 
@@ -514,6 +523,53 @@ uint8_t request_statusword()//This function requests the statusword of a node th
     }
   }
   return ret;
+}
+    
+
+/* This function will send out an SDO read request message to the "Error register" object of each node. The SDO confirmation from each node will have a command specifier of 0x4F (read dictionary object reply) 
+ *  and an object index of 0x1001 (same as used in the request message below). In your main script there should be a function that checks for an SDO confirmation message and extracts the error message byte appropriately. 
+ *  See EPOS4 Firmware Specification pgs 6-59 for information on the error register object.  
+*/
+void request_error_registers( CAN_message_t &msg )
+{
+  uint8_t write_error = NO_ERROR;
+
+  for(uint8_t node_id = 1; node_id <=4; node_id++)
+  {
+    
+    msg.id = 0x600 + node_id;//SDO COB-id for the node
+    msg.len = 8;
+    msg.buf[0] = 0x40;//Command specifier for read dictionary object request
+    msg.buf[2] = 0x10;//High byte of error register object index
+    msg.buf[1] = 0x01;//Low byte of error register object index
+    msg.buf[3] = 0;//No sub-index
+    msg.buf[4] = 0;//Empty data (junk)
+    msg.buf[5] = 0;//Empty data (junk)
+    msg.buf[6] = 0;//Empty data (junk)
+    msg.buf[7] = 0;//Empty data (junk)
+    //Must send zeros on a read request 
+    
+   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
+    {
+      write_error = ERROR_CAN_WRITE;
+      if (CONFIGURATION_PRINT)
+      {
+          Serial.println();
+          Serial.print("error CAN write during request_error_registers function call, node: ");
+          Serial.println(node_id);
+          Serial.println();
+                
+      } 
+    }
+  }
+  if(write_error == NO_ERROR){
+    if (CONFIGURATION_PRINT)
+    {
+        Serial.println();
+        Serial.println("All CAN writes were successful during the request_error_registers function call");
+        Serial.println();
+    }
+  }
 }
 
 /* ---------------------------------------------------------RECEIVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS------------------------------------------------------------------------------------------------------*/
@@ -546,7 +602,7 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1
     msg.buf[0] = command_LB;
     
     //   msg.timeout = 0;//If this is set to zero, write blocking will not occur - the write function will try to send out the message immediately and return a 0 if unsuccessful
-    if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+    if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
       error_count++;
       if (DYNAMIC_PRINT)
@@ -591,7 +647,7 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO
   memcpy(&(msg.buf[3]), ((char *)(&throttle) + 3), 1);
   
   //   msg.timeout = 0;//Milliseconds before giving up on broadcasting CAN message
-  if (Can0.write(msg) == 0)// Test if the CAN write was successful and set the return variable accordingly
+  if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
     if (DYNAMIC_PRINT)
@@ -660,11 +716,24 @@ void print_CAN_message(CAN_message_t msg)
   
 }
 
-uint8_t CAN_wait(uint16_t timeout){
+uint8_t CAN_read_wait(unsigned long int timeout_millis){
 
   unsigned long int startMillis = millis();
   while( !Can0.available() ) {
-    if ( !timeout || (timeout<=(millis()-startMillis)) ) {
+    if ( !timeout_millis || (timeout_millis<=(millis()-startMillis)) ) {
+      // early EXIT nothing here
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+uint8_t CAN_write_wait(uint16_t timeout_millis, CAN_message_t &msg){
+  
+  unsigned long int startMillis = millis();
+  while( !Can0.write(msg) ) {
+    if ( !timeout_millis || (timeout_millis<=(millis()-startMillis)) ) {
       // early EXIT nothing here
       return 0;
     }
