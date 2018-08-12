@@ -63,7 +63,6 @@ uint16_t statusword_1;//stores statusword of node 1
 uint16_t statusword_2;//stores statusword of node 2
 uint16_t statusword_3;//stores statusword of node 3
 uint16_t statusword_4;//stores statusword of node 4
-CAN_stats_t my_CAN_stats; 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
@@ -120,8 +119,14 @@ void setup() {
 
   /*Startup CAN network (this is a FlexCAN function)*/
   Can0.begin(1000000); //void FlexCAN::begin (uint32_t baud, const CAN_filter_t &mask, uint8_t txAlt, uint8_t rxAlt)
-  Can0.startStats();//Function in FlexCAN that provides CAN statistic gathering 
-   
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function. 
+  uint8_t num_mailboxes = Can0.setNumTxBoxes(1); //Set the number of transmit mailboxes. There are 16 mailboxes available in the CAN hardware. Anything not used for transmitting will be used for receiving. If set to 1, strict in order transmission occurs
+  if (GENERAL_PRINT){
+    Serial.println();
+    Serial.print("The number of CAN Tx Mailboxes is: ");
+    Serial.println(num_mailboxes);
+    Serial.println();
+  }
   /* Also going to do a little servo testing here*/
 //  initPWMin();
 //  initServo();
@@ -134,11 +139,6 @@ void loop() {
 
   /* MOTOR CONTROLLER STARTUP CODE, WILL ONLY BE RUN ONCE*/
   if(CAN_Test_Flag){
-    
-    Can0.setNumTxBoxes(1); //Set the number of transmit mailboxes. There are 16 mailboxes available in the CAN hardware. Anything not used for transmitting will be used for receiving. If set to 1, strict in order transmission occurs.
-                           //It is being set to one during configuration so that commands are sent out in the order they are supposed to.
-  
-
 
     //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
     unsigned long start_time_CAN_check = millis();
@@ -206,10 +206,17 @@ void loop() {
 //    if (GENERAL_PRINT) {
 //      Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
 //      Serial.println();
-////      Serial.println();
-////    }
+//      Serial.println();
+//    }
+
 //
-//    delay(1); //Wait a little for the motor controllers to change state 
+//    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
+//     
+//    if (GENERAL_PRINT) {
+//      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//      Serial.println();
+//      Serial.println();
+//    } 
     
     //NEED TO REQUEST THE STATUSWORD OF EACH NODE HERE AND ENSURE THAT EACH IS IN NMT STATE OPERATIONAL (Bit 9 of statusword)
     
@@ -265,29 +272,26 @@ void loop() {
 //      }
 //      
 //     delay(1); //Wait a little for the motor controllers to change state 
-     
+
+      /* TESTING ERROR REGISTER REQUEST SDO'S AND WRITE BUFFER OVERLOADING*/
       Can0.clearStats();//Testing out the stats for the error register requests alone
+      Can0.startStats();//Begin gathering CAN statistics. FlexCAN function.
+//      Can0.setNumTxBoxes(16);
       Serial.println();
       Serial.println("------------------------------------------------------------");
-      for(uint8_t index = 0; index <= 15; index++){
+      for(uint8_t index = 0; index <= 199; index++){
         
+//          Can0.startStats();//Begin gathering CAN statistics
+          
           Serial.println();
           Serial.print("Number of available recieve frames prior to write: ");
           Serial.println(Can0.available());
           
-          CAN_message_t msg;//Instantiate a CAN message type object.
-          request_error_registers(msg); //Send out an expedited error register read request to all nodes
+          request_error_registers(); //Send out an expedited error register read request to all nodes
           
-          Serial.print("Overrun Flag: ");
-          Serial.println(msg.flags.overrun);
-          Serial.print("Length of message written: ");
-          Serial.println(msg.len);
-          Serial.println();
+          //delayMicroseconds(10000);//No delay here seems to cause a write buffer overload and CAN write errors occur
           
-      
-          delay(10);
-          
-          while(Can0.available()){
+          if(Can0.available()){
             try_CAN_msg_filter();
           }
 
@@ -295,7 +299,7 @@ void loop() {
           Serial.print("Number of available receive frames after try_CAN_message_filter: ");
           Serial.println(Can0.available());
           Serial.println();
-
+          
           print_CAN_statistics();
           
           Serial.println("------------------------------------------------------------");

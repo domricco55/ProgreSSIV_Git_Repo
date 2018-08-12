@@ -34,6 +34,7 @@ uint8_t reset_nodes()
   msg.buf[1] = 0;//Entering a Zero here means send to all nodes (otherwise it would be the node id here)
 
   Can0.clearStats(); //Want to look at the stats of this message alone
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function. 
   
   if(CONFIGURATION_PRINT){
     
@@ -97,8 +98,9 @@ uint8_t reset_nodes()
   
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
           Serial.println();
-          Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The COB-id was: ");
-          Serial.println(msg.id, HEX);
+          Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The message was: ");
+          //Serial.println(msg.id, HEX);
+          print_CAN_message(msg);
           Serial.println();
           
         }
@@ -147,6 +149,15 @@ uint8_t reset_communications()
   msg.buf[1] = 0;//Entering a Zero here means send to all nodes (otherwise it would be the node id here)
 
   Can0.clearStats(); //Want to look at the stats of this message alone
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function. 
+
+  if(CONFIGURATION_PRINT){
+    
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    Serial.println();
+  }
     
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
@@ -204,8 +215,9 @@ uint8_t reset_communications()
   
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
           Serial.println();
-          Serial.print("A non-boot up message was recieved during the reset__communications function call and was ignored. The COB-id was: ");
-          Serial.println(msg.id, HEX);
+          Serial.print("A non-boot up message was recieved during the reset__communications function call and was ignored. The message was: ");
+//          Serial.println(msg.id, HEX);
+          print_CAN_message(msg);
           Serial.println();
           
         } 
@@ -252,6 +264,7 @@ uint8_t enter_pre_operational()
   msg.buf[1] = 0;//when set to zero, all slaves will be started
 
   Can0.clearStats(); //Want to look at the stats of this message alone
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function.
 
   if(CONFIGURATION_PRINT){
     
@@ -260,7 +273,7 @@ uint8_t enter_pre_operational()
     Serial.println();
     Serial.println();
   }
-    
+
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
@@ -313,6 +326,7 @@ uint8_t start_remote_nodes()
 	msg.buf[1] = 0;//when set to zero, all slaves will react to the command
  
   Can0.clearStats(); //Want to look at the stats of this message alone
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function.
   
   if(CONFIGURATION_PRINT){
     
@@ -322,7 +336,6 @@ uint8_t start_remote_nodes()
     Serial.println();
   }
   
-  //   msg.timeout = 1000;//Milliseconds before giving up on broadcasting CAN message
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
@@ -376,8 +389,17 @@ uint8_t stop_remote_nodes()
   msg.buf[0] = 0x02; //Command Specifier for "Stop Remote Node"
   msg.buf[1] = 0;//when set to zero, all slaves will react to the command
  
-
-  //   msg.timeout = 1000;//Milliseconds before giving up on broadcasting CAN message
+  Can0.clearStats(); //Want to look at the stats of this message alone
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function.
+  
+  if(CONFIGURATION_PRINT){
+    
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    Serial.println();
+  }
+  
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;
@@ -399,6 +421,17 @@ uint8_t stop_remote_nodes()
     }
   }
 
+  if(CONFIGURATION_PRINT){
+    
+    print_CAN_statistics();
+    Serial.print("Overrun flag after function call: ");
+    Serial.println(msg.flags.overrun);
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    
+  }
+
   return ret;
 }
 
@@ -415,7 +448,10 @@ uint8_t set_torque_operating_mode()
 {
   CAN_message_t msg;
   uint8_t ret = NO_ERROR;
-
+  
+  Can0.clearStats(); //Want to look at the stats of this message alone
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function.
+  
   if(CONFIGURATION_PRINT){
     
     Serial.println();
@@ -423,8 +459,6 @@ uint8_t set_torque_operating_mode()
     Serial.println();
     Serial.println();
   } 
-  
-  Can0.clearStats(); //Want to look at the stats of this message alone
   
   //Send out 4 SDO's, one for each node to request a write to each's Operating Mode Object. Configures each to Torque mode
   for( uint8_t node_id = 1; node_id <=4; node_id++ )
@@ -476,8 +510,9 @@ uint8_t set_torque_operating_mode()
           else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
    
             index--; //Decrement the index so that the loop runs again and checks for the next read message
-            Serial.print("A non-sdo-confirmation message was recieved during the set_torque_operating_mode function call and was ignored. The COB-id was: ");
-            Serial.println(msg.id, HEX);
+            Serial.print("A non-sdo-confirmation message was recieved during the set_torque_operating_mode function call and was ignored. The message: ");
+            //Serial.println(msg.id, HEX);
+            print_CAN_message(msg);
             Serial.println();
             
           } 
@@ -528,6 +563,9 @@ uint8_t set_TxPDO1_inhibit_time()
 {
   CAN_message_t msg;
   uint8_t ret = NO_ERROR;
+
+  Can0.clearStats(); //Want to look at the stats of this message alone
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function.
   
   if(CONFIGURATION_PRINT){
     
@@ -536,8 +574,6 @@ uint8_t set_TxPDO1_inhibit_time()
     Serial.println();
     Serial.println();
   } 
-  
-  Can0.clearStats(); //Want to look at the stats of this message alone
   
   //Set the TxPDO1 inhibit time for each node
   for( uint8_t node_id = 1; node_id <=4; node_id++ )
@@ -593,8 +629,9 @@ uint8_t set_TxPDO1_inhibit_time()
           else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
    
             index--; //Decrement the index so that the loop runs again and checks for the next read message
-            Serial.print("A non-sdo-confirmation message was recieved during the set_TxPDO1_inhibit_time function call and was ignored. The COB-id was: ");
-            Serial.println(msg.id, HEX);
+            Serial.print("A non-sdo-confirmation message was recieved during the set_TxPDO1_inhibit_time function call and was ignored. The message was: ");
+            //Serial.println(msg.id, HEX);
+            print_CAN_message(msg);
             Serial.println();
           } 
         }
@@ -640,6 +677,17 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
 {
   CAN_message_t msg;
   uint8_t ret = 0;
+
+  Can0.clearStats(); //Want to look at the stats of this message alone
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function.
+  
+  if(CONFIGURATION_PRINT){
+    
+    Serial.println();
+    Serial.println("------------------------------------------------------------");
+    Serial.println();
+    Serial.println();
+  } 
   
   for(uint8_t node_id = 1; node_id <=4; node_id++)
   {
@@ -658,8 +706,8 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
     msg.buf[6] = 0;//Empty data (junk)
     msg.buf[7] = 0;//Empty data (junk)
     //Must send zeros on a read request 
-    
-   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
+
+    if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
       ret = ERROR_CAN_WRITE;
       if (CONFIGURATION_PRINT)
@@ -682,14 +730,17 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
     }
   }
 
+  
   if(CONFIGURATION_PRINT){
 
     print_CAN_statistics();
+    Serial.print("Overrun flag after function call: ");
+    Serial.println(msg.flags.overrun);
     Serial.println();
     Serial.println("------------------------------------------------------------");
     Serial.println();
 
-  }  
+  } 
   
   return ret;
 }
@@ -699,9 +750,10 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
  *  and an object index of 0x1001 (same as used in the request message below). In your main script there should be a function that checks for an SDO confirmation message and extracts the error message byte appropriately. 
  *  See EPOS4 Firmware Specification pgs 6-59 for information on the error register object.  
 */
-void request_error_registers( CAN_message_t &msg )
+uint8_t request_error_registers()
 {
-  uint8_t write_error = NO_ERROR;
+  CAN_message_t msg;
+  uint8_t ret = NO_ERROR;
 
   for(uint8_t node_id = 1; node_id <=4; node_id++)
   {
@@ -720,7 +772,7 @@ void request_error_registers( CAN_message_t &msg )
     
    if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
-      write_error = ERROR_CAN_WRITE;
+      ret = ERROR_CAN_WRITE;
       if (CONFIGURATION_PRINT)
       {
           Serial.println();
@@ -731,7 +783,7 @@ void request_error_registers( CAN_message_t &msg )
       } 
     }
   }
-  if(write_error == NO_ERROR){
+  if(ret == NO_ERROR){
     if (CONFIGURATION_PRINT)
     {
         Serial.println();
@@ -739,6 +791,7 @@ void request_error_registers( CAN_message_t &msg )
         Serial.println();
     }
   }
+  return ret;
 }
 
 /* ---------------------------------------------------------RECEIVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS------------------------------------------------------------------------------------------------------*/
@@ -913,18 +966,59 @@ uint8_t CAN_write_wait(uint16_t timeout_millis, CAN_message_t &msg){
 
 void print_CAN_statistics(){
   
-    my_CAN_stats = Can0.getStats();
+    CAN_stats_t my_CAN_stats = Can0.getStats();
     Serial.println();
-    Serial.print("Stats enabled parameter: ");
+    Serial.println("The current CAN statistics are: ");
+    Serial.println();
+    Serial.print("  Stats enabled parameter: ");
     Serial.println(my_CAN_stats.enabled);
-    Serial.print("Stats ringRxFramesLost: ");
+    Serial.print("  Stats ringRxFramesLost: ");
     Serial.println(my_CAN_stats.ringRxFramesLost);
-    Serial.print("Stats ringRxmax: ");
+    Serial.print("  Stats ringRxmax: ");
     Serial.println(my_CAN_stats.ringRxMax);  
-    Serial.print("Stats ringRxHighWater: ");
+    Serial.print("  Stats ringRxHighWater: ");
     Serial.println(my_CAN_stats.ringRxHighWater);
-    Serial.print("Stats ringTxHighWater: ");
+    Serial.print("  Stats ringTxMax: ");
+    Serial.println(my_CAN_stats.ringTxMax);  
+    Serial.print("  Stats ringTxHighWater: ");
     Serial.println(my_CAN_stats.ringTxHighWater);
-    Serial.println();
+
+    Serial.print("  Stats Mailbox 0 Use Count: ");
+    Serial.println(my_CAN_stats.mb[0].refCount);
+    Serial.print("  Stats Mailbox 1 Use Count: ");
+    Serial.println(my_CAN_stats.mb[1].refCount);
+    Serial.print("  Stats Mailbox 2 Use Count: ");
+    Serial.println(my_CAN_stats.mb[2].refCount);
+    Serial.print("  Stats Mailbox 3 Use Count: ");
+    Serial.println(my_CAN_stats.mb[3].refCount);
+    Serial.print("  Stats Mailbox 4 Use Count: ");
+    Serial.println(my_CAN_stats.mb[4].refCount);
+    Serial.print("  Stats Mailbox 5 Use Count: ");
+    Serial.println(my_CAN_stats.mb[5].refCount);
+    Serial.print("  Stats Mailbox 6 Use Count: ");
+    Serial.println(my_CAN_stats.mb[6].refCount);
+    Serial.print("  Stats Mailbox 7 Use Count: ");
+    Serial.println(my_CAN_stats.mb[7].refCount);
+    Serial.print("  Stats Mailbox 8 Use Count: ");
+    Serial.println(my_CAN_stats.mb[8].refCount);
+    Serial.print("  Stats Mailbox 9 Use Count: ");
+    Serial.println(my_CAN_stats.mb[9].refCount);
+    Serial.print("  Stats Mailbox 10 Use Count: ");
+    Serial.println(my_CAN_stats.mb[10].refCount);
+    Serial.print("  Stats Mailbox 11 Use Count: ");
+    Serial.println(my_CAN_stats.mb[11].refCount);
+    Serial.print("  Stats Mailbox 12 Use Count: ");
+    Serial.println(my_CAN_stats.mb[12].refCount);
+    Serial.print("  Stats Mailbox 13 Use Count: ");
+    Serial.println(my_CAN_stats.mb[13].refCount);
+    Serial.print("  Stats Mailbox 14 Use Count: ");
+    Serial.println(my_CAN_stats.mb[14].refCount);
+    Serial.print("  Stats Mailbox 15 Use Count: ");
+    Serial.println(my_CAN_stats.mb[15].refCount);
+//    Serial.print("  Stats Mailbox 14 Overrun Count: ");
+//    Serial.println(my_CAN_stats.mb[14].overrunCount);
+//    Serial.print("  Stats Mailbox 15 Overrun Count: ");
+//    Serial.println(my_CAN_stats.mb[15].overrunCount);
+    Serial.println();  
 }
 
