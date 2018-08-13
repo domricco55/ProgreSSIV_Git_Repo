@@ -41,7 +41,6 @@ uint8_t reset_nodes()
     Serial.println();
     Serial.println("------------------------------------------------------------");
     Serial.println();
-    Serial.println();
   }
     
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
@@ -94,15 +93,14 @@ uint8_t reset_nodes()
             print_CAN_message(msg);
             }
         }
-        else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
-  
+        else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something.
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
-          Serial.println();
-          Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The message was: ");
-          //Serial.println(msg.id, HEX);
-          print_CAN_message(msg);
-          Serial.println();
-          
+          if(CONFIGURATION_PRINT){
+            Serial.println();
+            Serial.print("A non-boot up message was recieved during the reset_nodes function call and was ignored. The message was: ");
+            print_CAN_message(msg);
+            Serial.println();
+          }
         }
       }
 
@@ -155,7 +153,6 @@ uint8_t reset_communications()
     
     Serial.println();
     Serial.println("------------------------------------------------------------");
-    Serial.println();
     Serial.println();
   }
     
@@ -214,11 +211,13 @@ uint8_t reset_communications()
         else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
   
           index--; //Decrement the index so that this non-boot-up message is ignored and the for loop will iterate the proper number of times
-          Serial.println();
-          Serial.print("A non-boot up message was recieved during the reset__communications function call and was ignored. The message was: ");
-//          Serial.println(msg.id, HEX);
-          print_CAN_message(msg);
-          Serial.println();
+          if(CONFIGURATION_PRINT)
+          {
+            Serial.println();
+            Serial.print("A non-boot up message was recieved during the reset__communications function call and was ignored. The message was: ");
+            print_CAN_message(msg);
+            Serial.println();
+          }
           
         } 
       }
@@ -257,7 +256,7 @@ uint8_t enter_pre_operational()
 
   //Enter Pre-Operational state CAN Message
   msg.id = 0;//COB-id for NMT or network management
-  msg.ext = 0;//Signigies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+  msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
   msg.rtr = 0;//Remote Transmit Request bit is low
   msg.len = 2;
   msg.buf[0] = 0x80; //Command Specifier for "Enter Pre-Operational"
@@ -270,7 +269,6 @@ uint8_t enter_pre_operational()
     
     Serial.println();
     Serial.println("------------------------------------------------------------");
-    Serial.println();
     Serial.println();
   }
 
@@ -321,6 +319,8 @@ uint8_t start_remote_nodes()
 
 	//"Start Remote Node CAN Message"
 	msg.id = 0;//COB-id for NMT or network management
+  msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+  msg.rtr = 0;//Remote Transmit Request bit is low
 	msg.len = 2;
 	msg.buf[0] = 0x01; //Command Specifier for "start_remote_node"
 	msg.buf[1] = 0;//when set to zero, all slaves will react to the command
@@ -332,7 +332,6 @@ uint8_t start_remote_nodes()
     
     Serial.println();
     Serial.println("------------------------------------------------------------");
-    Serial.println();
     Serial.println();
   }
   
@@ -384,7 +383,8 @@ uint8_t stop_remote_nodes()
 
   //"Stop Remote Node CAN Message"
   msg.id = 0;//COB-id for NMT or network management
-  msg.ext = 0;
+  msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+  msg.rtr = 0;//Remote Transmit Request bit is low
   msg.len = 2;
   msg.buf[0] = 0x02; //Command Specifier for "Stop Remote Node"
   msg.buf[1] = 0;//when set to zero, all slaves will react to the command
@@ -396,7 +396,6 @@ uint8_t stop_remote_nodes()
     
     Serial.println();
     Serial.println("------------------------------------------------------------");
-    Serial.println();
     Serial.println();
   }
   
@@ -457,14 +456,13 @@ uint8_t set_torque_operating_mode()
     Serial.println();
     Serial.println("------------------------------------------------------------");
     Serial.println();
-    Serial.println();
   } 
   
   //Send out 4 SDO's, one for each node to request a write to each's Operating Mode Object. Configures each to Torque mode
   for( uint8_t node_id = 1; node_id <=4; node_id++ )
   {
     msg.id = 0x600 + node_id; //COB-id for an SDO client to server (server to client??) from the Teensy to a node
-    msg.ext = 0;//Signigies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+    msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
     msg.rtr = 0;//Remote Transmit Request bit is low
     msg.len = 5;
     msg.buf[0] = 0x2F; //Command specifier for expedited one byte write request
@@ -508,12 +506,15 @@ uint8_t set_torque_operating_mode()
           }
           
           else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
-   
+            
             index--; //Decrement the index so that the loop runs again and checks for the next read message
-            Serial.print("A non-sdo-confirmation message was recieved during the set_torque_operating_mode function call and was ignored. The message: ");
-            //Serial.println(msg.id, HEX);
-            print_CAN_message(msg);
-            Serial.println();
+            if(CONFIGURATION_PRINT)
+            {
+              Serial.println();
+              Serial.print("A non-sdo-confirmation message was recieved during the set_torque_operating_mode function call and was ignored. The message: ");
+              print_CAN_message(msg);
+              Serial.println();
+            }
             
           } 
         }
@@ -579,7 +580,7 @@ uint8_t set_TxPDO1_inhibit_time()
   for( uint8_t node_id = 1; node_id <=4; node_id++ )
   {
     msg.id = 0x600 + node_id;//SDO COB-id for the node
-    msg.ext = 0;//Signigies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+    msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
     msg.rtr = 0;//Remote Transmit Request bit is low
     msg.len = 5;
     msg.buf[0] = 0x2B;//Command specifier for writing 2 bytes
@@ -629,10 +630,13 @@ uint8_t set_TxPDO1_inhibit_time()
           else{// Else the recieved message was not an NMT boot up message and what was recieved may be a lingering PDO or an SDO response or something. 
    
             index--; //Decrement the index so that the loop runs again and checks for the next read message
-            Serial.print("A non-sdo-confirmation message was recieved during the set_TxPDO1_inhibit_time function call and was ignored. The message was: ");
-            //Serial.println(msg.id, HEX);
-            print_CAN_message(msg);
-            Serial.println();
+            if(CONFIGURATION_PRINT)
+            {
+              Serial.println();
+              Serial.print("A non-sdo-confirmation message was recieved during the set_TxPDO1_inhibit_time function call and was ignored. The message was: ");
+              print_CAN_message(msg);
+              Serial.println();
+            }
           } 
         }
 
@@ -694,8 +698,8 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
     
     //Send a statusword request to the node and wait for the SDO confirmation (will contain the nodes statusword). Mostly for debugging purposes. 
     msg.id = 0x600 + node_id;
-    msg.ext = 0;//Signigies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
-    msg.rtr = 0;//Remote Transmit Request bit is 
+    msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+    msg.rtr = 0;//Remote Transmit Request bit is low
     msg.len = 8;// Message length is 8 because I think I'm supposed to send 4 empty bytes during an SDO read request. Not certain this is necessary though.
     msg.buf[0] = 0x40;// Command Specifier for object dictionary read of 2 bytes
     msg.buf[2] = 0x60;
@@ -759,6 +763,8 @@ uint8_t request_error_registers()
   {
     
     msg.id = 0x600 + node_id;//SDO COB-id for the node
+    msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+    msg.rtr = 0;//Remote Transmit Request bit is low
     msg.len = 8;
     msg.buf[0] = 0x40;//Command specifier for read dictionary object request
     msg.buf[2] = 0x10;//High byte of error register object index
@@ -773,7 +779,7 @@ uint8_t request_error_registers()
    if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
       ret = ERROR_CAN_WRITE;
-      if (CONFIGURATION_PRINT)
+      if (DYNAMIC_PRINT)
       {
           Serial.println();
           Serial.print("error CAN write during request_error_registers function call, node: ");
@@ -784,13 +790,14 @@ uint8_t request_error_registers()
     }
   }
   if(ret == NO_ERROR){
-    if (CONFIGURATION_PRINT)
+    if (DYNAMIC_PRINT)
     {
         Serial.println();
         Serial.println("All CAN writes were successful during the request_error_registers function call");
         Serial.println();
     }
   }
+
   return ret;
 }
 
@@ -818,7 +825,8 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1
     
     //CAN message to update the controlword value of the node.
     msg.id = 0x200 + node_id;//COB-id for RxPDO1 - defined using EPOS Studio software
-    msg.ext = 0;
+    msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+    msg.rtr = 0;//Remote Transmit Request bit is low
     msg.len = 2;
     msg.buf[1] = command_HB;
     msg.buf[0] = command_LB;
@@ -861,7 +869,8 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO
 
   //RxPDO 2,updating the target torque
   msg.id = 0x300 + node_id; //COB-id of RxPDO 2 for this specific node
-  msg.ext = 0;
+  msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+  msg.rtr = 0;//Remote Transmit Request bit is low
   msg.len = 4;
   memcpy(&(msg.buf[0]), (void *)(&throttle), 1);
   memcpy(&(msg.buf[1]), ((char *)(&throttle) + 1), 1);
@@ -980,41 +989,41 @@ void print_CAN_statistics(){
     Serial.println(my_CAN_stats.ringRxHighWater);
     Serial.print("  Stats ringTxMax: ");
     Serial.println(my_CAN_stats.ringTxMax);  
-    Serial.print("  Stats ringTxHighWater: ");
-    Serial.println(my_CAN_stats.ringTxHighWater);
-
-    Serial.print("  Stats Mailbox 0 Use Count: ");
-    Serial.println(my_CAN_stats.mb[0].refCount);
-    Serial.print("  Stats Mailbox 1 Use Count: ");
-    Serial.println(my_CAN_stats.mb[1].refCount);
-    Serial.print("  Stats Mailbox 2 Use Count: ");
-    Serial.println(my_CAN_stats.mb[2].refCount);
-    Serial.print("  Stats Mailbox 3 Use Count: ");
-    Serial.println(my_CAN_stats.mb[3].refCount);
-    Serial.print("  Stats Mailbox 4 Use Count: ");
-    Serial.println(my_CAN_stats.mb[4].refCount);
-    Serial.print("  Stats Mailbox 5 Use Count: ");
-    Serial.println(my_CAN_stats.mb[5].refCount);
-    Serial.print("  Stats Mailbox 6 Use Count: ");
-    Serial.println(my_CAN_stats.mb[6].refCount);
-    Serial.print("  Stats Mailbox 7 Use Count: ");
-    Serial.println(my_CAN_stats.mb[7].refCount);
-    Serial.print("  Stats Mailbox 8 Use Count: ");
-    Serial.println(my_CAN_stats.mb[8].refCount);
-    Serial.print("  Stats Mailbox 9 Use Count: ");
-    Serial.println(my_CAN_stats.mb[9].refCount);
-    Serial.print("  Stats Mailbox 10 Use Count: ");
-    Serial.println(my_CAN_stats.mb[10].refCount);
-    Serial.print("  Stats Mailbox 11 Use Count: ");
-    Serial.println(my_CAN_stats.mb[11].refCount);
-    Serial.print("  Stats Mailbox 12 Use Count: ");
-    Serial.println(my_CAN_stats.mb[12].refCount);
-    Serial.print("  Stats Mailbox 13 Use Count: ");
-    Serial.println(my_CAN_stats.mb[13].refCount);
-    Serial.print("  Stats Mailbox 14 Use Count: ");
-    Serial.println(my_CAN_stats.mb[14].refCount);
-    Serial.print("  Stats Mailbox 15 Use Count: ");
-    Serial.println(my_CAN_stats.mb[15].refCount);
+    //Serial.print("  Stats ringTxHighWater: ");
+    Serial.println("  I dont think the transfer buffer or mailbox use statistics are working at the moment.");
+//
+//    Serial.print("  Stats Mailbox 0 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[0].refCount);
+//    Serial.print("  Stats Mailbox 1 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[1].refCount);
+//    Serial.print("  Stats Mailbox 2 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[2].refCount);
+//    Serial.print("  Stats Mailbox 3 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[3].refCount);
+//    Serial.print("  Stats Mailbox 4 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[4].refCount);
+//    Serial.print("  Stats Mailbox 5 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[5].refCount);
+//    Serial.print("  Stats Mailbox 6 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[6].refCount);
+//    Serial.print("  Stats Mailbox 7 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[7].refCount);
+//    Serial.print("  Stats Mailbox 8 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[8].refCount);
+//    Serial.print("  Stats Mailbox 9 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[9].refCount);
+//    Serial.print("  Stats Mailbox 10 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[10].refCount);
+//    Serial.print("  Stats Mailbox 11 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[11].refCount);
+//    Serial.print("  Stats Mailbox 12 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[12].refCount);
+//    Serial.print("  Stats Mailbox 13 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[13].refCount);
+//    Serial.print("  Stats Mailbox 14 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[14].refCount);
+//    Serial.print("  Stats Mailbox 15 Use Count: ");
+//    Serial.println(my_CAN_stats.mb[15].refCount);
 //    Serial.print("  Stats Mailbox 14 Overrun Count: ");
 //    Serial.println(my_CAN_stats.mb[14].overrunCount);
 //    Serial.print("  Stats Mailbox 15 Overrun Count: ");
