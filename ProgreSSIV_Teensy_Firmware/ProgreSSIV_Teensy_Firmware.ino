@@ -130,8 +130,6 @@ volatile uint8_t Teensy_Status_Byte = 25;//25 by default for now. NOT YET IMPLEM
 /*CAN bus/Motor Controller preparation (From uLaren_CAN_driver)*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-FlexCAN CANbus(1000000);
-
 /* Nodes 1 through 4 indicate which motor driver the firmware is talking to, CAN NODES*/
 #define NODE_1 1
 #define NODE_2 2
@@ -147,7 +145,11 @@ FlexCAN CANbus(1000000);
 
 /*loop CAN variables.*/
 uint8_t ret = 0;
-uint8_t error = NO_ERROR;
+int32_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
+int32_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
+int32_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
+int32_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
+uint16_t statuswords[4];//stores statuswords locally
 
 
 /* Dead switch state machine setup */
@@ -192,6 +194,7 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 }
 
 #define GENERAL_PRINT 1
+#define CAN_FILTER_PRINT 0
 
 /*SPI Debugging Setup*/
 // SPI Printing Related
@@ -220,7 +223,6 @@ unsigned long start_time_motors;
 unsigned long start_time_servo;
 unsigned long start_time_quickstop;
 unsigned long start_time_error_check;
-//unsigned long start_time_voltage;//Need to add in the voltage monitoring feature of the motor controllers. FUTURE WORK
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -280,8 +282,16 @@ void setup() {
     bno.setExtCrystalUse(true);
   }
 
-  /*Startup CAN network*/
-  CANbus.begin();
+  /*Startup CAN network (this is a FlexCAN function)*/
+  Can0.begin(1000000); //void FlexCAN::begin (uint32_t baud, const CAN_filter_t &mask, uint8_t txAlt, uint8_t rxAlt)
+  Can0.startStats();//Begin gathering CAN statistics. FlexCAN function. 
+  uint8_t num_mailboxes = Can0.setNumTxBoxes(1); //Set the number of transmit mailboxes. There are 16 mailboxes available in the CAN hardware. Anything not used for transmitting will be used for receiving. If set to 1, strict in order transmission occurs
+  if (GENERAL_PRINT){
+    Serial.println();
+    Serial.print("The number of CAN Tx Mailboxes is: ");
+    Serial.println(num_mailboxes);
+    Serial.println();
+  }
 
 }
 
@@ -345,40 +355,29 @@ void loop() {
     }
 
 //    Serial.println();
-//    Serial.print (statusword_1, BIN);
-//    Serial.print ("  ");
-//    Serial.print (statusword_2, BIN);
-//    Serial.print ("  ");
-//    Serial.print (statusword_3, BIN);
-//    Serial.print ("  ");
-//    Serial.print (statusword_4, BIN);
-//    Serial.print ("  ");
+//    Serial.print("Statusword 1 = 0x");
+//    Serial.println(registers.reg_map.node_statuswords[1], HEX);
+//    Serial.print("Statusword 2 = 0x");
+//    Serial.println(registers.reg_map.node_statuswords[2], HEX);
+//    Serial.print("Statusword 3 = 0x");
+//    Serial.println(registers.reg_map.node_statuswords[3], HEX);
+//    Serial.print("Statusword 4 = 0x");
+//    Serial.println(registers.reg_map.node_statuswords[4], HEX);
 //    Serial.println();
+//
 //    Serial.println();
-
+//    Serial.print("Error 1 = 0x");
+//    Serial.println(registers.reg_map.node_errors[1], HEX);
+//    Serial.print("Error 2 = 0x");
+//    Serial.println(registers.reg_map.node_errors[2], HEX);
+//    Serial.print("Error 3 = 0x");
+//    Serial.println(registers.reg_map.node_errors[3], HEX);
+//    Serial.print("Error 4 = 0x");
+//    Serial.println(registers.reg_map.node_errors[4], HEX);
 //    Serial.println();
-//    Serial.print (registers.reg_map.node_errors[0], BIN);
-//    Serial.print ("  ");
-//    Serial.print (registers.reg_map.node_errors[1], BIN);
-//    Serial.print ("  ");
-//    Serial.print (registers.reg_map.node_errors[2], BIN);
-//    Serial.print ("  ");
-//    Serial.print (registers.reg_map.node_errors[3], BIN);
-//    Serial.print ("  ");
-//    Serial.println();
-//    Serial.println();
-
-    Serial.println();
-    Serial.print (registers.reg_map.node_statuswords[0], BIN);
-    Serial.print ("  ");
-    Serial.print (registers.reg_map.node_statuswords[1], BIN);
-    Serial.print ("  ");
-    Serial.print (registers.reg_map.node_statuswords[2], BIN);
-    Serial.print ("  ");
-    Serial.print (registers.reg_map.node_statuswords[3], BIN);
-    Serial.print ("  ");
-    Serial.println();
-    Serial.println();
+//
+//
+//    print_CAN_statistics();
 
     start_time_print = current_time_print;
   }
@@ -397,148 +396,8 @@ void loop() {
   if (registers.reg_map.init_motor_controllers) {
     MC_on_flag = false;  
 
-    //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
-    unsigned long start_time_CAN_check = millis();
-    unsigned long current_time_CAN_check = millis();
-    while(current_time_CAN_check - start_time_CAN_check <= 1000 )
-    {
-
-    read_available_message(); 
-    current_time_CAN_check = millis();
+    MC_startup_run();//The motor controller startup code is long so I put it in a function below. 
     
-    }
-    
-    ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
-      
-    if (GENERAL_PRINT) {
-      Serial.println();
-      Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    }
-
-    ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
-     
-    if (GENERAL_PRINT) {
-      Serial.println();
-      Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    }
- 
-    ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
-     
-    if (GENERAL_PRINT) {
-      Serial.println();
-      Serial <<"enter_pre_operational function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    }
-
-    delay(5); //Wait a little for the motor controllers to change state 
-
-    ret = request_statusword();
-
-    if (GENERAL_PRINT) {
-      Serial <<"request_statusword function call successfully wrote this many SDO's:  "  << ret;
-      Serial.println();
-      Serial.println();
-    }
-    
-//    ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
-//    
-//    if (GENERAL_PRINT) {
-//        Serial.println();
-//        Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-//        Serial.println();
-//        Serial.println();
-//      }
-//
-//    delay(1); //Wait a little for the motor controllers to change state 
-//
-//    request_statusword();
-//      
-//    if (GENERAL_PRINT) {
-//      Serial <<"request_statusword function call successfully wrote this many SDO's:  "  << ret;
-//      Serial.println();
-//      Serial.println();
-//    }
-//
-//    ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
-//     
-//    if (GENERAL_PRINT) {
-//      Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-//      Serial.println();
-//      Serial.println();
-//    } 
-//
-//    delay(1); //Wait a little for the motor controllers to change state 
-//
-//    request_statusword();
-//
-//    if (GENERAL_PRINT) {
-//      Serial <<"request_statusword function call successfully wrote this many SDO's:  "  << ret;
-//      Serial.println();
-//      Serial.println();
-//    } 
-//    
-//    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
-//    
-//
-//    if (GENERAL_PRINT) {
-//      Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-//      Serial.println();
-//      Serial.println();
-//    }
-
-    while(true){
-      try_CAN_msg_filter();
-      unsigned long current_time_print = millis();
-      if ((current_time_print - start_time_print) >= 2000)  //2000ms => 1/2 hz. All printing will happen at this frequency.
-      {
-    
-    
-        Serial.println();
-        Serial.print (registers.reg_map.node_statuswords[0], BIN);
-        Serial.print ("  ");
-        Serial.print (registers.reg_map.node_statuswords[1], BIN);
-        Serial.print ("  ");
-        Serial.print (registers.reg_map.node_statuswords[2], BIN);
-        Serial.print ("  ");
-        Serial.print (registers.reg_map.node_statuswords[3], BIN);
-        Serial.print ("  ");
-        Serial.println();
-        Serial.println();
-    
-        start_time_print = current_time_print;
-      }
-      
-    }
-
-//    delay(1); //Wait a little for the motor controllers to change state 
-//    
-//    //NEED TO REQUEST THE STATUSWORD OF EACH NODE HERE AND ENSURE THAT EACH IS IN NMT STATE OPERATIONAL (Bit 9 of statusword)
-//    
-//    ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
-//    
-//    if (GENERAL_PRINT) {
-//      Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-//      Serial.println();
-//      Serial.println();
-//    }
-//    
-//    delay(1); //Wait a little for the motor controllers to change state
-//    
-//    ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
-//    
-//    if (GENERAL_PRINT) {
-//      Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-//      Serial.println();
-//      Serial.println();
-//    }
-//    
-//    delay(1); //Wait a little for the motor controllers to change state 
-//
     registers.reg_map.init_motor_controllers = 0; //Set to zero so the motor controllers can be initialized again and so that this code does not run continuously
     MC_on_flag = true;  
 
@@ -769,19 +628,15 @@ void loop() {
   try_CAN_msg_filter();//Function in this script that checks for an available CAN message from the FlexCAN buffer and interprets it accordingly. Motor Controller wheel velocities, 
                         //statuswords, error messages, boot up messages, and so on are gathered here. This function also sets flags used in Motor Controller related state machines.  
   
-//  unsigned long current_time_error_check = millis();
-//  if (current_time_error_check - start_time_error_check >= 2000){ //Send out an error register SDO read request at 1/2 Hz(arbitrary frequency - pretty slow in comparison to other processes)
-//
-//    ret = request_error_registers();
-//
-////    if (GENERAL_PRINT) {
-////      Serial <<"request_error_registers function call successfully wrote this many SDO's:  "  << ret;
-////      Serial.println();
-////      Serial.println();
-////    }
-//
-//    start_time_error_check = current_time_error_check;
-//  }
+  unsigned long current_time_error_check = millis();
+  if (current_time_error_check - start_time_error_check >= 2000){ //Send out an error register SDO read request at 1/2 Hz(arbitrary frequency - pretty slow in comparison to other processes)
+
+    ret = request_error_registers();
+
+    start_time_error_check = current_time_error_check;
+  }
+  
+    
 }
 
 /* END OF MAIN LOOP*/
@@ -1513,11 +1368,13 @@ void try_CAN_msg_filter()
 {
 
   //Read a single message from the CAN read register if it is available. Filter it according to COB-id and internal data and update the Teensy memory associated with that data or set a flag accordingly.
-  CAN_message_t msg;// Struct defined in FlexCAN
-  msg.timeout = 0;// Set timeout to zero so FlexCAN will only check for an incoming message, not wait for one. 
-  if(CANbus.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
+  CAN_message_t msg;// Struct defined in FlexCAN 
+  if(Can0.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
   {
-    Serial.println("TRY_CAN_MSG_FILTER READ OCCURED");
+    if(CAN_FILTER_PRINT){
+      Serial.println("TRY_CAN_MSG_FILTER READ OCCURED");
+    }
+    
     switch(msg.id){
       
       
@@ -1552,20 +1409,16 @@ void try_CAN_msg_filter()
 
       case 0x2A1: //If TxPDO2, node 1 (the statusword)
       
-//        Serial.println("Recieved a PDO statusword update");  
-//        Serial.println();
-//        Serial.println(msg.id, HEX);
-//        Serial.println();  
-//        Serial.println(msg.buf[0], HEX);
-//        Serial.println();  
+        statuswords[0] = (uint16_t)(msg.buf[1] << 8 | msg.buf[0]); //This is extracting the statusword value from TxPDO2 node 1, both high byte and low byte, and storing the whole 16 bit statusword locally.
 
-        registers.reg_map.node_statuswords[0] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 1 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
+        registers.reg_map.node_statuswords[0] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 1 (High byte of the statusword is ignored here because Device Control state information is only stored in the low byte)
 
           
       break;
 
       case 0x2A2: //If TxPDO2, node 2 (the statusword)
       
+        statuswords[1] = (uint16_t)(msg.buf[1] << 8 | msg.buf[0]); //This is extracting the statusword value from TxPDO2 node 2, both high byte and low byte, and storing the whole 16 bit statusword locally.
         
         registers.reg_map.node_statuswords[1] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 2 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
 
@@ -1573,6 +1426,8 @@ void try_CAN_msg_filter()
       break;
 
       case 0x2A3: //If TxPDO2, node 3 (the statusword)
+
+        statuswords[2] = (uint16_t)(msg.buf[1] << 8 | msg.buf[0]); //This is extracting the statusword value from TxPDO2 node 3, both high byte and low byte, and storing the whole 16 bit statusword locally.
       
         registers.reg_map.node_statuswords[2] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 3 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
 
@@ -1581,13 +1436,15 @@ void try_CAN_msg_filter()
 
       case 0x2A4: //If TxPDO2, node 4 (the statusword )
 
+        statuswords[3] = (uint16_t)(msg.buf[1] << 8 | msg.buf[0]); //This is extracting the statusword value from TxPDO2 node 4, both high byte and low byte, and storing the whole 16 bit statusword locally.
+
         registers.reg_map.node_statuswords[3] = (uint8_t)(msg.buf[0]); // This is extracting the statusword value from TxPDO2 node 4 (High byte of the statusword is ignored because Device Control state information is only stored in the low byte)
 
       break;
 
       case 0x581: case 0x582: case 0x583: case 0x0584: //If Service Data Object from one of the nodes
 
-        filter_SDO(&msg); //This function will interpret the Service Data Object and act occordingly. A pointer to the CAN message object is passed in
+        filter_SDO(msg); //This function will interpret the Service Data Object and act occordingly. A reference to the CAN message object is passed in
 
       break;
 
@@ -1601,11 +1458,11 @@ void try_CAN_msg_filter()
   } 
 }
 
-void filter_SDO(CAN_message_t *msg){
+void filter_SDO(CAN_message_t &msg){
 
   
-  int16_t object_index = (msg->buf[2] << 8 | msg->buf[1]); //Concatinate the high and low byte of the object dictionairy index of the recieved SDO message
-  int8_t command_specifier = msg->buf[0]; //Grab the command specifier of the recieved SDO message
+  uint16_t object_index = (msg.buf[2] << 8 | msg.buf[1]); //Concatinate the high and low byte of the object dictionairy index of the recieved SDO message
+  uint8_t command_specifier = msg.buf[0]; //Grab the command specifier of the recieved SDO message
   uint8_t node_id;
   
   switch (object_index){
@@ -1616,15 +1473,23 @@ void filter_SDO(CAN_message_t *msg){
 
     case 0x6041: //Statusword object dictionary index
 
-        node_id = msg->id & 0x000F; //the last byte of the COB-id is the node id
-        registers.reg_map.node_statuswords[node_id] = msg->buf[4]; //The first data byte of the SDO return message is the LSB of the Statusword for the node
-        
-        Serial.println("Recieved an SDO statusword response");  
-        Serial.println();
-        Serial.println(msg->id, HEX);
-        Serial.println();  
-        Serial.println(msg->buf[0], HEX);
-        Serial.println();  
+        node_id = msg.id & 0x000F; //the last byte of the COB-id is the node id
+        registers.reg_map.node_statuswords[node_id--] = msg.buf[4]; //The first data byte of the SDO return message is the LSB of the Statusword for the node. For storage in SPI registers
+        statuswords[node_id--] = (uint16_t)(msg.buf[5] << 8 | msg.buf[4]); //Store the FULL 16 bit statusword for local Teensy use
+        if(CAN_FILTER_PRINT){
+          Serial.println("Recieved an SDO statusword response");  
+          Serial.println();
+          Serial.print("The COB-id was: ");
+          Serial.print(msg.id, HEX);
+          Serial.println(); 
+          Serial.print("The command specifier was: "); 
+          Serial.println(command_specifier, HEX);
+          Serial.print("The object index was: "); 
+          Serial.println(object_index, HEX);
+          Serial.println();
+          print_CAN_message(msg);  
+        }
+
     break;
 
     case 0x6060: //Modes of operation object dictionary index
@@ -1633,18 +1498,239 @@ void filter_SDO(CAN_message_t *msg){
 
     case 0x1001: //Error register object dictionary index
     
-      if(command_specifier == 0x4F){//If the command specifier indicates that the message was a read dictionary object reply of 1 byte
+      //if(command_specifier == 0x4B){//If the command specifier indicates that the message was a read dictionary object reply of 1 byte
         
-        node_id = msg->id & 0x000F; //the last byte of the COB-id is the node id
-        registers.reg_map.node_errors[node_id] = msg->buf[4]; //The first data byte of the SDO return message 
+        node_id = msg.id & 0x000F; //the last byte of the COB-id is the node id
+        registers.reg_map.node_errors[node_id--] = msg.buf[4]; //The first data byte of the SDO return message 
         //error_flag = true;  
         
-      }
+        if(CAN_FILTER_PRINT){
+          
+          Serial.println("Recieved an SDO error register response");  
+          Serial.println();
+          Serial.print("The COB-id was: ");
+          Serial.print(msg.id, HEX);
+          Serial.println(); 
+          Serial.print("The command specifier was: "); 
+          Serial.println(command_specifier, HEX);
+          Serial.print("The object index was: "); 
+          Serial.println(object_index, HEX);
+          Serial.println();
+          print_CAN_message(msg);
+        }  
+        
+     // }
 
 
     break;
     
   }
+  
+}
+
+void MC_startup_run(){
+
+    ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+
+    if (GENERAL_PRINT) {
+      Serial <<"reset_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }
+    
+    ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+    
+    if (GENERAL_PRINT) {
+      Serial <<"reset_communications function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }
+      
+    ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+    
+    if (GENERAL_PRINT) {
+    Serial.println();
+    Serial <<"enter_pre_operational function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+    Serial.println();
+    Serial.println();
+    }
+
+    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
+     
+    if (GENERAL_PRINT) {
+      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    } 
+
+    unsigned long start_time_statuswait = millis();
+    unsigned long current_time_statuswait = millis(); 
+    while(current_time_statuswait - start_time_statuswait < 100)
+    {
+      try_CAN_msg_filter();
+      current_time_statuswait = millis();
+    }
+
+    if(GENERAL_PRINT)
+    { 
+      Serial.println();
+      Serial.println("After the enter pre operational function call, the statusword values were: ");
+      Serial.println();
+      Serial.print("  Statusword 1 = 0x");
+      Serial.println(statuswords[0], HEX);
+      Serial.print("  Statusword 2 = 0x");
+      Serial.println(statuswords[1], HEX);
+      Serial.print("  Statusword 3 = 0x");
+      Serial.println(statuswords[2], HEX);
+      Serial.print("  Statusword 4 = 0x");
+      Serial.println(statuswords[3], HEX);
+      Serial.println();     
+    }
+    
+    ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+    
+    if (GENERAL_PRINT) {
+      Serial <<"set_torque_operating_mode function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }
+
+
+    ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
+     
+    if (GENERAL_PRINT) {
+      Serial <<"set_TxPDO1_inhibit_time function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+
+    } 
+
+    
+    ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
+    
+    if (GENERAL_PRINT) {
+      Serial <<"start_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    }
+    
+
+    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
+     
+    if (GENERAL_PRINT) {
+      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    } 
+
+    start_time_statuswait = millis();
+    current_time_statuswait = millis(); 
+    while(current_time_statuswait - start_time_statuswait < 100)
+    {
+      try_CAN_msg_filter();
+      current_time_statuswait = millis();
+    }
+
+    if(GENERAL_PRINT)
+    {
+      Serial.println();
+      Serial.println("After the start remote nodes function call, the statusword values were: ");
+      Serial.println();
+      Serial.print("  Statusword 1 = 0x");
+      Serial.println(statuswords[0], HEX);
+      Serial.print("  Statusword 2 = 0x");
+      Serial.println(statuswords[1], HEX);
+      Serial.print("  Statusword 3 = 0x");
+      Serial.println(statuswords[2], HEX);
+      Serial.print("  Statusword 4 = 0x");
+      Serial.println(statuswords[3], HEX);
+      Serial.println();       
+    }
+    
+    ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND); //Send out the controlword RxPDO with a shutdown command so that the device state machine transitions to the "Ready to switch on" state 
+    
+    if (GENERAL_PRINT) {
+      Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+      Serial.println();
+      Serial.println();
+    }
+
+    delay(1);//Wait a little bit for the motor controllers to change state and then request the statuswords
+
+    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
+     
+    if (GENERAL_PRINT) {
+      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    } 
+
+    start_time_statuswait = millis();
+    current_time_statuswait = millis(); 
+    while(current_time_statuswait - start_time_statuswait < 100)
+    {
+      try_CAN_msg_filter();
+      current_time_statuswait = millis();
+    }
+
+    if(GENERAL_PRINT)
+    {
+      Serial.println();
+      Serial.println("After the RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call, the statusword values were: ");
+      Serial.println();
+      Serial.print("  Statusword 1 = 0x");
+      Serial.println(statuswords[0], HEX);
+      Serial.print("  Statusword 2 = 0x");
+      Serial.println(statuswords[1], HEX);
+      Serial.print("  Statusword 3 = 0x");
+      Serial.println(statuswords[2], HEX);
+      Serial.print("  Statusword 4 = 0x");
+      Serial.println(statuswords[3], HEX);
+      Serial.println();           
+    }
+    
+    
+    ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
+    
+    if (GENERAL_PRINT) {
+      Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+      Serial.println();
+      Serial.println();
+    }    
+    
+    delay(1);//Wait a little bit for the motor controllers to change state and then request the statuswords
+    
+    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
+     
+    if (GENERAL_PRINT) {
+      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+      Serial.println();
+      Serial.println();
+    } 
+
+    start_time_statuswait = millis();
+    current_time_statuswait = millis(); 
+    while(current_time_statuswait - start_time_statuswait < 100)
+    {
+      try_CAN_msg_filter();
+      current_time_statuswait = millis();
+    }
+
+    if(GENERAL_PRINT)
+    {
+      Serial.println();
+      Serial.println("After the RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call, the statusword values were: ");
+      Serial.println();
+      Serial.print("  Statusword 1 = 0x");
+      Serial.println(statuswords[0], HEX);
+      Serial.print("  Statusword 2 = 0x");
+      Serial.println(statuswords[1], HEX);
+      Serial.print("  Statusword 3 = 0x");
+      Serial.println(statuswords[2], HEX);
+      Serial.print("  Statusword 4 = 0x");
+      Serial.println(statuswords[3], HEX);
+      Serial.println();     
+    }  
   
 }
 

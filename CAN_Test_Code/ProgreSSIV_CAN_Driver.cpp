@@ -6,7 +6,7 @@
 /*********************************/
 
 #include "flexCAN.h"
-#include "ProgreSSIV_MC_Driver.h"
+#include "ProgreSSIV_CAN_Driver.h"
 #include <string.h>
 
 #define CONFIGURATION_PRINT 1
@@ -830,8 +830,7 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1
     msg.len = 2;
     msg.buf[1] = command_HB;
     msg.buf[0] = command_LB;
-    
-    //   msg.timeout = 0;//If this is set to zero, write blocking will not occur - the write function will try to send out the message immediately and return a 0 if unsuccessful
+
     if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
       error_count++;
@@ -876,8 +875,7 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO
   memcpy(&(msg.buf[1]), ((char *)(&throttle) + 1), 1);
   memcpy(&(msg.buf[2]), ((char *)(&throttle) + 2), 1);
   memcpy(&(msg.buf[3]), ((char *)(&throttle) + 3), 1);
-  
-  //   msg.timeout = 0;//Milliseconds before giving up on broadcasting CAN message
+
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
     ret = ERROR_CAN_WRITE;

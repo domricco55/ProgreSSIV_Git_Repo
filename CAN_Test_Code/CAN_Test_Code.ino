@@ -4,7 +4,7 @@
 
 */
 
-#include "ProgreSSIV_MC_Driver.h"
+#include "ProgreSSIV_CAN_Driver.h"
 #include "FlexCAN.h"
 #include "kinetis_flexcan.h"
 #include "input_handler.h"
@@ -54,7 +54,6 @@ reg_union_t registers;//Instantiate the register union (the registers will be fi
 
 /*loop CAN variables.*/
 uint8_t ret = 0;
-uint8_t error = NO_ERROR;
 int32_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
 int32_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
 int32_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
@@ -97,7 +96,6 @@ unsigned long start_time_motors;
 unsigned long start_time_servo;
 unsigned long start_time_print;
 unsigned long start_time_error_check;
-//unsigned long start_time_voltage;//Need to add in the voltage monitoring feature of the motor controllers. FUTURE WORK
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -124,8 +122,9 @@ void setup() {
     Serial.println();
   }
   /* Also going to do a little servo testing here*/
-//  initPWMin();
-//  initServo();
+  initPWMin();
+  initServo();
+  writeServo(0);
 
 }
 
@@ -347,101 +346,104 @@ void loop() {
       Serial.println();     
     }
     
-    
-// NOW JUST TURNING THINGS OFF SO THAT I CAN READ THE STARTUP MESSAGES HERE BUT ALSO COMMUNICATE THROUGH EPOS STUDIO AFTERWARD
+//    
+//// NOW JUST TURNING THINGS OFF SO THAT I CAN READ THE STARTUP MESSAGES HERE BUT ALSO COMMUNICATE THROUGH EPOS STUDIO AFTERWARD
+//
+//     ret = RxPDO1_controlword_write(QUICK_STOP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Quick Stop Active" state 
+//                                                         //and then to the "Switch On Disabled" state
+//     if (GENERAL_PRINT) {
+//        Serial <<"RxPDO1_controlword_write(QUICK_STOP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+//        Serial.println();
+//        Serial.println();
+//     }
+//
+//    delay(1); //Wait a little for the motor controllers to change state and then request the statuswords
+//
+//    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
+//     
+//    if (GENERAL_PRINT) {
+//      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//      Serial.println();
+//      Serial.println();
+//    } 
+//
+//    start_time_statuswait = millis();
+//    current_time_statuswait = millis(); 
+//    while(current_time_statuswait - start_time_statuswait < 100)
+//    {
+//      try_CAN_msg_filter();
+//      current_time_statuswait = millis();
+//    }
+//
+//    if(GENERAL_PRINT)
+//    {
+//      Serial.println();
+//      Serial.println("After the RxPDO1_controlword_write(QUICK_STOP_COMMAND) function call, the statusword values were: ");
+//      Serial.println();
+//      Serial.print("  Statusword 1 = 0x");
+//      Serial.println(statuswords[0], HEX);
+//      Serial.print("  Statusword 2 = 0x");
+//      Serial.println(statuswords[1], HEX);
+//      Serial.print("  Statusword 3 = 0x");
+//      Serial.println(statuswords[2], HEX);
+//      Serial.print("  Statusword 4 = 0x");
+//      Serial.println(statuswords[3], HEX);
+//      Serial.println();     
+//    }
+//    
+//     ret = RxPDO1_controlword_write(DISABLE_VOLTAGE_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Quick Stop Active" state 
+//                                                         //and then to the "Switch On Disabled" state
+//     if (GENERAL_PRINT) {
+//        Serial <<"RxPDO1_controlword_write(DISABLE_VOLTAGE_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+//        Serial.println();
+//        Serial.println();
+//     }
+//
+//    delay(1); //Wait a little for the motor controllers to change state and then request the statuswords
+//
+//    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
+//     
+//    if (GENERAL_PRINT) {
+//      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//      Serial.println();
+//      Serial.println();
+//    } 
+//
+//    start_time_statuswait = millis();
+//    current_time_statuswait = millis(); 
+//    while(current_time_statuswait - start_time_statuswait < 100)
+//    {
+//      try_CAN_msg_filter();
+//      current_time_statuswait = millis();
+//    }
+//
+//    if(GENERAL_PRINT)
+//    {
+//      Serial.println();
+//      Serial.println("After the RxPDO1_controlword_write(QUICK_STOP_COMMAND) function call, the statusword values were: ");
+//      Serial.println();
+//      Serial.print("  Statusword 1 = 0x");
+//      Serial.println(statuswords[0], HEX);
+//      Serial.print("  Statusword 2 = 0x");
+//      Serial.println(statuswords[1], HEX);
+//      Serial.print("  Statusword 3 = 0x");
+//      Serial.println(statuswords[2], HEX);
+//      Serial.print("  Statusword 4 = 0x");
+//      Serial.println(statuswords[3], HEX);
+//      Serial.println();     
+//    }
+//     ret = stop_remote_nodes();// Send the NMT CAN message for stopping all CAN nodes. This stops all SDO and PDO exchange to and from the nodes but allows NMT messages. 
+//      
+//      if (GENERAL_PRINT) {
+//        Serial <<"stop_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//        Serial.println();
+//        Serial.println();
+//      }
+//      
+//    delay(10); //Wait a little for the motor controllers to change state and then request the statuswords
 
-     ret = RxPDO1_controlword_write(QUICK_STOP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Quick Stop Active" state 
-                                                         //and then to the "Switch On Disabled" state
-     if (GENERAL_PRINT) {
-        Serial <<"RxPDO1_controlword_write(QUICK_STOP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-        Serial.println();
-        Serial.println();
-     }
 
-    delay(1); //Wait a little for the motor controllers to change state and then request the statuswords
-
-    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
-     
-    if (GENERAL_PRINT) {
-      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    } 
-
-    start_time_statuswait = millis();
-    current_time_statuswait = millis(); 
-    while(current_time_statuswait - start_time_statuswait < 100)
-    {
-      try_CAN_msg_filter();
-      current_time_statuswait = millis();
-    }
-
-    if(GENERAL_PRINT)
-    {
-      Serial.println();
-      Serial.println("After the RxPDO1_controlword_write(QUICK_STOP_COMMAND) function call, the statusword values were: ");
-      Serial.println();
-      Serial.print("  Statusword 1 = 0x");
-      Serial.println(statuswords[0], HEX);
-      Serial.print("  Statusword 2 = 0x");
-      Serial.println(statuswords[1], HEX);
-      Serial.print("  Statusword 3 = 0x");
-      Serial.println(statuswords[2], HEX);
-      Serial.print("  Statusword 4 = 0x");
-      Serial.println(statuswords[3], HEX);
-      Serial.println();     
-    }
-    
-     ret = RxPDO1_controlword_write(DISABLE_VOLTAGE); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Quick Stop Active" state 
-                                                         //and then to the "Switch On Disabled" state
-     if (GENERAL_PRINT) {
-        Serial <<"RxPDO1_controlword_write(QUICK_STOP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-        Serial.println();
-        Serial.println();
-     }
-
-    delay(1); //Wait a little for the motor controllers to change state and then request the statuswords
-
-    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
-     
-    if (GENERAL_PRINT) {
-      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    } 
-
-    start_time_statuswait = millis();
-    current_time_statuswait = millis(); 
-    while(current_time_statuswait - start_time_statuswait < 100)
-    {
-      try_CAN_msg_filter();
-      current_time_statuswait = millis();
-    }
-
-    if(GENERAL_PRINT)
-    {
-      Serial.println();
-      Serial.println("After the RxPDO1_controlword_write(QUICK_STOP_COMMAND) function call, the statusword values were: ");
-      Serial.println();
-      Serial.print("  Statusword 1 = 0x");
-      Serial.println(statuswords[0], HEX);
-      Serial.print("  Statusword 2 = 0x");
-      Serial.println(statuswords[1], HEX);
-      Serial.print("  Statusword 3 = 0x");
-      Serial.println(statuswords[2], HEX);
-      Serial.print("  Statusword 4 = 0x");
-      Serial.println(statuswords[3], HEX);
-      Serial.println();     
-    }
-     ret = stop_remote_nodes();// Send the NMT CAN message for stopping all CAN nodes. This stops all SDO and PDO exchange to and from the nodes but allows NMT messages. 
-      
-      if (GENERAL_PRINT) {
-        Serial <<"stop_remote_nodes function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-        Serial.println();
-        Serial.println();
-      }
-      
-    delay(10); //Wait a little for the motor controllers to change state and then request the statuswords
+     //STOP
      
 //     ret = enter_pre_operational();// Send the NMT CAN message for the motor controllers to enter the pre-operational state. 
 //     
@@ -506,7 +508,7 @@ void loop() {
   if (timing_init_flag) {
     // Initialize the Timing Variables so that there is a start time
     start_time_motors = micros();
-    start_time_servo = millis();
+    start_time_servo = micros();
     start_time_print = millis();
     start_time_error_check = millis();
     //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
@@ -521,20 +523,6 @@ void loop() {
 //    
 ////    request_error_registers(); //Send out an expedited error register read request to all nodes 
 ////    //request_statuswords();
-
-//    my_CAN_stats = Can0.getStats()
-//    Serial.println();
-//    Serial.print("Stats enabled parameter: ");
-//    Serial.println(my_CAN_stats.enabled);
-//    Serial.print("Stats ringRxFramesLost: ");
-//    Serial.println(my_CAN_stats.ringRxFramesLost);
-//    Serial.print("Stats ringRxmax: ");
-//    Serial.println(my_CAN_stats.ringRxMax);  
-//    Serial.print("Stats ringRxHighWater: ");
-//    Serial.println(my_CAN_stats.ringRxHighWater);
-//    Serial.print("Stats ringTxHighWater: ");
-//    Serial.println(my_CAN_stats.ringTxHighWater);
-//    Serial.println();
 //
 //    
 //    start_time_error_check = current_time_error_check;
@@ -603,13 +591,13 @@ void loop() {
 //      start_time_print = current_time_print;
 //    }
 
-//    unsigned long current_time_servo = millis();
-//    if ((current_time_servo - start_time_servo) >= 50) 
-//    {
-//      writeServo(ST_in);
-//      Serial.println(ST_in);
-//      start_time_servo = current_time_servo;
-//    }
+    unsigned long current_time_servo = micros();
+    if ((current_time_servo - start_time_servo) >= 3000) 
+    {
+      writeServo(ST_in);
+      Serial.println(ST_in);
+      start_time_servo = current_time_servo;
+    }
 
 
      
