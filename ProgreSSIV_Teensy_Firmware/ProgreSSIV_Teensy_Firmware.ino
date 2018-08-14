@@ -252,7 +252,7 @@ void setup() {
   //Set some of the starting conditions of the registers
   //  registers.reg_map.begin_data_collection = 1;//Anything non-zero will cause the begin_data_collection flag to be set true in the SPI task
   //registers.reg_map.init_servo_radio = 1;//Anything non-zero will cause the servo and radio initialization code to run in the SPI task
-  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
+  //registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
   //registers.reg_map.print_registers = 1;//Controls whether the registers are printed at startup or not
   //registers.reg_map.print_radio = 1;//Controls whether radio transeiver data is printing or not
   //registers.reg_map.print_imu = 1;//Controls whether IMU data is printing or not
