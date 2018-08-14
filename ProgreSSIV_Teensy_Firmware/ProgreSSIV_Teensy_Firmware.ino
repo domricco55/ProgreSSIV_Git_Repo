@@ -449,12 +449,6 @@ void loop() {
       // Dead man's switch.  If throttle is being pressed just about half way, then actuate the motor controllers. Otherwise run quickstop command code and proceed through state machine to return to operational state.
       // There is a dead switch already implemented in Simulink but that one is for redundancy mostly and does not have the quick stop behavior implemented here. 
       if (registers.reg_map.dead_switch) {
-
-//  op_enabled_zero_torque, //Operation enabled state but don't relay any torque acuations, make sure torque setpoint is zero. This happens only once at startup. Once throttle is pressed, this state is never reached again. 
-//  op_enabled_actuate_torque, //Operation enabled state and relay the torque actuations found in the throttle registers. If throttle is released, send quickstop command, set torques to zero, and go into wait for guickstop statusword state.
-//  wait_for_quickstop_statusword, //Waiting for confirmation from the motor controllers that the quickstop state has been reached 
-//  quickstop_active,//Quickstop state is active and waiting for throttle to be pressed again. Once pressed, send enable operation command and go into wait for op enabled statusword state
-//  wait_for_op_enabled_statusword //Once operation enabled statuswords confirmed, go into op enabled actuate torque state
         
         //State machine implemented if dead switch register is non-zero (dead switch behavior is desired). This state machine knows the "Device Control" state of each motor controller via each one's statusword. 
         switch(dead_switch_state_var){
