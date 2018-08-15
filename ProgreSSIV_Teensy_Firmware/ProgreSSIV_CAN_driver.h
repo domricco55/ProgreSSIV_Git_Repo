@@ -29,7 +29,7 @@ uint8_t request_statuswords();
 uint8_t request_error_registers();
 /*RECIEVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS*/
 uint8_t RxPDO1_controlword_write(uint16_t control_command);
-uint8_t RxPDO2_torque_write(int node_id, uint16_t torque);
+uint8_t RxPDO2_torque_write(int node_id,int32_t torque);
 /*MISCELLANEOUS*/
 void read_available_message();
 void print_CAN_message(CAN_message_t msg);

@@ -198,7 +198,7 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 #define PRINT_REGISTERS 0
 #define PRINT_IMU 0
 #define PRINT_RADIO 0
-#define MC_CHECK_PRINT 1
+#define MC_CHECK_PRINT 0
 #define SPI_DEBUG_PRINT 0
 
 /*SPI Debugging Setup*/
@@ -257,10 +257,10 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr, RISING);
 
   //Set some of the starting conditions of the registers
-  //registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
-  //registers.reg_map.dead_switch = 1;//Dead switch on or off?
+  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
+  registers.reg_map.dead_switch = 1;//Dead switch on or off?
   
-  registers.reg_map.servo_out = 0;//Set an initial servo position value. Just a visual que that servo is working at startup
+//  registers.reg_map.servo_out = 0;//Set an initial servo position value. Just a visual que that servo is working at startup
   if (GENERAL_PRINT) {
     //Print the registers at initialization
     spi_registers_print();
@@ -1359,7 +1359,7 @@ void MC_state_machine(){
 /* MOTOR CONTROLLER STARTUP AND OPERATION STATE MACHINE*/
 
   //This tasks stack variables
-  int16_t torque_actuate[4];
+  int32_t torque_actuate[4];
   unsigned long current_time_motors;
       
   switch(MC_state_var) {
@@ -1369,7 +1369,16 @@ void MC_state_machine(){
       bootup_count = 0; 
       op_mode_SDO_count = 0;
       inhibit_time_SDO_count = 0;
-
+      
+      ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+  
+      if (GENERAL_PRINT) {
+        Serial.println();
+        Serial <<"reset_nodes() function call successfully wrote this many NMT commands:  "  << ret;
+        Serial.println();
+        Serial.println();
+      }
+      
       MC_state_var = MC_state_1;
       if(GENERAL_PRINT){
         Serial.println();
@@ -1380,31 +1389,6 @@ void MC_state_machine(){
     break;
 
     case MC_state_1: //Wait for init MCs flag - SPI task has access to this flag
-
-      if(registers.reg_map.init_motor_controllers){
-        
-        ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
-    
-        if (GENERAL_PRINT) {
-          Serial.println();
-          Serial <<"reset_nodes() function call successfully wrote this many NMT commands:  "  << ret;
-          Serial.println();
-          Serial.println();
-        }
-
-        registers.reg_map.init_motor_controllers = 0; //Can be made true again by writing to SPI register location
-
-        MC_state_var = MC_state_2;
-        if(GENERAL_PRINT){
-          Serial.println();
-          Serial.println("Transitioning to MC_state_2");
-          Serial.println();
-        }
-      }
-    
-    break;
-
-    case MC_state_2: //Wait for reset node complete - A bootup confirmation should be received from each node 
 
       if(bootup_count == 4){
 
@@ -1419,20 +1403,20 @@ void MC_state_machine(){
           Serial.println();
         }
         
-        MC_state_var = MC_state_3;
+        MC_state_var = MC_state_2;
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_3");
+          Serial.println("Transitioning to MC_state2");
           Serial.println();
         }
       }
     
     break;
 
-    case MC_state_3: //Wait for reset communication complete - A bootup confirmation should be received from each node 
-
-      if(bootup_count == 4){
-
+    case MC_state_2: //Wait for reset node complete - A bootup confirmation should be received from each node 
+    
+      if(registers.reg_map.init_motor_controllers && bootup_count==4){
+        
         bootup_count = 0; 
         
         ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
@@ -1456,19 +1440,22 @@ void MC_state_machine(){
           Serial.println();
         }
         
-        MC_state_var = MC_state_4;
+        registers.reg_map.init_motor_controllers = 0; //Can be made true again by writing to SPI register location
 
+        MC_state_var = MC_state_3;
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_4");
+          Serial.println("Transitioning to MC_state_3");
           Serial.println();
         }
-        
       }
+
+
+             
     
     break;
 
-    case MC_state_4: //Wait for set torque mode Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
+    case MC_state_3: //Wait for set torque mode Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
 
       if(op_mode_SDO_count == 4){
         
@@ -1485,18 +1472,18 @@ void MC_state_machine(){
 
         op_mode_SDO_count = 0;
         
-        MC_state_var = MC_state_5;
+        MC_state_var = MC_state_4;
 
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_5");
+          Serial.println("Transitioning to MC_state_4");
           Serial.println();
         }
       }
     
     break;
 
-    case MC_state_5: //Wait for set inhibit time Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
+    case MC_state_4: //Wait for set inhibit time Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
 
       if(inhibit_time_SDO_count == 4){
 
@@ -1523,18 +1510,18 @@ void MC_state_machine(){
 
         inhibit_time_SDO_count = 0;
         
-        MC_state_var = MC_state_6;
+        MC_state_var = MC_state_5;
 
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_6");
+          Serial.println("Transitioning to MC_state_5");
           Serial.println();
         }
       }
     
     break;
 
-    case MC_state_6: //Wait for remote nodes startup confirmation - the Statuswords of each node should indicate "Switch on disabled" device control state 
+    case MC_state_5: //Wait for remote nodes startup confirmation - the Statuswords of each node should indicate "Switch on disabled" device control state 
 
       if((uint8_t)statuswords[0] & (uint8_t)statuswords[1]  & (uint8_t)statuswords[2] & (uint8_t)statuswords[3] & 0b01000000){
         
@@ -1548,11 +1535,11 @@ void MC_state_machine(){
           Serial.println();
         }
         
-        MC_state_var = MC_state_7;
+        MC_state_var = MC_state_6;
 
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_7");
+          Serial.println("Transitioning to MC_state_6");
           Serial.println();
         }
         
@@ -1560,7 +1547,7 @@ void MC_state_machine(){
     
     break;
 
-    case MC_state_7: //Wait for "Ready to switch on" device control state - the Statuswords of each node will indicate state 
+    case MC_state_6: //Wait for "Ready to switch on" device control state - the Statuswords of each node will indicate state 
 
       if((uint8_t)statuswords[0] & (uint8_t)statuswords[1]  & (uint8_t)statuswords[2] & (uint8_t)statuswords[3] & 0b00100001){
 
@@ -1575,6 +1562,17 @@ void MC_state_machine(){
             Serial.println();
           }
 
+          MC_state_var = MC_state_7;
+
+          if(GENERAL_PRINT){
+            Serial.println();
+            Serial.println("Transitioning to MC_state_7");
+            Serial.println();
+          }
+        }
+
+        else{//The dead switch feature is on
+           
           MC_state_var = MC_state_8;
 
           if(GENERAL_PRINT){
@@ -1583,23 +1581,12 @@ void MC_state_machine(){
             Serial.println();
           }
         }
-
-        else{//The dead switch feature is on
-           
-          MC_state_var = MC_state_9;
-
-          if(GENERAL_PRINT){
-            Serial.println();
-            Serial.println("Transitioning to MC_state_9");
-            Serial.println();
-          }
-        }
         
       }
     
     break;
 
-    case MC_state_8: //Wait for "Operation enabled" device control state = the Statuswords of each node will indicate state 
+    case MC_state_7: //Wait for "Operation enabled" device control state = the Statuswords of each node will indicate state 
 
       if(registers.reg_map.node_statuswords[0] & registers.reg_map.node_statuswords[1] & registers.reg_map.node_statuswords[2] & registers.reg_map.node_statuswords[3] & 0b00100111 ){
 
@@ -1613,11 +1600,11 @@ void MC_state_machine(){
         torque_actuate[2] = 0;
         torque_actuate[3] = 0;
 
-        MC_state_var = MC_state_10;
+        MC_state_var = MC_state_9;
 
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_10");
+          Serial.println("Transitioning to MC_state_9");
           Serial.println();
         }       
       }
@@ -1625,7 +1612,7 @@ void MC_state_machine(){
 
     break;
 
-    case MC_state_9: //Wait for throttle - the dead switch flag is true and waiting for user to pull the throttle on the radio transeiver 
+    case MC_state_8: //Wait for throttle - the dead switch flag is true and waiting for user to pull the throttle on the radio transeiver 
 
       if( THR_in >= 200){
         
@@ -1638,11 +1625,11 @@ void MC_state_machine(){
           Serial.println();
         }
         
-        MC_state_var = MC_state_8;
+        MC_state_var = MC_state_7;
 
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_8");
+          Serial.println("Transitioning to MC_state_7");
           Serial.println();
         }
       }
@@ -1650,20 +1637,20 @@ void MC_state_machine(){
     
     break;
 
-    case MC_state_10: //"Operation enabled" device control state, actuate torque - Send out the torque actuations at a set frequency of about 180hz 
+    case MC_state_9: //"Operation enabled" device control state, actuate torque - Send out the torque actuations at a set frequency of about 180hz 
       
       current_time_motors = micros();
       if ((current_time_motors - start_time_motors) >= 5555)  //5,555 microseconds => 180hz. Motor torque setpoints will update at this frequency (this frequency should prevent buffer overruns on the nodes
       {
         //If SPI task ends up being a task with access to the MC state machine data, this chunk of code will not need to be here
-        torque_actuate[0] = -saturate_torque(registers.reg_map.node_torques[0]); //Front right wheel
-        torque_actuate[1] = saturate_torque(registers.reg_map.node_torques[1]); //Front left wheel
-        torque_actuate[2] = -saturate_torque(registers.reg_map.node_torques[2]); //Back right wheel
-        torque_actuate[3] = saturate_torque(registers.reg_map.node_torques[3]); //Back left wheel
+        torque_actuate[0] = (int32_t)(-saturate_torque(registers.reg_map.node_torques[0])); //Front right wheel
+        torque_actuate[1] = (int32_t)saturate_torque(registers.reg_map.node_torques[1]); //Front left wheel
+        torque_actuate[2] = (int32_t)(-saturate_torque(registers.reg_map.node_torques[2])); //Back right wheel
+        torque_actuate[3] = (int32_t)saturate_torque(registers.reg_map.node_torques[3]); //Back left wheel
 
         for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
           //Write saturated torque actuation values
-          ret = RxPDO2_torque_write(node_id, torque_actuate[node_id-1]);
+          ret = RxPDO2_torque_write(node_id,torque_actuate[node_id-1]);
           
           if(!ret){
             torque_write_error_cnt++;
@@ -1709,11 +1696,11 @@ void MC_state_machine(){
             Serial.println();
           }
           
-          MC_state_var = MC_state_11;
+          MC_state_var = MC_state_10;
 
           if(GENERAL_PRINT){
             Serial.println();
-            Serial.println("Transitioning to MC_state_11");
+            Serial.println("Transitioning to MC_state_10");
             Serial.println();
           }
         }
@@ -1721,23 +1708,23 @@ void MC_state_machine(){
           
     break;
 
-    case MC_state_11: //Wait for "Quickstop active" device control state - the Statuswords of each node will indicate state 
+    case MC_state_10: //Wait for "Quickstop active" device control state - the Statuswords of each node will indicate state 
       
       if(statuswords[0] >> 8 & statuswords[1] >> 8 & statuswords[2] >> 8 & statuswords[3] >> 8 & 0b00000111 ){
       //If MCs have reached the "Quickstop active" device control state, transition
           
-          MC_state_var = MC_state_12;
+          MC_state_var = MC_state_11;
 
           if(GENERAL_PRINT){
             Serial.println();
-            Serial.println("Transitioning to MC_state_12");
+            Serial.println("Transitioning to MC_state_11");
             Serial.println();
           }
       }
 
     break;
 
-    case MC_state_12: //"Quickstop active" device control state - the dead switch flag is true and waiting for user to pull the throttle on the radio transeiver 
+    case MC_state_11: //"Quickstop active" device control state - the dead switch flag is true and waiting for user to pull the throttle on the radio transeiver 
 
       if(THR_in >= 200){
         
@@ -1750,11 +1737,11 @@ void MC_state_machine(){
           Serial.println();
         }
         
-        MC_state_var = MC_state_8;
+        MC_state_var = MC_state_7;
 
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_8");
+          Serial.println("Transitioning to MC_state_7");
           Serial.println();
         }
       }

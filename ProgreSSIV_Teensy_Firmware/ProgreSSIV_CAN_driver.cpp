@@ -668,7 +668,7 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1
  * This function writes a PDO message to the CAN bus, RxPDO2 (cob-id designated by myself to be of 300 + node_id) and updates the "Target Torque" object of a motor controller's object dictionary. 
  * See EPOS4 Firmware Specification pg 6-167. 
  */
-uint8_t RxPDO2_torque_write(int node_id, uint16_t torque) //Send out the RxPDO1 message that updates the node's controlword object
+uint8_t RxPDO2_torque_write(int node_id, int32_t torque) //Send out the RxPDO1 message that updates the node's controlword object
 {
   CAN_message_t msg;
   uint8_t error_count = 0;
@@ -678,10 +678,14 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t torque) //Send out the RxPDO1 
   msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
   msg.rtr = 0;//Remote Transmit Request bit is low
   msg.len = 4;
-  memcpy(&(msg.buf[0]), (void *)(&torque), 1);
-  memcpy(&(msg.buf[1]), ((char *)(&torque) + 1), 1);
-  memcpy(&(msg.buf[2]), ((char *)(&torque) + 2), 1);
-  memcpy(&(msg.buf[3]), ((char *)(&torque) + 3), 1);
+  msg.buf[3] = (uint8_t)((torque & 0xFF000000) >> 24);
+  msg.buf[2] = (uint8_t)((torque & 0x00FF0000) >> 16);  
+  msg.buf[1] = (uint8_t)((torque & 0x0000FF00) >> 8);
+  msg.buf[0] = (uint8_t)((torque & 0x000000FF));  
+//  memcpy(&(msg.buf[0]), (void *)(&torque), 1);
+//  memcpy(&(msg.buf[1]), ((char *)(&torque) + 1), 1);
+//  memcpy(&(msg.buf[2]), ((char *)(&torque) + 2), 1);
+//  memcpy(&(msg.buf[3]), ((char *)(&torque) + 3), 1);
 
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
