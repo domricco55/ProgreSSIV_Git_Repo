@@ -3,14 +3,12 @@
 
 #include "FlexCAN.h"
 
-/* Nodes 1 through 4 indicate which motor driver the firmware is talking to, CAN NODES*/
+///* Nodes 1 through 4 indicate which motor driver the firmware is talking to, CAN NODES*/
 #define NODE_1 1
 #define NODE_2 2
 #define NODE_3 3
 #define NODE_4 4
 
-#define NO_ERROR 0
-#define ERROR_CAN_WRITE 1
 #define CORRECT 0
 #define NOT_CORRECT 1
 
@@ -31,7 +29,7 @@ uint8_t request_statuswords();
 uint8_t request_error_registers();
 /*RECIEVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS*/
 uint8_t RxPDO1_controlword_write(uint16_t control_command);
-uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle);
+uint8_t RxPDO2_torque_write(int node_id, uint16_t torque);
 /*MISCELLANEOUS*/
 void read_available_message();
 void print_CAN_message(CAN_message_t msg);

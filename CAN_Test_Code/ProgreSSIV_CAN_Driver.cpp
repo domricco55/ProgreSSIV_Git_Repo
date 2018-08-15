@@ -241,7 +241,7 @@ uint8_t start_remote_nodes()
   
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {
-    ret = ERROR_CAN_WRITE;
+    error_count++;
     if (CONFIGURATION_PRINT)
     {
 
@@ -249,8 +249,8 @@ uint8_t start_remote_nodes()
         Serial.println("error CAN write during start_remote_nodes() function call. The CAN statistics are: ");
         Serial.println();
     }
-    
   }
+  
   if(error_count == 0){
 
     if (CONFIGURATION_PRINT)
@@ -345,7 +345,7 @@ uint8_t stop_remote_nodes()
  *  the message to one of the nodes and if successful it will wait up to 1 second for the SDO confirmation message to be returned by the node. It will do this for each node and 
  *  notify through a print statement if there was a read message timeout and one of the nodes did not respond to the message within 1 second of successfully sending it. This 
  *  should likely be changed from a print statement to some kind of error checking variable to be used by the main Teensy firmware's error code. See EPOS4 Firmware Specification
- *  pg 6-164 (Modes of Operation) and pg 3-38 (Cyclic Synchronous Torque mode). 
+ *  pg 6-164 (Modes of Operation) and pg 3-38 (Cyclic Synchronous Torque mode). SDO's MUST BE 8 BYTES LONG
 */
 uint8_t set_torque_operating_mode()
 {
@@ -368,13 +368,16 @@ uint8_t set_torque_operating_mode()
     msg.id = 0x600 + node_id; //COB-id for an SDO client to server (server to client??) from the Teensy to a node
     msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
     msg.rtr = 0;//Remote Transmit Request bit is low
-    msg.len = 5;
+    msg.len = 8;
     msg.buf[0] = 0x2F; //Command specifier for expedited one byte write request
     msg.buf[2] = 0x60; //High byte of index for Modes of Operation dictionary object
     msg.buf[1] = 0x60; //Low byte of index for Modes of Operation dictionary object 
     msg.buf[3] = 0; //Sub-index
     msg.buf[4] = TORQUE_MODE; //Pound defined earlier. To set torque mode, write a 10
-          
+    msg.buf[5] = 0;//MUST WRITE ZEROES HERE
+    msg.buf[6] = 0;//MUST WRITE ZEROES HERE
+    msg.buf[7] = 0;//MUST WRITE ZEROES HERE
+    
     if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
       error_count++;
@@ -436,13 +439,15 @@ uint8_t set_TxPDO1_inhibit_time()
     msg.id = 0x600 + node_id;//SDO COB-id for the node
     msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
     msg.rtr = 0;//Remote Transmit Request bit is low
-    msg.len = 5;
+    msg.len = 8;
     msg.buf[0] = 0x2B;//Command specifier for writing 2 bytes
     msg.buf[2] = 0x18;//High byte of TxPDO1 Parameter Index
     msg.buf[1] = 0x00;//Low byte of TxPDO1 Parameter Index
     msg.buf[3] = 0x03;//Sub-index of TxPDO1 Parameter Object, the INHIBIT TIME
     msg.buf[5] = 0x00;//High byte of data is zero
     msg.buf[4] = 0x37;//Low byte of data -> 55 multiples of 100uS produces an inhibit time of 0.0055 seconds or 180hz
+    msg.buf[6] = 0;//MUST WRITE ZEROES HERE
+    msg.buf[7] = 0;//MUST WRITE ZEROES HERE    
     
     if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
     {
@@ -461,7 +466,7 @@ uint8_t set_TxPDO1_inhibit_time()
     if (CONFIGURATION_PRINT)
     {
         Serial.println();
-        Serial.println("All CAN writes were successful during the set_torque_operating_mode function call");
+        Serial.println("All CAN writes were successful during the set_TxPDO1_inhibit_time function call");
         Serial.println();
     }
   }
@@ -508,10 +513,10 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
     msg.buf[2] = 0x60;
     msg.buf[1] = 0x41;
     msg.buf[3] = 0;//Sub-index
-    msg.buf[4] = 0;//Empty data (junk)
-    msg.buf[5] = 0;//Empty data (junk)
-    msg.buf[6] = 0;//Empty data (junk)
-    msg.buf[7] = 0;//Empty data (junk)
+    msg.buf[4] = 0;//MUST WRITE ZEROES HERE  
+    msg.buf[5] = 0;//MUST WRITE ZEROES HERE  
+    msg.buf[6] = 0;//MUST WRITE ZEROES HERE  
+    msg.buf[7] = 0;//MUST WRITE ZEROES HERE  
     //Must send zeros on a read request 
 
     if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
@@ -556,52 +561,52 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
  *  and an object index of 0x1001 (same as used in the request message below). In your main script there should be a function that checks for an SDO confirmation message and extracts the error message byte appropriately. 
  *  See EPOS4 Firmware Specification pgs 6-59 for information on the error register object.  
 */
-uint8_t request_error_registers()
-{
-  CAN_message_t msg;
-  uint8_t error_count = 0;
-
-  for(uint8_t node_id = 1; node_id <=4; node_id++)
-  {
-    
-    msg.id = 0x600 + node_id;//SDO COB-id for the node
-    msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
-    msg.rtr = 0;//Remote Transmit Request bit is low
-    msg.len = 8;
-    msg.buf[0] = 0x40;//Command specifier for read dictionary object request
-    msg.buf[2] = 0x10;//High byte of error register object index
-    msg.buf[1] = 0x01;//Low byte of error register object index
-    msg.buf[3] = 0;//No sub-index
-    msg.buf[4] = 0;//Empty data (junk)
-    msg.buf[5] = 0;//Empty data (junk)
-    msg.buf[6] = 0;//Empty data (junk)
-    msg.buf[7] = 0;//Empty data (junk)
-    //Must send zeros on a read request 
-    
-   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
-    {
-      error_count++;
-      if (DYNAMIC_PRINT)
-      {
-          Serial.println();
-          Serial.print("error CAN write during request_error_registers function call, node: ");
-          Serial.println(node_id);
-          Serial.println();
-                
-      } 
-    }
-  }
-  if(error_count==0){
-    if (DYNAMIC_PRINT)
-    {
-        Serial.println();
-        Serial.println("All CAN writes were successful during the request_error_registers function call");
-        Serial.println();
-    }
-  }
-
-  return (4 - error_count);
-}
+//uint8_t request_error_registers() //Errors will actually be broadcast in EMCY objects if they occur. Don't need to request them via SDO
+//{
+//  CAN_message_t msg;
+//  uint8_t error_count = 0;
+//
+//  for(uint8_t node_id = 1; node_id <=4; node_id++)
+//  {
+//    
+//    msg.id = 0x600 + node_id;//SDO COB-id for the node
+//    msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
+//    msg.rtr = 0;//Remote Transmit Request bit is low
+//    msg.len = 8;
+//    msg.buf[0] = 0x40;//Command specifier for read dictionary object request
+//    msg.buf[2] = 0x10;//High byte of error register object index
+//    msg.buf[1] = 0x01;//Low byte of error register object index
+//    msg.buf[3] = 0;//No sub-index
+//    msg.buf[4] = 0;//MUST WRITE ZEROES HERE  
+//    msg.buf[5] = 0;//MUST WRITE ZEROES HERE  
+//    msg.buf[6] = 0;//MUST WRITE ZEROES HERE  
+//    msg.buf[7] = 0;//MUST WRITE ZEROES HERE  
+//    //Must send zeros on a read request 
+//    
+//   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
+//    {
+//      error_count++;
+//      if (DYNAMIC_PRINT)
+//      {
+//          Serial.println();
+//          Serial.print("error CAN write during request_error_registers function call, node: ");
+//          Serial.println(node_id);
+//          Serial.println();
+//                
+//      } 
+//    }
+//  }
+//  if(error_count==0){
+//    if (DYNAMIC_PRINT)
+//    {
+//        Serial.println();
+//        Serial.println("All CAN writes were successful during the request_error_registers function call");
+//        Serial.println();
+//    }
+//  }
+//
+//  return (4 - error_count);
+//}
 
 /* ---------------------------------------------------------RECEIVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS------------------------------------------------------------------------------------------------------*/
 
@@ -663,7 +668,7 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command) //Send out the RxPDO1
  * This function writes a PDO message to the CAN bus, RxPDO2 (cob-id designated by myself to be of 300 + node_id) and updates the "Target Torque" object of a motor controller's object dictionary. 
  * See EPOS4 Firmware Specification pg 6-167. 
  */
-uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO1 message that updates the node's controlword object
+uint8_t RxPDO2_torque_write(int node_id, uint16_t torque) //Send out the RxPDO1 message that updates the node's controlword object
 {
   CAN_message_t msg;
   uint8_t error_count = 0;
@@ -673,10 +678,10 @@ uint8_t RxPDO2_torque_write(int node_id, uint16_t throttle) //Send out the RxPDO
   msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
   msg.rtr = 0;//Remote Transmit Request bit is low
   msg.len = 4;
-  memcpy(&(msg.buf[0]), (void *)(&throttle), 1);
-  memcpy(&(msg.buf[1]), ((char *)(&throttle) + 1), 1);
-  memcpy(&(msg.buf[2]), ((char *)(&throttle) + 2), 1);
-  memcpy(&(msg.buf[3]), ((char *)(&throttle) + 3), 1);
+  memcpy(&(msg.buf[0]), (void *)(&torque), 1);
+  memcpy(&(msg.buf[1]), ((char *)(&torque) + 1), 1);
+  memcpy(&(msg.buf[2]), ((char *)(&torque) + 2), 1);
+  memcpy(&(msg.buf[3]), ((char *)(&torque) + 3), 1);
 
   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
   {

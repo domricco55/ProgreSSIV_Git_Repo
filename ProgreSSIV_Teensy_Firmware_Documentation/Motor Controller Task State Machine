@@ -1,7 +1,7 @@
 digraph MC_state_machine {
 	
-	rankdir = LR;
-	nodesep = 1;
+	//rankdir = LR;
+	nodesep = 2;
 	splines = spline;
 
 
@@ -22,7 +22,7 @@ digraph MC_state_machine {
 
 	start -> S0  
 	S0 -> S1 [label = " [ Always/ \n op_mode_SDO_count = 0, \nbootup_count = 0, \ninhibit_time_SDO_count = 0] "] ;
-	S1 -> S2 [ label = " [ Init_MCs / \nsend reset nodes msg, \nInit_MCs = 0 ] " ]
+	S1 -> S2 [ label = " [ init_MCs / \nsend reset nodes msg, \ninit_MCs = 0 ] " ]
 	S2 -> S3 [ label = " [ bootup_count == 4 / \nbootup_count = 0, \nsend reset communication msg] "]
 	S3 -> S4 [ label = " [ bootup_count == 4 / \nsend enter pre operational msg, \nsend set torque op mode msg]"]
 	S4 -> S5 [ label = " [ op_mode_SDO_count == 4 / \nsend set inhibit time msg, \nop_mode_SDO_count = 0]"]
@@ -35,6 +35,14 @@ digraph MC_state_machine {
 	S10 -> S11 [ label = " [ THR_in <200 && dead_switch / \nRxPDO2 write zero torque \nRxPDO1 Quickstop Command ]"]
 	S11 -> S12 [ label = " [ statuswords[] & 0b00000111 ]"]
 	S12 -> S8 [ label = " [ THR_in >= 200 / \n\RxPDO1 Enable Op Command]"]
-	S10 -> S0 [ label = " [ watchdog_flag / shutdown command ] " ]
+	S10 -> S0 [ label = " [ watchdog_flag / shutdown command ] " ] 
+
+
+//maybe this should be from ANY state, same as the faults and heartbeating. OR it could JUST be from the two states involving the trigger during dead switch on (any state that is inevitable after holding the trigger down for a long time or inevitable after releasing it for a long time) and the state that is inevitable after a long time when the dead switch is off (operation enabled actuate torque...this state is shared with the dead switch on case). Should the end result of a fault be the same as the end result of the watchdog counter? Perhaps not because if Simulink is still running you may want to resume operation after a fault. If the watchdog counter is reached, theoretically, Simulink is no longer running...for now maybe I shouldnt think about falling back down from an operational condition...let the state machine hit a dead stop in that quick stop loop...that may be just fine in the time I have.
+
+// A watchdog feature could reset the inti_motor_controllers flag but a fault could not...it could have some other conditions that need to be met before allowing the motor controller to go back into operation enabled state or wait for trigger state or not. The conditon could be that the wheel be turned to a certain angle or something...this is where error message printing to the LCD screen would be helpful. In this case, state 1 would not clear the init_MCs flag, that flag would only be lowered by the watchdog feature. A watchdog timeout condition would cause the motor controllers to be shut off. 
+
+//I think I should get rid of the IMU and radio and all that jazz command registers and just initialize those every time. Also the print registers are just unnessecary, idk why I thought to use them...you need to be in the arduino IDE to view the print statements anyway...can just make them pound defines and have the print frequency set to something constant
+	
 
 }

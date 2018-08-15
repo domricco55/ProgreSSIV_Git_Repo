@@ -20,15 +20,11 @@
 ////service routine
 typedef struct __attribute__ ((__packed__)) reg_struct {
   volatile uint8_t init_motor_controllers;
-  volatile int16_t throttle_front_right;
-  volatile int16_t throttle_front_left;
-  volatile int16_t throttle_rear_right;
-  volatile int16_t throttle_rear_left;
+  volatile uint8_t dead_switch;
+  //volatile uint8_t watchdog;
+  volatile int16_t node_torques[4]; //Array of node torque actuations. 0 - torque front right, 1 - torque front left, 2 - torque back right, 3 - torque back left
   //Velocity Units are in RPM and the data comes in from the MC's as 32 bit integers. This can be truncated to 16 bits because there is no way our motors will be spinning more than 32,768 rpm
-  volatile int16_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
-  volatile int16_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
-  volatile int16_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
-  volatile int16_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
+  volatile int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
   //CAN Error Code Registers
   volatile uint8_t node_errors[4];//Array of node error messages
   //CAN Statusword Registers 
@@ -55,14 +51,16 @@ reg_union_t registers;//Instantiate the register union (the registers will be fi
 
 /*CAN variables.*/
 uint8_t ret = 0;
-int32_t velocity_FR;//stores rpm of node 1 (Front Right wheel)
-int32_t velocity_FL;//stores rpm of node 2 (Front Left wheel)
-int32_t velocity_RR;//stores rpm of node 3 (Rear Right wheel)
-int32_t velocity_RL;//stores rpm of node 4 (Rear Left wheel)
+int32_t rpm_FR;//stores rpm of node 1 (Front Right wheel)
+int32_t rpm_FL;//stores rpm of node 2 (Front Left wheel)
+int32_t rpm_BR;//stores rpm of node 3 (Back Right wheel)
+int32_t rpm_BL;//stores rpm of node 4 (Back Left wheel)
 uint16_t statuswords[4];//stores statuswords locally
+int32_t torque_write_error_cnt = 0;
+int32_t torque_write_attempts = 0;
 
-/* Dead switch state machine setup */
-enum MC_state_var{
+/* Motor Controller state machine setup */
+enum MC_state{
 
   MC_state_0,  
   MC_state_1, 
@@ -78,6 +76,8 @@ enum MC_state_var{
   MC_state_11,
   MC_state_12
 };
+
+MC_state MC_state_var = MC_state_0; //First state to be entered
 
 uint8_t bootup_count; 
 uint8_t op_mode_SDO_count;
@@ -95,7 +95,7 @@ uint8_t inhibit_time_SDO_count;
 /*Radio Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* Steering and Throttle (both from the radio) variable instantiation. These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code*/
+/* Steering and throttle (both from the radio) variable instantiation. These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code*/
 volatile int16_t THR_in; // instantiate variable for throttle input value (ranges from ~-500 to 500)
 volatile int16_t ST_in;  // instantiate variable for steering input value (ranges from ~-500 to 500)
 
@@ -112,10 +112,7 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 }
 
 #define GENERAL_PRINT 1
-#define CAN_FILTER_PRINT 0
-
-bool CAN_Test_Flag = true;
-
+#define CAN_FILTER_PRINT 1
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Timing/Frequency setup */
@@ -127,7 +124,6 @@ bool timing_init_flag = true; //This flag allows the timing variables to be init
 unsigned long start_time_motors;
 unsigned long start_time_servo;
 unsigned long start_time_print;
-unsigned long start_time_error_check;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -143,6 +139,9 @@ void setup() {
     delay(500);
   }
 
+  registers.reg_map.init_motor_controllers = 1;
+  registers.reg_map.dead_switch = 1;
+  
   /*Startup CAN network (this is a FlexCAN function)*/
   Can0.begin(1000000); //void FlexCAN::begin (uint32_t baud, const CAN_filter_t &mask, uint8_t txAlt, uint8_t rxAlt)
   Can0.startStats();//Begin gathering CAN statistics. FlexCAN function. 
@@ -164,269 +163,216 @@ void setup() {
   when using delays and try to have tasks run quickly.*/
 void loop() {
 
-  /* MOTOR CONTROLLER STARTUP CODE, WILL ONLY BE RUN ONCE*/
-  if(CAN_Test_Flag){
+  //Initialize all timing variables for the loop. 
+  if (timing_init_flag) {
+    // Initialize the Timing Variables so that there is a start time
+    start_time_motors = micros();
+    start_time_servo = micros();
+    start_time_print = millis();
+    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
+    //start_time_voltage = millis();
+    timing_init_flag = false;
+  }
 
 
-    //This tasks torque actuation variables
-    int16_t torque_actuate_FR;
-    int16_t torque_actuate_FL;
-    int16_t torque_actuate_RR;
-    int16_t torque_actuate_RL;
+/* MOTOR CONTROLLER STARTUP AND OPERATION STATE MACHINE*/
+
+
+  //This tasks stack variables
+  int16_t torque_actuate[4];
+  unsigned long current_time_motors;
+
       
-    switch(MC_state_var) {
+  switch(MC_state_var) {
 
-      case MC_state_0: //Init
+    case MC_state_0: //Init
 
-        bootup_count = 0;
-        op_mode_SDO_count = 0;
-        inhibit_time_SDO_count = 0;
+      bootup_count = 0; 
+      op_mode_SDO_count = 0;
+      inhibit_time_SDO_count = 0;
 
-        MC_state_var = MC_state_1;
+      MC_state_var = MC_state_1;
+      if(GENERAL_PRINT){
+        Serial.println();
+        Serial.println("Transitioning to MC_state_1");
+        Serial.println();
+      }
+    
+    break;
+
+    case MC_state_1: //Wait for init MCs flag - SPI task has access to this flag
+
+      if(registers.reg_map.init_motor_controllers){
+        
+        ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+    
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"reset_nodes() function call successfully wrote this many NMT commands:  "  << ret;
+          Serial.println();
+          Serial.println();
+        }
+
+        registers.reg_map.init_motor_controllers = 0; //Can be made true again by writing to SPI register location
+
+        MC_state_var = MC_state_2;
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_1")
+          Serial.println("Transitioning to MC_state_2");
           Serial.println();
         }
-      
-      break;
+      }
+    
+    break;
 
-      case MC_state_1: //Wait for init MCs flag - SPI task has access to this flag
+    case MC_state_2: //Wait for reset node complete - A bootup confirmation should be received from each node 
 
-        if(registers.reg_map.init_motor_controllers){
-          
-          ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
-      
-          if (GENERAL_PRINT) {
-            Serial.println();
-            Serial <<"reset_nodes() function call successfully wrote this many NMT commands:  "  << ret;
-            Serial.println();
-            Serial.println();
-          }
+      if(bootup_count == 4){
 
-          init_motor_controllers = 0; //Can be made true again by writing to SPI register location
-
-          MC_state_var = MC_state_2;
-          if(GENERAL_PRINT){
-            Serial.println();
-            Serial.println("Transitioning to MC_state_2")
-            Serial.println();
-          }
+        bootup_count = 0; //Make sure this is cleared BEFORE sending reset_communications command
+        
+        ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+        
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"reset_communications() function call successfully wrote this many NMT commands:  "  << ret;
+          Serial.println();
+          Serial.println();
         }
-      
-      break;
-
-      case MC_state_2: //Wait for reset node complete - A bootup confirmation should be received from each node 
-
-        if(bootup_count == 4){
-  
-          bootup_count = 0;
-          
-          ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
-          
-          if (GENERAL_PRINT) {
-            Serial.println();
-            Serial <<"reset_communications() function call successfully wrote this many NMT commands:  "  << ret;
-            Serial.println();
-            Serial.println();
-          }
-          
-          MC_state_var = MC_state_3;
-          if(GENERAL_PRINT){
-            Serial.println();
-            Serial.println("Transitioning to MC_state_3")
-            Serial.println();
-          }
+        
+        MC_state_var = MC_state_3;
+        if(GENERAL_PRINT){
+          Serial.println();
+          Serial.println("Transitioning to MC_state_3");
+          Serial.println();
         }
-      
-      break;
+      }
+    
+    break;
 
-      case MC_state_3: //Wait for reset communication complete - A bootup confirmation should be received from each node 
+    case MC_state_3: //Wait for reset communication complete - A bootup confirmation should be received from each node 
 
-        if(bootup_count == 4){
-  
-          bootup_count = 0;
-          
-          ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
-          delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
-          
-          if (GENERAL_PRINT) {
-            Serial.println();
-            Serial <<"enter_pre_operational() function call successfully wrote this many NMT commands:  "  << ret;
-            Serial.println();
-            Serial.println();
-          }
-          
-          delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
+      if(bootup_count == 4){
 
-          ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
-          
-          if (GENERAL_PRINT) {
-            Serial.println();
-            Serial <<"set_torque_operating_mode() function call successfully wrote this many SDO's:  "  << ret;
-            Serial.println();
-            Serial.println();
-          }
-          
-          MC_state_var = MC_state_4;
-
-          if(GENERAL_PRINT){
-            Serial.println();
-            Serial.println("Transitioning to MC_state_4")
-            Serial.println();
-          }
-          
+        bootup_count = 0; 
+        
+        ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+        delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
+        
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"enter_pre_operational() function call successfully wrote this many NMT commands:  "  << ret;
+          Serial.println();
+          Serial.println();
         }
-      
-      break;
+        
+        delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
 
-      case MC_state_4: //Wait for set torque mode Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
-
-        if(op_mode_SDO_count == 4){
-          
-          ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
-           
-          if (GENERAL_PRINT) {
-            Serial.println();
-            Serial <<"set_TxPDO1_inhibit_time() function call successfully wrote this many SDO's:  "  << ret;
-            Serial.println();
-            Serial.println();
-      
-          }
-
-          op_mode_SDO_count = 0;
-          
-          MC_state_var = MC_state_5;
-
-          if(GENERAL_PRINT){
-            Serial.println();
-            Serial.println("Transitioning to MC_state_5")
-            Serial.println();
-          }
+        ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+        
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"set_torque_operating_mode() function call successfully wrote this many SDO's:  "  << ret;
+          Serial.println();
+          Serial.println();
         }
-      
-      break;
+        
+        MC_state_var = MC_state_4;
 
-      case MC_state_5: //Wait for set inhibit time Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
-
-        if(inhibit_time_SDO_count == 4){
-          
-          ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
-   
-          if (GENERAL_PRINT) {
-            Serial.println();
-            Serial <<"start_remote_nodes() function call successfully wrote this many NMT commands:  "  << ret;
-            Serial.println();
-            Serial.println();
-      
-          }
-
-          inhibit_time_SDO_count = 0;
-          
-          MC_state_var = MC_state_6;
-
-          if(GENERAL_PRINT){
-            Serial.println();
-            Serial.println("Transitioning to MC_state_6")
-            Serial.println();
-          }
+        if(GENERAL_PRINT){
+          Serial.println();
+          Serial.println("Transitioning to MC_state_4");
+          Serial.println();
         }
-      
-      break;
+        
+      }
+    
+    break;
 
-      case MC_state_6: //Wait for remote nodes startup confirmation - the Statuswords of each node should indicate "Switch on disabled" device control state 
+    case MC_state_4: //Wait for set torque mode Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
 
-        if(registers.reg_map.node_statuswords[0] & registers.reg_map.node_statuswords[1] & registers.reg_map.node_statuswords[2] & registers.reg_map.node_statuswords[3] & 0b01000000){
-
-          ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND);
-          
-          if (GENERAL_PRINT) {
-            Serial.println();
-            Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-            Serial.println();
-            Serial.println();
-          }
-          
-          MC_state_var = MC_state_7;
-
-          if(GENERAL_PRINT){
-            Serial.println();
-            Serial.println("Transitioning to MC_state_7")
-            Serial.println();
-          }
-          
+      if(op_mode_SDO_count == 4){
+        
+        ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
+         
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"set_TxPDO1_inhibit_time() function call successfully wrote this many SDO's:  "  << ret;
+          Serial.println();
+          Serial.println();
+    
         }
-      
-      break;
 
-      case MC_state_7: //Wait for "Ready to switch on" device control state - the Statuswords of each node will indicate state 
+        op_mode_SDO_count = 0;
+        
+        MC_state_var = MC_state_5;
 
-        if(registers.reg_map.node_statuswords[0] & registers.reg_map.node_statuswords[1] & registers.reg_map.node_statuswords[2] & registers.reg_map.node_statuswords[3] &  0b00100001){
-
-          if(!registers.reg_map.dead_switch){//If the dead switch feature is off
-            
-            ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
-            
-            if (GENERAL_PRINT) {
-              Serial.println();
-              Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-              Serial.println();
-              Serial.println();
-            }
-
-            MC_state_var = MC_state_8;
-  
-            if(GENERAL_PRINT){
-              Serial.println();
-              Serial.println("Transitioning to MC_state_8")
-              Serial.println();
-            }
-          }
-
-          else{//The dead switch feature is on
-             
-            MC_state_var = MC_state_9;
-  
-            if(GENERAL_PRINT){
-              Serial.println();
-              Serial.println("Transitioning to MC_state_9")
-              Serial.println();
-            }
-          }
-          
+        if(GENERAL_PRINT){
+          Serial.println();
+          Serial.println("Transitioning to MC_state_5");
+          Serial.println();
         }
-      
-      break;
+      }
+    
+    break;
 
-      case MC_state_8: //Wait for "Operation enabled" device control state = the Statuswords of each node will indicate state 
+    case MC_state_5: //Wait for set inhibit time Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
 
-        if(registers.reg_map.node_statuswords[0] & registers.reg_map.node_statuswords[1] & registers.reg_map.node_statuswords[2] & registers.reg_map.node_statuswords[3] & 0b00100111 ){
+      if(inhibit_time_SDO_count == 4){
+        
+        ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
  
-          registers.reg_map.throttle_front_right = 0;
-          registers.reg_map.throttle_front_left = 0;
-          registers.reg_map.throttle_rear_right = 0;
-          registers.reg_map.throttle_rear_left = 0;
-
-          torque_actuate_FR = 0;
-          torque_actuate_FL = 0;
-          torque_actuate_RR = 0;
-          torque_actuate_RL = 0;
-
-          MC_state_var = MC_state_10;
-
-          if(GENERAL_PRINT){
-            Serial.println();
-            Serial.println("Transitioning to MC_state_10")
-            Serial.println();
-          }       
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"start_remote_nodes() function call successfully wrote this many NMT commands:  "  << ret;
+          Serial.println();
+          Serial.println();
+    
         }
 
+        inhibit_time_SDO_count = 0;
+        
+        MC_state_var = MC_state_6;
 
-      break;
+        if(GENERAL_PRINT){
+          Serial.println();
+          Serial.println("Transitioning to MC_state_6");
+          Serial.println();
+        }
+      }
+    
+    break;
 
-      case MC_state_9: //Wait for trigger - the dead switch flag is true and waiting for user to pull the trigger on the radio transeiver 
+    case MC_state_6: //Wait for remote nodes startup confirmation - the Statuswords of each node should indicate "Switch on disabled" device control state 
 
-        if( THR_in >= 200){
+      if(statuswords[0] >> 8 & statuswords[1] >> 8 & statuswords[2] >> 8 & statuswords[3] >> 8 & 0b01000000){
+
+        ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND);
+        
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+          Serial.println();
+          Serial.println();
+        }
+        
+        MC_state_var = MC_state_7;
+
+        if(GENERAL_PRINT){
+          Serial.println();
+          Serial.println("Transitioning to MC_state_7");
+          Serial.println();
+        }
+        
+      }
+    
+    break;
+
+    case MC_state_7: //Wait for "Ready to switch on" device control state - the Statuswords of each node will indicate state 
+
+      if(statuswords[0] >> 8 & statuswords[1] >> 8 & statuswords[2] >> 8 & statuswords[3] >> 8 & 0b00100001){
+
+        if(!registers.reg_map.dead_switch){//If the dead switch feature is off
           
           ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
           
@@ -436,217 +382,240 @@ void loop() {
             Serial.println();
             Serial.println();
           }
-          
+
           MC_state_var = MC_state_8;
 
           if(GENERAL_PRINT){
             Serial.println();
-            Serial.println("Transitioning to MC_state_8")
+            Serial.println("Transitioning to MC_state_8");
             Serial.println();
           }
         }
-      
-      
-      break;
 
-      case MC_state_10: //"Operation enabled" device control state, actuate torque - Send out the torque actuations at a set frequency of about 180hz 
+        else{//The dead switch feature is on
+           
+          MC_state_var = MC_state_9;
 
-        //If SPI task ends up being a task with access to the MC state machine data, this chunk of code will not need to be here
-        torque_actuate_FR = saturate_torque(registers.reg_map.throttle_front_right);
-        torque_actuate_FL = saturate_torque(registers.reg_map.throttle_front_left);
-        torque_actuate_RR = saturate_torque(registers.reg_map.throttle_rear_right);
-        torque_actuate_RL = saturate_torque(registers.reg_map.throttle_rear_left);
-        
-        //Write saturated torque actuation values
-        RxPDO2_torque_write(NODE_1, -torque_actuate_FR);
-        RxPDO2_torque_write(NODE_2, torque_actuate_FL);
-        RxPDO2_torque_write(NODE_3, -torque_actuate_RR);
-        RxPDO2_torque_write(NODE_4, torque_actuate_RL);
-
-        if(registers.reg_map.dead_switch){
-          if(THR_in < 200){
-
-            //Write zero torque actuation values
-            RxPDO2_torque_write(NODE_1, 0);
-            RxPDO2_torque_write(NODE_2, 0);
-            RxPDO2_torque_write(NODE_3, 0);
-            RxPDO2_torque_write(NODE_4, 0);
-            
+          if(GENERAL_PRINT){
+            Serial.println();
+            Serial.println("Transitioning to MC_state_9");
+            Serial.println();
           }
         }
-            
-      break;
-
-      case MC_state_11: //Wait for "Quickstop active" device control state - the Statuswords of each node will indicate state 
-
         
-      
-      
-      break;
+      }
+    
+    break;
 
-      case MC_state_12: //"Quickstop active" device control state - the dead switch flag is true and waiting for user to pull the trigger on the radio transeiver 
+    case MC_state_8: //Wait for "Operation enabled" device control state = the Statuswords of each node will indicate state 
 
+      if(registers.reg_map.node_statuswords[0] & registers.reg_map.node_statuswords[1] & registers.reg_map.node_statuswords[2] & registers.reg_map.node_statuswords[3] & 0b00100111 ){
+
+        registers.reg_map.node_torques[0] = 0;
+        registers.reg_map.node_torques[1] = 0;
+        registers.reg_map.node_torques[2] = 0;
+        registers.reg_map.node_torques[3] = 0;
+
+        torque_actuate[0] = 0;
+        torque_actuate[1] = 0;
+        torque_actuate[2] = 0;
+        torque_actuate[3] = 0;
+
+        MC_state_var = MC_state_10;
+
+        if(GENERAL_PRINT){
+          Serial.println();
+          Serial.println("Transitioning to MC_state_10");
+          Serial.println();
+        }       
+      }
+
+
+    break;
+
+    case MC_state_9: //Wait for throttle - the dead switch flag is true and waiting for user to pull the throttle on the radio transeiver 
+
+      if( THR_in >= 200){
         
+        ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
+        
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+          Serial.println();
+          Serial.println();
+        }
+        
+        MC_state_var = MC_state_8;
+
+        if(GENERAL_PRINT){
+          Serial.println();
+          Serial.println("Transitioning to MC_state_8");
+          Serial.println();
+        }
+      }
+    
+    
+    break;
+
+    case MC_state_10: //"Operation enabled" device control state, actuate torque - Send out the torque actuations at a set frequency of about 180hz 
       
+      current_time_motors = micros();
+      if ((current_time_motors - start_time_motors) >= 5555)  //5,555 microseconds => 180hz. Motor torque setpoints will update at this frequency (this frequency should prevent buffer overruns on the nodes
+      {
+        //If SPI task ends up being a task with access to the MC state machine data, this chunk of code will not need to be here
+        torque_actuate[0] = -saturate_torque(registers.reg_map.node_torques[0]); //Front right wheel
+        torque_actuate[1] = saturate_torque(registers.reg_map.node_torques[1]); //Front left wheel
+        torque_actuate[2] = -saturate_torque(registers.reg_map.node_torques[2]); //Back right wheel
+        torque_actuate[3] = saturate_torque(registers.reg_map.node_torques[3]); //Back left wheel
+
+        for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
+          //Write saturated torque actuation values
+          ret = RxPDO2_torque_write(node_id, torque_actuate[node_id-1]);
+          
+          if(!ret){
+            torque_write_error_cnt++;
+          }
+          
+          torque_write_attempts++;
+        }
+
+        start_time_motors = current_time_motors;
+      }
+
+
+      if(registers.reg_map.dead_switch){
+        if(THR_in < 200){
+        //If conditions for quickstop have been met
+
+          if (GENERAL_PRINT){
+            Serial.println();
+            Serial.print("The Torque write error count was: ");
+            Serial.println(torque_write_error_cnt);
+            Serial.println();
+            Serial.print("The Torque write attempt count was: ");
+            Serial.println(torque_write_attempts);
+            Serial.println();
+          }
+          torque_write_error_cnt = 0;
+          torque_write_attempts = 0;
+          
+          //Write zero torque actuation values
+          RxPDO2_torque_write(NODE_1, 0);
+          RxPDO2_torque_write(NODE_2, 0);
+          RxPDO2_torque_write(NODE_3, 0);
+          RxPDO2_torque_write(NODE_4, 0);
+          
+          delayMicroseconds(10);
+          
+          ret = RxPDO1_controlword_write(QUICKSTOP_COMMAND); 
+          
+          if (GENERAL_PRINT) {
+            Serial.println();
+            Serial <<"RxPDO1_controlword_write(QUICKSTOP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+            Serial.println();
+            Serial.println();
+          }
+          
+          MC_state_var = MC_state_11;
+
+          if(GENERAL_PRINT){
+            Serial.println();
+            Serial.println("Transitioning to MC_state_11");
+            Serial.println();
+          }
+        }
+      }
+          
+    break;
+
+    case MC_state_11: //Wait for "Quickstop active" device control state - the Statuswords of each node will indicate state 
       
-      break;
+      if(statuswords[0] >> 8 & statuswords[1] >> 8 & statuswords[2] >> 8 & statuswords[3] >> 8 & 0b00000111 ){
+      //If MCs have reached the "Quickstop active" device control state, transition
+          
+          MC_state_var = MC_state_12;
+
+          if(GENERAL_PRINT){
+            Serial.println();
+            Serial.println("Transitioning to MC_state_12");
+            Serial.println();
+          }
+      }
+
+    break;
+
+    case MC_state_12: //"Quickstop active" device control state - the dead switch flag is true and waiting for user to pull the throttle on the radio transeiver 
+
+      if(THR_in >= 200){
+        
+        ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
+        
+        if (GENERAL_PRINT) {
+          Serial.println();
+          Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
+          Serial.println();
+          Serial.println();
+        }
+        
+        MC_state_var = MC_state_8;
+
+        if(GENERAL_PRINT){
+          Serial.println();
+          Serial.println("Transitioning to MC_state_8");
+          Serial.println();
+        }
+      }
       
-    }
+    break;
+  }
 
-    //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
-    unsigned long start_time_CAN_check = millis();
-    unsigned long current_time_CAN_check = millis();
-    while(current_time_CAN_check - start_time_CAN_check <=1000)
-    {
-      read_available_message(); 
-      current_time_CAN_check = millis();
-    }
+  try_CAN_msg_filter(); //This will run as often as loop runs...which should be REALLY fast...checking for received CAN messages often
 
 
-    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
-     
-    if (GENERAL_PRINT) {
-      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    } 
+/* ---------------------------------FEATURES I AM OR WAS EXPERIMENTING WITH AT SOME POINT------------------------------------------------------------------------------------------------------------------------*/
+//
+//    //This while loop will make sure there are no lingering NMT boot up messages in the CAN read buffer before beginning the Motor Controller initialization code
+//    unsigned long start_time_CAN_check = millis();
+//    unsigned long current_time_CAN_check = millis();
+//    while(current_time_CAN_check - start_time_CAN_check <=1000)
+//    {
+//      read_available_message(); 
+//      current_time_CAN_check = millis();
+//    }
 
-    unsigned long start_time_statuswait = millis();
-    unsigned long current_time_statuswait = millis(); 
-    while(current_time_statuswait - start_time_statuswait < 100)
-    {
-      try_CAN_msg_filter();
-      current_time_statuswait = millis();
-    }
 
-    if(GENERAL_PRINT)
-    { 
-      Serial.println();
-      Serial.println("After the enter pre operational function call, the statusword values were: ");
-      Serial.println();
-      Serial.print("  Statusword 1 = 0x");
-      Serial.println(statuswords[0], HEX);
-      Serial.print("  Statusword 2 = 0x");
-      Serial.println(statuswords[1], HEX);
-      Serial.print("  Statusword 3 = 0x");
-      Serial.println(statuswords[2], HEX);
-      Serial.print("  Statusword 4 = 0x");
-      Serial.println(statuswords[3], HEX);
-      Serial.println();     
-    }
+//    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
+//     
+//    if (GENERAL_PRINT) {
+//      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
+//      Serial.println();
+//      Serial.println();
+//    } 
 
-    
-
-    
-
-    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
-     
-    if (GENERAL_PRINT) {
-      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    } 
-
-    start_time_statuswait = millis();
-    current_time_statuswait = millis(); 
-    while(current_time_statuswait - start_time_statuswait < 100)
-    {
-      try_CAN_msg_filter();
-      current_time_statuswait = millis();
-    }
-
-    if(GENERAL_PRINT)
-    {
-      Serial.println();
-      Serial.println("After the start remote nodes function call, the statusword values were: ");
-      Serial.println();
-      Serial.print("  Statusword 1 = 0x");
-      Serial.println(statuswords[0], HEX);
-      Serial.print("  Statusword 2 = 0x");
-      Serial.println(statuswords[1], HEX);
-      Serial.print("  Statusword 3 = 0x");
-      Serial.println(statuswords[2], HEX);
-      Serial.print("  Statusword 4 = 0x");
-      Serial.println(statuswords[3], HEX);
-      Serial.println();       
-    }
-
-    delay(1);//Wait a little bit for the motor controllers to change state and then request the statuswords
-
-    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
-     
-    if (GENERAL_PRINT) {
-      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    } 
-
-    start_time_statuswait = millis();
-    current_time_statuswait = millis(); 
-    while(current_time_statuswait - start_time_statuswait < 100)
-    {
-      try_CAN_msg_filter();
-      current_time_statuswait = millis();
-    }
-
-    if(GENERAL_PRINT)
-    {
-      Serial.println();
-      Serial.println("After the RxPDO1_controlword_write(SHUTDOWN_COMMAND) function call, the statusword values were: ");
-      Serial.println();
-      Serial.print("  Statusword 1 = 0x");
-      Serial.println(statuswords[0], HEX);
-      Serial.print("  Statusword 2 = 0x");
-      Serial.println(statuswords[1], HEX);
-      Serial.print("  Statusword 3 = 0x");
-      Serial.println(statuswords[2], HEX);
-      Serial.print("  Statusword 4 = 0x");
-      Serial.println(statuswords[3], HEX);
-      Serial.println();           
-    }
-    
-    
-    ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); //Send out the controlword RxPDO with an enable operation command so that the device state machine transitions to the "Operation Enabled" state 
-    
-    if (GENERAL_PRINT) {
-      Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-      Serial.println();
-      Serial.println();
-    }    
-    
-    delay(1);//Wait a little bit for the motor controllers to change state and then request the statuswords
-    
-    ret = request_statuswords(); //Send out an expedited statusword read request to all nodes
-     
-    if (GENERAL_PRINT) {
-      Serial <<"request_statusword function call returned error code "  << ret << " which may later be used for error checking in the main Teensy firmware";
-      Serial.println();
-      Serial.println();
-    } 
-
-    start_time_statuswait = millis();
-    current_time_statuswait = millis(); 
-    while(current_time_statuswait - start_time_statuswait < 100)
-    {
-      try_CAN_msg_filter();
-      current_time_statuswait = millis();
-    }
-
-    if(GENERAL_PRINT)
-    {
-      Serial.println();
-      Serial.println("After the RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call, the statusword values were: ");
-      Serial.println();
-      Serial.print("  Statusword 1 = 0x");
-      Serial.println(statuswords[0], HEX);
-      Serial.print("  Statusword 2 = 0x");
-      Serial.println(statuswords[1], HEX);
-      Serial.print("  Statusword 3 = 0x");
-      Serial.println(statuswords[2], HEX);
-      Serial.print("  Statusword 4 = 0x");
-      Serial.println(statuswords[3], HEX);
-      Serial.println();     
-    }
+//    unsigned long start_time_statuswait = millis();
+//    unsigned long current_time_statuswait = millis(); 
+//    while(current_time_statuswait - start_time_statuswait < 100)
+//    {
+//      try_CAN_msg_filter();
+//      current_time_statuswait = millis();
+//    }
+//
+//    if(GENERAL_PRINT)
+//    { 
+//      Serial.println();
+//      Serial.println("After the enter pre operational function call, the statusword values were: ");
+//      Serial.println();
+//      Serial.print("  Statusword 1 = 0x");
+//      Serial.println(statuswords[0], HEX);
+//      Serial.print("  Statusword 2 = 0x");
+//      Serial.println(statuswords[1], HEX);
+//      Serial.print("  Statusword 3 = 0x");
+//      Serial.println(statuswords[2], HEX);
+//      Serial.print("  Statusword 4 = 0x");
+//      Serial.println(statuswords[3], HEX);
+//      Serial.println();     
+//    }
 
 
       
@@ -690,45 +659,9 @@ void loop() {
 //      Serial.println("------------------------------------------------------------");   
 //      Serial.println();   
 
-      
-      CAN_Test_Flag = false;
-    }
+/* -------------------------------------END OF EXPERIMENTAL FEATURES-----------------------------------------------------------------------------------------------------------------------------------------------*/
 
-//  //Initialize all timing variables for the loop. 
-//  if (timing_init_flag) {
-//    // Initialize the Timing Variables so that there is a start time
-//    start_time_motors = micros();
-//    start_time_servo = micros();
-//    start_time_print = millis();
-//    start_time_error_check = millis();
-//    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
-//    //start_time_voltage = millis();
-//    timing_init_flag = false;
-//  }
-  
-
-//  unsigned long current_time_error_check = millis();
-//  if ((current_time_error_check - start_time_error_check) >= 2000) 
-//  {
-//    
-////    request_error_registers(); //Send out an expedited error register read request to all nodes 
-////    //request_statuswords();
-//
-//    
-//    start_time_error_check = current_time_error_check;
-//  }
     
-
-//  unsigned long current_time_motors = micros();
-//  if ((current_time_motors - start_time_motors) >= 556)  //556 microseconds => 180hz. Motor torque setpoints will update at this frequency
-//  {
-//
-//    RxPDO2_torque_write(NODE_1, -THR_in);
-//    RxPDO2_torque_write(NODE_2, THR_in);
-//    RxPDO2_torque_write(NODE_3, -THR_in);
-//    RxPDO2_torque_write(NODE_4, THR_in);
-//    start_time_motors = current_time_motors;
-//  }
 
 //  if (GENERAL_PRINT)
 //  {
@@ -803,7 +736,8 @@ void try_CAN_msg_filter()
   if(Can0.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
   {
     if(CAN_FILTER_PRINT){
-      Serial.println("TRY_CAN_MSG_FILTER READ OCCURED");
+      Serial.print("TRY_CAN_MSG_FILTER READ OCCURED, the id was: ");
+      Serial.println(msg.id, HEX);
     }
     
     switch(msg.id){
@@ -812,28 +746,28 @@ void try_CAN_msg_filter()
       case 0x1A1: //If TxPDO1, node 1 (the motor velocity)
       
         
-        registers.reg_map.velocity_FR = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 1. Units are in RPM.
+        registers.reg_map.node_rpms[0] = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 1. Units are in RPM.
                                                                                    //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
         
       break;
 
       case 0x1A2: //If TxPDO1, node 1 (the motor velocity)
 
-        registers.reg_map.velocity_FL = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 2. Units are in RPM.
+        registers.reg_map.node_rpms[1] = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 2. Units are in RPM.
                                                                                    //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
         
       break;
 
       case 0x1A3: //If TxPDO1, node 1 (the motor velocity)
 
-        registers.reg_map.velocity_RR = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 3. Units are in RPM.
+        registers.reg_map.node_rpms[2] = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 3. Units are in RPM.
                                                                                    //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
         
       break;
 
       case 0x1A4: //If TxPDO1, node 1 (the motor velocity)
 
-        registers.reg_map.velocity_RL = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 4. Units are in RPM.
+        registers.reg_map.node_rpms[3] = (int16_t)((msg.buf[1] << 8) | msg.buf[0]); // This is extracting the velocity reading from TxPDO1 node 4. Units are in RPM.
                                                                                    //(original message is 32 bits but we're ignoring 2 high bytes because the motors never spin that fast)
           
       break;
@@ -879,11 +813,32 @@ void try_CAN_msg_filter()
 
       break;
 
-      case 0x701: case 0x702: case 0x703: case 0x704://If Network Management (NMT) Boot Up message
+      case 0x701: case 0x702: case 0x703: case 0x704:
       
+        if(msg.buf[0] == 0 && msg.buf[1] == 0 && msg.buf[2] == 0 && msg.buf[3] == 0 && msg.buf[4] == 0 && msg.buf[5] == 0 &&msg.buf[6] == 0 &&msg.buf[7] == 0){ //If Network Management (NMT) Boot Up message
+         
+          bootup_count++;
+          
+          if(CAN_FILTER_PRINT){
+          Serial.println();
+          Serial.println("Recieved a bootup confirmation");  
+          Serial.println();
+          print_CAN_message(msg);
+          }  
+        }
+          
+
       break;
       
       default:
+
+      if(CAN_FILTER_PRINT){
+        Serial.println();
+        Serial.print("A message was received during the try_CAN_msg_filter() function call that was not accounted for: ");
+        Serial.println();
+        print_CAN_message(msg);
+      }
+      
       break;
     }
   } 
@@ -905,8 +860,8 @@ void filter_SDO(CAN_message_t &msg){
     case 0x6041: //Statusword object dictionary index
 
         node_id = msg.id & 0x000F; //the last byte of the COB-id is the node id
-        registers.reg_map.node_statuswords[node_id--] = msg.buf[4]; //The first data byte of the SDO return message is the LSB of the Statusword for the node. For storage in SPI registers
-        statuswords[node_id--] = (uint16_t)(msg.buf[5] << 8 | msg.buf[4]); //Store the FULL 16 bit statusword for local Teensy use
+        registers.reg_map.node_statuswords[node_id-1] = msg.buf[4]; //The first data byte of the SDO return message is the LSB of the Statusword for the node. For storage in SPI registers
+        statuswords[node_id-1] = (uint16_t)(msg.buf[5] << 8 | msg.buf[4]); //Store the FULL 16 bit statusword for local Teensy use
         if(CAN_FILTER_PRINT){
           Serial.println("Recieved an SDO statusword response");  
           Serial.println();
@@ -925,6 +880,27 @@ void filter_SDO(CAN_message_t &msg){
 
     case 0x6060: //Modes of operation object dictionary index
 
+      if(command_specifier == 0x60){//If the SDO was an expedited write confirmation (command specifier of 0x60)
+        
+        op_mode_SDO_count++;
+        
+        if(CAN_FILTER_PRINT){
+          Serial.println("Recieved an SDO operating mode write confirmation");  
+          Serial.println();
+          Serial.print("The COB-id was: ");
+          Serial.print(msg.id, HEX);
+          Serial.println(); 
+          Serial.print("The command specifier was: "); 
+          Serial.println(command_specifier, HEX);
+          Serial.print("The object index was: "); 
+          Serial.println(object_index, HEX);
+          Serial.println();
+          print_CAN_message(msg);
+        }  
+      }
+        
+
+        
     break;
 
     case 0x1001: //Error register object dictionary index
@@ -932,7 +908,7 @@ void filter_SDO(CAN_message_t &msg){
       //if(command_specifier == 0x4B){//If the command specifier indicates that the message was a read dictionary object reply of 1 byte
         
         node_id = msg.id & 0x000F; //the last byte of the COB-id is the node id
-        registers.reg_map.node_errors[node_id--] = msg.buf[4]; //The first data byte of the SDO return message 
+        registers.reg_map.node_errors[node_id-1] = msg.buf[4]; //The first data byte of the SDO return message 
         //error_flag = true;  
         
         if(CAN_FILTER_PRINT){
@@ -954,7 +930,41 @@ void filter_SDO(CAN_message_t &msg){
 
 
     break;
+
+    case 0x1800:
+
+      if((command_specifier == 0x60) && (msg.buf[3] == 0x03)){//If the SDO was an expedited write confirmation (command specifier of 0x60) AND the subindex was that of the inhibit time (3)
+        
+        inhibit_time_SDO_count++;
+        
+        if(CAN_FILTER_PRINT){
+          
+          Serial.println("Recieved an SDO TxPDO1 inhibit time write confirmation");  
+          Serial.println();
+          Serial.print("The COB-id was: ");
+          Serial.print(msg.id, HEX);
+          Serial.println(); 
+          Serial.print("The command specifier was: "); 
+          Serial.println(command_specifier, HEX);
+          Serial.print("The object index was: "); 
+          Serial.println(object_index, HEX);
+          Serial.println();
+          print_CAN_message(msg);
+        }   
+      }
+
+    break;
+
+    default:
     
+      if(CAN_FILTER_PRINT){
+        Serial.println();
+        Serial.print("A message was received during the try_CAN_msg_filter() function call that was not accounted for: ");
+        Serial.println();
+        print_CAN_message(msg);
+      }
+      
+      break;
   }
   
 }
