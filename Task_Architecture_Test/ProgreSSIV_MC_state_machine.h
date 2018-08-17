@@ -2,6 +2,7 @@
 #define __PROGRESSIV_MC_STATE_MACHINE_H__
 
 #include <stdint.h>
+#include "shares.h"
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*CAN bus/Motor Controller preparation*/
@@ -27,8 +28,9 @@ class MC_state_machine
  private:
 
   /*Class attributes*/
+  SPI_commands_t *SPI_commands_struct;
   int16_t *torque_actuations; 
-  struct node_struct *CAN_read_struct; 
+  node_info_t *CAN_read_struct; 
   
   int32_t write_error_cnt; //Used for debugging CAN writes
   int32_t torque_write_attempts; //Used for debugging CAN writes
@@ -54,7 +56,7 @@ class MC_state_machine
   } MC_state_var; //First state to be entered
   
  public:
- MC_state_machine::MC_state_machine( int16_t *SPI_torque_actuations, node_info_t *CAN_read_struct ); //Prototype of the constructor
+ MC_state_machine( SPI_commands_t *SPI_commands, int16_t *SPI_torque_actuations, node_info_t *CAN_read_struct ); //Prototype of the constructor. It takes in an array of torque actuations from the SPI_actuations struct
  void run_sm(); //Run the state machine
 }; 
 

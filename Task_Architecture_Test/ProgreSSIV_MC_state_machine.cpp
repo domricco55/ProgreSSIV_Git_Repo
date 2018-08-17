@@ -6,15 +6,22 @@ of the ProgreSSIV senior project team - Cal Poly San Luis Obispo  */
 #include "ProgreSSIV_MC_state_machine.h"
 #include "ProgreSSIV_CAN_driver.h"
 
+/*General Debugging*/
+template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding streaming (insertion-style) Output" from playground.arduino.cc
+  //Allows Serial << "This is an insertion-style message" type operation
+  obj.print(arg);
+  return obj;
+}
 #define MC_STATE_MACHINE_PRINT 1  
 
 
 
-MC_state_machine::MC_state_machine( int16_t *SPI_torque_actuations, node_info_t *CAN_read_struct ){
+MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, int16_t *SPI_torque_actuations, node_info_t *CAN_read_struct ){
 
   /* Initialize member attribute pointers */
+  SPI_commands_struct = SPI_commands_struct;
   int16_t *torque_actuations = SPI_torque_actuations;
-  node_info_t *CAN_read_struct = CAN_read_struct; //Contains statuswords, modes of operation displays, error messages, etc. Data read in CAN filter task is placed into this struct 
+  CAN_read_struct = CAN_read_struct; //Contains statuswords, modes of operation displays, error messages, etc. Data read in CAN filter task is placed into this struct 
 
   /* Initialize non-pointer member attributes */
   int32_t write_error_cnt = 0;
@@ -24,7 +31,7 @@ MC_state_machine::MC_state_machine( int16_t *SPI_torque_actuations, node_info_t 
 
 
 
-void MC_state_machine::run_sm{
+void MC_state_machine::run_sm(){
 
 /* MOTOR CONTROLLER STARTUP AND OPERATION STATE MACHINE*/
 
@@ -36,9 +43,9 @@ void MC_state_machine::run_sm{
 
     case MC_state_0: //Init
 
-      nodes_struct -> bootup_count = 0; 
-      nodes_struct -> op_mode_SDO_count = 0;
-      nodes_struct -> inhibit_time_SDO_count = 0;
+      CAN_read_struct -> bootup_count = 0; 
+      CAN_read_struct -> op_mode_SDO_count = 0;
+      CAN_read_struct -> inhibit_time_SDO_count = 0;
       
       ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
   
@@ -60,9 +67,9 @@ void MC_state_machine::run_sm{
 
     case MC_state_1: //Wait for init MCs flag - SPI task has access to this flag
 
-      if(bootup_count == 4){
+      if(CAN_read_struct -> bootup_count == 4){
 
-        bootup_count = 0; //Make sure this is cleared BEFORE sending reset_communications command
+        CAN_read_struct -> bootup_count = 0; //Make sure this is cleared BEFORE sending reset_communications command
         
         ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
         
@@ -85,9 +92,9 @@ void MC_state_machine::run_sm{
 
     case MC_state_2: //Wait for reset node complete - A bootup confirmation should be received from each node 
     
-      if(registers.reg_map.init_motor_controllers && bootup_count==4){
+      if(SPI_commands_struct -> init_motor_controllers && CAN_read_struct -> bootup_count==4){
         
-        bootup_count = 0; 
+        CAN_read_struct -> bootup_count = 0; 
         
         ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
         delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
@@ -110,7 +117,7 @@ void MC_state_machine::run_sm{
           Serial.println();
         }
         
-        registers.reg_map.init_motor_controllers = 0; //Can be made true again by writing to SPI register location
+        SPI_commands_struct -> init_motor_controllers = 0; //Can be made true again by writing to SPI register location
 
         MC_state_var = MC_state_3;
         if(MC_STATE_MACHINE_PRINT){
@@ -127,7 +134,7 @@ void MC_state_machine::run_sm{
 
     case MC_state_3: //Wait for set torque mode Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
 
-      if(op_mode_SDO_count == 4){
+      if(CAN_read_struct -> op_mode_SDO_count == 4){
         
         delayMicroseconds(10);
         ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
@@ -140,7 +147,7 @@ void MC_state_machine::run_sm{
     
         }
 
-        op_mode_SDO_count = 0;
+        CAN_read_struct -> op_mode_SDO_count = 0;
         
         MC_state_var = MC_state_4;
 
@@ -155,7 +162,7 @@ void MC_state_machine::run_sm{
 
     case MC_state_4: //Wait for set inhibit time Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
 
-      if(inhibit_time_SDO_count == 4){
+      if(CAN_read_struct -> inhibit_time_SDO_count == 4){
 
         delayMicroseconds(10);
         ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
@@ -178,7 +185,7 @@ void MC_state_machine::run_sm{
     
         }
 
-        inhibit_time_SDO_count = 0;
+        CAN_read_struct -> inhibit_time_SDO_count = 0;
         
         MC_state_var = MC_state_5;
 
@@ -193,7 +200,7 @@ void MC_state_machine::run_sm{
 
     case MC_state_5: //Wait for remote nodes startup confirmation - the Statuswords of each node should indicate "Switch on disabled" device control state 
 
-      if((uint8_t)statuswords[0] & (uint8_t)statuswords[1]  & (uint8_t)statuswords[2] & (uint8_t)statuswords[3] & 0b01000000){
+      if(CAN_read_struct -> node_statuswords[0] & CAN_read_struct -> node_statuswords[1]  & CAN_read_struct -> node_statuswords[2] & CAN_read_struct -> node_statuswords[3] & 0b01000000){
         
         delayMicroseconds(10);
         ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND);
@@ -219,9 +226,9 @@ void MC_state_machine::run_sm{
 
     case MC_state_6: //Wait for "Ready to switch on" device control state - the Statuswords of each node will indicate state 
 
-      if((uint8_t)statuswords[0] & (uint8_t)statuswords[1]  & (uint8_t)statuswords[2] & (uint8_t)statuswords[3] & 0b00100001){
+      if(CAN_read_struct -> node_statuswords[0] & CAN_read_struct -> node_statuswords[1]  & CAN_read_struct -> node_statuswords[2] & CAN_read_struct -> node_statuswords[3] & 0b00100001){
 
-        if(!registers.reg_map.dead_switch){//If the dead switch feature is off
+        if(!SPI_commands_struct -> dead_switch){//If the dead switch feature is off
           
           ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
           
@@ -258,7 +265,7 @@ void MC_state_machine::run_sm{
 
     case MC_state_7: //Wait for "Operation enabled" device control state = the Statuswords of each node will indicate state 
 
-      if(registers.reg_map.node_statuswords[0] & registers.reg_map.node_statuswords[1] & registers.reg_map.node_statuswords[2] & registers.reg_map.node_statuswords[3] & 0b00100111 ){
+      if(CAN_read_struct -> node_statuswords[0] & CAN_read_struct -> node_statuswords[1]  & CAN_read_struct -> node_statuswords[2] & CAN_read_struct -> node_statuswords[3] & 0b00100111 ){
 
         torque_actuate[0] = 0;
         torque_actuate[1] = 0;

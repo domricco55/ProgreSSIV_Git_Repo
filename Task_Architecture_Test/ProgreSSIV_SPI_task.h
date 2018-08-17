@@ -93,7 +93,7 @@ class MC_state_machine
 
   
  public:
- SPI_task(int16_t *SPI_torque_actuations, struct *CAN_read_struct ); //Prototype of the constructor
+ SPI_task(SPI_ *SPI_torque_actuations, node_info_t *CAN_read_struct ); //Prototype of the constructor
  void handle_registers(); //The register struct is being accessed by the spi0_isr, handle its data
 };  
 
