@@ -138,7 +138,8 @@ int16_t rpm_FL;//stores rpm of node 2 (Front Left wheel)
 int16_t rpm_BR;//stores rpm of node 3 (Back Right wheel)
 int16_t rpm_BL;//stores rpm of node 4 (Back Left wheel)
 uint16_t statuswords[4];//stores statuswords locally
-int32_t torque_write_error_cnt = 0;
+uint8_t mode_of_op_displays[4];//Stores the mode of operation of each node
+int32_t write_error_cnt = 0;
 int32_t torque_write_attempts = 0;
 
 
@@ -257,8 +258,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr, RISING);
 
   //Set some of the starting conditions of the registers
-  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
-  registers.reg_map.dead_switch = 1;//Dead switch on or off?
+//  registers.reg_map.init_motor_controllers = 1;//Anything non-zero will cause the motor controllers (associated with the CAN Bus) to initialize in the SPI task
+//  registers.reg_map.dead_switch = 1;//Dead switch on or off?
   
 //  registers.reg_map.servo_out = 0;//Set an initial servo position value. Just a visual que that servo is working at startup
   if (GENERAL_PRINT) {
@@ -1191,6 +1192,30 @@ void try_CAN_msg_filter()
 
       break;
 
+      case 0x3A1: //If TxPDO3, node 1 (the statusword)
+
+        mode_of_op_displays[0] = msg.buf[0];
+          
+      break;
+
+      case 0x3A2: //If TxPDO3, node 2 (the statusword)
+      
+        mode_of_op_displays[1] = msg.buf[0];
+          
+      break;
+
+      case 0x3A3: //If TxPDO3, node 3 (the statusword)
+      
+        mode_of_op_displays[2] = msg.buf[0];
+          
+      break;
+
+      case 0x3A4: //If TxPDO3, node 4 (the statusword )
+
+        mode_of_op_displays[3] = msg.buf[0];
+
+      break;
+
       case 0x581: case 0x582: case 0x583: case 0x0584: //If Service Data Object from one of the nodes
 
         filter_SDO(msg); //This function will interpret the Service Data Object and act occordingly. A reference to the CAN message object is passed in
@@ -1431,11 +1456,11 @@ void MC_state_machine(){
         
         delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
 
-        ret = set_torque_operating_mode(); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+        ret = SDO_set_operating_mode(TORQUE_MODE); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
         
         if (GENERAL_PRINT) {
           Serial.println();
-          Serial <<"set_torque_operating_mode() function call successfully wrote this many SDO's:  "  << ret;
+          Serial <<"SDO_set_operating_mode(TORQUE_MODE) function call successfully wrote this many SDO's:  "  << ret;
           Serial.println();
           Serial.println();
         }
@@ -1653,7 +1678,7 @@ void MC_state_machine(){
           ret = RxPDO2_torque_write(node_id,torque_actuate[node_id-1]);
           
           if(!ret){
-            torque_write_error_cnt++;
+            write_error_cnt++;
           }
           
           torque_write_attempts++;
@@ -1670,13 +1695,13 @@ void MC_state_machine(){
           if (GENERAL_PRINT){
             Serial.println();
             Serial.print("The Torque write error count was: ");
-            Serial.println(torque_write_error_cnt);
+            Serial.println(write_error_cnt);
             Serial.println();
             Serial.print("The Torque write attempt count was: ");
             Serial.println(torque_write_attempts);
             Serial.println();
           }
-          torque_write_error_cnt = 0;
+          write_error_cnt = 0;
           torque_write_attempts = 0;
           
           //Write zero torque actuation values
@@ -1686,15 +1711,25 @@ void MC_state_machine(){
           RxPDO2_torque_write(NODE_4, 0);
           
           delayMicroseconds(10);
-          
-          ret = RxPDO1_controlword_write(QUICKSTOP_COMMAND); 
-          
-          if (GENERAL_PRINT) {
+
+          //Write 4 RxPDO3's, one for each node telling to go to Profile Velocity Mode and set each's target velocity to zero
+          for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
+            //Write saturated torque actuation values
+            ret = RxPDO3_mode_and_TV_write(node_id, PROFILE_VELOCITY_MODE, 0 );
+            
+            if(!ret){
+              write_error_cnt++;
+            }
+          }  
+
+          if (GENERAL_PRINT){
             Serial.println();
-            Serial <<"RxPDO1_controlword_write(QUICKSTOP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-            Serial.println();
+            Serial.print("4 RxPDO3 write messages attempted - the write error count was: ");
+            Serial.println(write_error_cnt);
             Serial.println();
           }
+          
+          write_error_cnt = 0;
           
           MC_state_var = MC_state_10;
 
@@ -1708,10 +1743,10 @@ void MC_state_machine(){
           
     break;
 
-    case MC_state_10: //Wait for "Quickstop active" device control state - the Statuswords of each node will indicate state 
+    case MC_state_10: //Wait for Velocity Profile Mode confirmation - TxPDO3 Modes of Operation Display
       
-      if(statuswords[0] >> 8 & statuswords[1] >> 8 & statuswords[2] >> 8 & statuswords[3] >> 8 & 0b00000111 ){
-      //If MCs have reached the "Quickstop active" device control state, transition
+      if(mode_of_op_displays[0] & mode_of_op_displays[1] & mode_of_op_displays[2] & mode_of_op_displays[3] & PROFILE_VELOCITY_MODE ){
+      //If MCs are now in Profile Velocity Mode
           
           MC_state_var = MC_state_11;
 
@@ -1724,30 +1759,55 @@ void MC_state_machine(){
 
     break;
 
-    case MC_state_11: //"Quickstop active" device control state - the dead switch flag is true and waiting for user to pull the throttle on the radio transeiver 
-
+    case MC_state_11: //Velocity Profile Mode Zero Velocity
+      
       if(THR_in >= 200){
         
-        ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
+          //Write 4 RxPDO3's, one for each node telling to go to Torque Mode. The Target Velocity is irrelevant at this point but it's mapped to the PDO so we will just write a zero
+          for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
+            //Write saturated torque actuation values
+            ret = RxPDO3_mode_and_TV_write(node_id, TORQUE_MODE, 0 );
+            
+            if(!ret){
+              write_error_cnt++;
+            }
+          }  
+
+          if (GENERAL_PRINT){
+            Serial.println();
+            Serial.print("4 RxPDO3 write messages attempted - the write error count was: ");
+            Serial.println(write_error_cnt);
+            Serial.println();
+          }
+          
+          write_error_cnt = 0;
         
-        if (GENERAL_PRINT) {
-          Serial.println();
-          Serial <<"RxPDO1_controlword_write(ENABLE_OP_COMMAND) function call successfully wrote this many PDO's:  "  << ret;
-          Serial.println();
-          Serial.println();
-        }
-        
-        MC_state_var = MC_state_7;
+        MC_state_var = MC_state_12;
 
         if(GENERAL_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state_7");
+          Serial.println("Transitioning to MC_state_12");
           Serial.println();
         }
       }
       
     break;
     
+    case MC_state_12: //Wait for Torque Mode confirmation - TxPDO3 Modes of Operation Display will update the mode_of_op_displays array. 
+      
+      if(mode_of_op_displays[0] & mode_of_op_displays[1] & mode_of_op_displays[2] & mode_of_op_displays[3] & TORQUE_MODE ){
+      //If MCs are now in Torque Mode
+          
+          MC_state_var = MC_state_9;
+
+          if(GENERAL_PRINT){
+            Serial.println();
+            Serial.println("Transitioning to MC_state_9");
+            Serial.println();
+          }
+      }
+
+    break;
   }
 }
 
