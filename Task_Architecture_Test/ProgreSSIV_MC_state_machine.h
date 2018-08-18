@@ -4,10 +4,6 @@
 #include <stdint.h>
 #include "shares.h"
 
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*CAN bus/Motor Controller preparation*/
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
 /* Nodes 1 through 4 indicate which motor driver the firmware is talking to, CAN NODES*/
 #define NODE_1 1
 #define NODE_2 2
@@ -65,7 +61,7 @@ class MC_state_machine
   
   public:
   
-  MC_state_machine(SPI_commands_t *SPI_commands, int16_t *SPI_torque_actuations, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor. It takes in an array of torque actuations from the SPI_actuations struct
+  MC_state_machine(SPI_commands_t *SPI_commands, int16_t *SPI_torque_actuations, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor. 
   void run_sm(); //Run the state machine
   int16_t saturate_torque(int16_t torque_command); //Saturate the torque actuations to the max continuous torque for our motors
 }; 

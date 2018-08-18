@@ -30,18 +30,15 @@
 
 #include "FlexCAN.h"
 #include "kinetis_flexcan.h"
-//libraries for imu
-#include <Wire.h>
-#include "Adafruit_Sensor.h"
-#include "Adafruit_BNO055_ProgreSSIV.h"
-#include "imumaths.h"
+
 
 /* MAY CHANGE OVER TO TASK STRUCTURE LATER */
 #include "ProgreSSIV_CAN_write_driver.h"
 #include "input_handler.h"
 #include "output_handler.h"
+
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*Task Preparation*/
+/*Task Static RAM*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Task Object Pointers declared in Static RAM*/
@@ -56,19 +53,12 @@ node_info_t *node_info;
 radio_struct_t *radio_struct;
     
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*Radio Preparation*/
+/*Radio Static RAM*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Steering and Throttle (both for the radio) variable instantiation. These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code*/
 volatile int16_t THR_in; // instantiate variable for throttle input value (ranges from ~-500 to 500)
 volatile int16_t ST_in;  // instantiate variable for steering input value (ranges from ~-500 to 500)
-
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*BNO055 Inertial Measurement Unit Preparation*/
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
-/* Instantiate and initialize an Adafruit_BNO055 object. */
-Adafruit_BNO055 bno = Adafruit_BNO055();
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Debugging/Printing setup*/
@@ -88,13 +78,12 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 //#define PRINT_RADIO 0
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/* Timing/Frequency setup */
+/* Frequency setup */
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 unsigned long *start_time_print;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*
-
 
 /* The setup function runs all start up functions. Any functions that are run only once, always, and at startup should go here. */
 void setup() {
