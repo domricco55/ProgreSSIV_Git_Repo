@@ -82,32 +82,18 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 }
 
 #define GENERAL_PRINT 1
-#define CAN_FILTER_PRINT 1
-#define PRINT_REGISTERS 0
-#define PRINT_IMU 0
-#define PRINT_RADIO 0
+#define LOOP_PRINT_REGISTERS 0
 #define MC_CHECK_PRINT 0
-#define SPI_DEBUG_PRINT 0
+//#define PRINT_IMU 0
+//#define PRINT_RADIO 0
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Timing/Frequency setup */
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-bool timing_init_flag = true; //This flag allows the timing variables to be initialized only once
-//
-//These will act as the previous clock value for which to compare the current value to. These are used to let code run at specified frequencies.
-unsigned long start_time_print;
-unsigned long start_time_motors;
-unsigned long start_time_servo;
-unsigned long start_time_quickstop;
+unsigned long *start_time_print;
 
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
-/*CAN Filter Variables*/
-int16_t rpm_FR;//stores rpm of node 1 (Front Right wheel)
-int16_t rpm_FL;//stores rpm of node 2 (Front Left wheel)
-int16_t rpm_BR;//stores rpm of node 3 (Back Right wheel)
-int16_t rpm_BL;//stores rpm of node 4 (Back Left wheel)
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*
 
 
 /* The setup function runs all start up functions. Any functions that are run only once, always, and at startup should go here. */
@@ -133,32 +119,11 @@ void setup() {
   //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr_wrapper, RISING);
 
-  //MOVE THIS INTO AN INIT FUNTION IN THE BNO DRIVER FILE
-  //This code will cause the bno to initialize. If it did not, it will print the error message
-  if (!bno.begin()) {
-    if (GENERAL_PRINT) {
-      //There was a problem detecting the BNO055 ... check your connections
-      Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-      //while(1);
-    }
-  }
-  else {
-    if (GENERAL_PRINT) {
-      //Display the current IMU temperature
-      int8_t temp = bno.getTemp();
-      Serial.print("Current Temperature: ");
-      Serial.print(temp);
-      Serial.println(" C");
-      Serial.println("");
-      Serial.println("You may want to calibrate your bno055");
-    }
-    bno.setExtCrystalUse(true);
-  }
-
   /*Startup CAN network (this is a FlexCAN function)*/
   Can0.begin(1000000); //void FlexCAN::begin (uint32_t baud, const CAN_filter_t &mask, uint8_t txAlt, uint8_t rxAlt)
   Can0.startStats();//Begin gathering CAN statistics. FlexCAN function. 
   uint8_t num_mailboxes = Can0.setNumTxBoxes(1); //Set the number of transmit mailboxes. There are 16 mailboxes available in the CAN hardware. Anything not used for transmitting will be used for receiving. If set to 1, strict in order transmission occurs
+  
   if (GENERAL_PRINT){
     Serial.println();
     Serial.print("The number of CAN Tx Mailboxes is: ");
@@ -179,95 +144,66 @@ void setup() {
 
   //MC state machine initialization on the heap
   MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> SPI_torque_actuations, node_info, radio_struct); //Creat an instance of the MC_state_machine class on the heap
+
+  /*Timinig Initialization*/
+  start_time_print = new unsigned long(millis());
+  
 }
 
 /* Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Do not use delays in the loop
 as dynamic tasks are executing and their timing is reliant upon cooperative multitasking.*/
 void loop() {
-  
-  //Initialize all timing variables for the loop. 
-  if (timing_init_flag) {
-    // Initialize the Timing Variables so that there is a start time
-    start_time_motors = micros();
-    start_time_servo = micros();
-    start_time_print = millis();
-    //Need to implement the motor controller voltage sensing again. The uLaren team had implemented this but I have not been able to get to it yet. Refer to their code for help.
-    //start_time_voltage = millis();
-    timing_init_flag = false;
-  }
 
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-  /* CANT QUITE DECIDE IF I WANT THE PRINTING DONE IN MAIN OR IN EACH TASK...BETER FOR ORGANIZING FLOW OF INFORMATION*/
-  unsigned long current_time_print = millis();
-  if ((current_time_print - start_time_print) >= 10000)  //2000ms => 1/2 hz. All printing will happen at this frequency.
-  {
-    //Print the entire register map at the print frequency
-    if(PRINT_REGISTERS){
-      
-      SPI_task_p -> spi_registers_print();
-      
-    }
-    
-//    //Print the IMU values only at the print frequency
-//    if (PRINT_IMU) {
-//      print_imu_data();
+//  /* CANT QUITE DECIDE IF I WANT THE PRINTING DONE IN MAIN OR IN EACH TASK...BETER FOR ORGANIZING FLOW OF INFORMATION*/
+//  unsigned long start_time_print = start_time_print;
+//  unsigned long current_time_print = millis();
+//  if ((current_time_print - start_time_print) >= 10000)  //2000ms => 1/2 hz. All printing will happen at this frequency.
+//  {
+////    //Print the entire register map at the print frequency
+////    if(LOOP_PRINT_REGISTERS){
+////      
+////      SPI_task_p -> spi_registers_print();
+////      
+////    }
+//    
+////    //Print the IMU values only at the print frequency
+////    if (PRINT_IMU) {
+////      print_imu_data();
+////    }
+//
+////    //Print only the registers associated with the radio athe the print frequency
+////    if (PRINT_RADIO) {
+////      print_radio_data();
+////    }
+//
+////    if(MC_CHECK_PRINT){
+////      Serial.println();
+////      Serial.print("Statusword 1 = 0x");
+////      Serial.println(node_info -> node_statuswords[0], HEX);
+////      Serial.print("Statusword 2 = 0x");
+////      Serial.println(node_info -> node_statuswords[1], HEX);
+////      Serial.print("Statusword 3 = 0x");
+////      Serial.println(node_info -> node_statuswords[2], HEX);
+////      Serial.print("Statusword 4 = 0x");
+////      Serial.println(node_info -> node_statuswords[3], HEX);
+////      Serial.println();
+//  
+////      Serial.println();
+////      Serial.print("Error 1 = 0x");
+////      Serial.println(registers.reg_map.node_errors[1], HEX);
+////      Serial.print("Error 2 = 0x");
+////      Serial.println(registers.reg_map.node_errors[2], HEX);
+////      Serial.print("Error 3 = 0x");
+////      Serial.println(registers.reg_map.node_errors[3], HEX);
+////      Serial.print("Error 4 = 0x");
+////      Serial.println(registers.reg_map.node_errors[4], HEX);
+////      Serial.println();
+//
+//      print_CAN_statistics();
 //    }
-
-    //Print only the registers associated with the radio athe the print frequency
-    if (PRINT_RADIO) {
-      print_radio_data();
-    }
-
-    if(MC_CHECK_PRINT){
-      Serial.println();
-      Serial.print("Statusword 1 = 0x");
-      Serial.println(node_info -> node_statuswords[0], HEX);
-      Serial.print("Statusword 2 = 0x");
-      Serial.println(node_info -> node_statuswords[1], HEX);
-      Serial.print("Statusword 3 = 0x");
-      Serial.println(node_info -> node_statuswords[2], HEX);
-      Serial.print("Statusword 4 = 0x");
-      Serial.println(node_info -> node_statuswords[3], HEX);
-      Serial.println();
-  
-//      Serial.println();
-//      Serial.print("Error 1 = 0x");
-//      Serial.println(registers.reg_map.node_errors[1], HEX);
-//      Serial.print("Error 2 = 0x");
-//      Serial.println(registers.reg_map.node_errors[2], HEX);
-//      Serial.print("Error 3 = 0x");
-//      Serial.println(registers.reg_map.node_errors[3], HEX);
-//      Serial.print("Error 4 = 0x");
-//      Serial.println(registers.reg_map.node_errors[4], HEX);
-//      Serial.println();
-
-      print_CAN_statistics();
-    }
-    start_time_print = current_time_print;
-  }
-
-/* WILL BE IN THE IMU TASK ONCE IT IS CREATED */
-//  /*reset_imu register*/
-//  //Run the imu initialization code from Adafruit_BNO055 library to reset the IMU readings
-//  if (registers.reg_map.reset_imu) {
-//    if (!bno.begin()) { //This code will cause the bno to initialize. If it did not, it will print the error message
-//      if (GENERAL_PRINT) {
-//        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!"); //Should likely add some error handling code here. Nothing to protect for this occurence.
-//      }
-//    }
-//    else {
-//      if (GENERAL_PRINT) {
-//        //Display the current IMU temperature
-//        int8_t temp = bno.getTemp();
-//        Serial.print("Current Temperature: ");
-//        Serial.print(temp);
-//        Serial.println(" C");
-//        Serial.println("");
-//        Serial.println("You may want to calibrate your bno055");
-//      }
-//    }
-//    registers.reg_map.reset_imu = 0;//Clear the register so that reset code does not run continuously.
+//    start_time_print = current_time_print;
 //  }
 
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -280,32 +216,6 @@ void loop() {
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
   /* UPDATE SENSOR READINGS. This code will grab the latest sensor values and store them in the registers. */
-
-//THE IMU DATA GATHERING WILL BE IN IMU TASK AND THE STEERING AND THROTTLE COMMAND GATHERING WILL BE IN THE INPUT H
-//  //Gather the IMU sensor data. These functions are from Adafruit_BNO055_ProgreSSIV.cpp
-//
-//  uint8_t bno_buffer[6]; //Used to store the I2C message containting the imu data
-//
-//  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6); //Send and I2C message to request the 6 bytes of EULER data
-//
-//  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-//  registers.reg_map.euler_heading = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
-//  registers.reg_map.euler_roll = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-//  registers.reg_map.euler_pitch = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
-//
-//  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_ACCELEROMETER, bno_buffer, 6); //Send and I2C message to request the 6 bytes of ACCELEROMETER data
-//
-//  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-//  registers.reg_map.accl_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
-//  registers.reg_map.accl_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-//  registers.reg_map.accl_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
-//
-//  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_GYROSCOPE, bno_buffer, 6); //Send and I2C message to request the 6 bytes of GYROSCOPE data
-//
-//  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-//  registers.reg_map.gyro_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
-//  registers.reg_map.gyro_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-//  registers.reg_map.gyro_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
 //
 //  //Gather the steering and throttle inputs from the RADIO
 //  registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
