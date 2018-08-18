@@ -32,7 +32,7 @@ class MC_state_machine
   //Give access to shared data via share structs defined in shared.h
   SPI_commands_t *SPI_commands_struct;
   int16_t *torque_actuations; 
-  node_info_t *node_info_struct; 
+  node_info_t *node_info; 
   radio_struct_t *radio_struct;
 
   //For use by the state machine only, not shared with other tasks
@@ -63,7 +63,7 @@ class MC_state_machine
   
  public:
  
-   MC_state_machine( SPI_commands_t *SPI_commands, int16_t *SPI_torque_actuations, node_info_t *node_info_struct,radio_struct_t *radio_struct); //Prototype of the constructor. It takes in an array of torque actuations from the SPI_actuations struct
+   MC_state_machine(SPI_commands_t *SPI_commands, int16_t *SPI_torque_actuations, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor. It takes in an array of torque actuations from the SPI_actuations struct
    void run_sm(); //Run the state machine
    int16_t saturate_torque(int16_t torque_command); //Saturate the torque actuations to the max continuous torque for our motors
 }; 

@@ -96,17 +96,16 @@ class SPI_task
 
   /*Private Function Prototypes*/
   void spi_slave_init(void);
-  void spi_registers_print(void);
   void spi_debug(void);
   void spi_transfer_complete_isr(void);
   
  public:
 
   /*Public Function Prototypes*/
-  SPI_task( SPI_actuations_t *SPI_actuations_struct, SPI_commands_t *SPI_commands_struct, SPI_sensor_data_t *SPI_sensor_data_struct, uint16_t *node_statuswords, uint16_t *node_errors ); //Prototype of the constructor
+  SPI_task( SPI_actuations_t *SPI_actuations, SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, uint16_t *node_statuswords, uint16_t *node_errors ); //Prototype of the constructor
   void spi0_callback(void);
   void handle_registers(); //The register struct is being accessed by the spi0_isr, handle its data
-
+  void spi_registers_print(void);
 
 };  
 

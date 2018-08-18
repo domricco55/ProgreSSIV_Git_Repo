@@ -16,28 +16,46 @@
    TO-DOs:
                               -
 
-   Compiling[Y/N]:            Y
+   Compiling[Y/N]:            
 
 
 */
 
-#include "ProgreSSIV_CAN_driver.h"
+/* Task File includes*/
+#include "ProgreSSIV_MC_state_machine.h"
+#include "ProgreSSIV_SPI_task.h"
+#include "shares.h"
+
+/* Other includes */
+
 #include "FlexCAN.h"
 #include "kinetis_flexcan.h"
-#include "input_handler.h"
-#include "output_handler.h"
 //libraries for imu
 #include <Wire.h>
 #include "Adafruit_Sensor.h"
 #include "Adafruit_BNO055_ProgreSSIV.h"
 #include "imumaths.h"
 
-
+/* MAY CHANGE OVER TO TASK STRUCTURE LATER */
+#include "ProgreSSIV_CAN_driver.h"
+#include "input_handler.h"
+#include "output_handler.h"
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*SPI Interrupt and Task Preparation*/
+/*Task Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
+/* Task Object Pointers declared in Static RAM*/
+SPI_task *SPI_task_p;
+MC_state_machine *MC_state_machine_p;
 
+/* Shared data struct pointers declared in Static RAM */
+  //Shared variable struct instantiation
+SPI_actuations_t *SPI_actuations;
+SPI_commands_t *SPI_commands;
+SPI_sensor_data_t *SPI_sensor_data;
+node_info_t *node_info;
+radio_struct_t *radio_struct;
+    
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Preparation*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -72,21 +90,17 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 #define MC_CHECK_PRINT 0
 #define SPI_DEBUG_PRINT 0
 
-
-/*SPI task instantiation*/
-ProgreSSIV_SPI_task SPI_task; //Create an instance of the ProgreSSIV_SPI_task class in static RAM. Must be static because members of the class are mapped to interrupts
-
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Timing/Frequency setup */
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-//bool timing_init_flag = true; //This flag allows the timing variables to be initialized only once
+bool timing_init_flag = true; //This flag allows the timing variables to be initialized only once
 //
-////These will act as the previous clock value for which to compare the current value to. These are used to let code run at specified frequencies.
-//unsigned long start_time_print;
-//unsigned long start_time_motors;
-//unsigned long start_time_servo;
-//unsigned long start_time_quickstop;
+//These will act as the previous clock value for which to compare the current value to. These are used to let code run at specified frequencies.
+unsigned long start_time_print;
+unsigned long start_time_motors;
+unsigned long start_time_servo;
+unsigned long start_time_quickstop;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -153,20 +167,24 @@ void setup() {
     Serial.println();
   }
 
+  /*Task setup*/
+  //Shared variable struct initialization
+  SPI_actuations = new SPI_actuations_t();
+  SPI_commands = new SPI_commands_t();
+  SPI_sensor_data = new SPI_sensor_data_t();
+  node_info = new node_info_t();
+  radio_struct = new radio_struct_t();
+    
+  //SPI task initialization
+  SPI_task_p = new SPI_task(SPI_actuations, SPI_commands, SPI_sensor_data, node_info -> node_statuswords, node_info -> node_errors); //Create an instance of the SPI_task class on the heap. 
+
+  //MC state machine instantiation
+  MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> SPI_torque_actuations, node_info, radio_struct); //Creat an instance of the MC_state_machine class on the heap
 }
 
-/* Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Be careful
-  when using delays and try to have tasks run quickly.*/
+/* Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Do not use delays in the loop
+as dynamic tasks are executing and their timing is reliant upon cooperative multitasking.*/
 void loop() {
-  /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-  /*SPI Task*/
-  /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
-  /*
-
-      SPI TASK DESCRIPTION HERE
-
-  */
   
   //Initialize all timing variables for the loop. 
   if (timing_init_flag) {
@@ -181,21 +199,21 @@ void loop() {
 
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-  
+  /* CANT QUITE DECIDE IF I WANT THE PRINTING DONE IN MAIN OR IN EACH TASK...BETER FOR ORGANIZING FLOW OF INFORMATION*/
   unsigned long current_time_print = millis();
   if ((current_time_print - start_time_print) >= 10000)  //2000ms => 1/2 hz. All printing will happen at this frequency.
   {
     //Print the entire register map at the print frequency
     if(PRINT_REGISTERS){
       
-      spi_registers_print();
+      SPI_task_p -> spi_registers_print();
       
     }
     
-    //Print the IMU values only at the print frequency
-    if (PRINT_IMU) {
-      print_imu_data();
-    }
+//    //Print the IMU values only at the print frequency
+//    if (PRINT_IMU) {
+//      print_imu_data();
+//    }
 
     //Print only the registers associated with the radio athe the print frequency
     if (PRINT_RADIO) {
@@ -205,13 +223,13 @@ void loop() {
     if(MC_CHECK_PRINT){
       Serial.println();
       Serial.print("Statusword 1 = 0x");
-      Serial.println(statuswords[0], HEX);
+      Serial.println(node_info -> node_statuswords[0], HEX);
       Serial.print("Statusword 2 = 0x");
-      Serial.println(statuswords[1], HEX);
+      Serial.println(node_info -> node_statuswords[1], HEX);
       Serial.print("Statusword 3 = 0x");
-      Serial.println(statuswords[2], HEX);
+      Serial.println(node_info -> node_statuswords[2], HEX);
       Serial.print("Statusword 4 = 0x");
-      Serial.println(statuswords[3], HEX);
+      Serial.println(node_info -> node_statuswords[3], HEX);
       Serial.println();
   
 //      Serial.println();
@@ -227,77 +245,72 @@ void loop() {
 
       print_CAN_statistics();
     }
-
-
     start_time_print = current_time_print;
   }
 
-  /*init_motor_controllers register signals this state machine to begin*/
-
-  MC_state_machine();//The motor controller state machine is in this function. It will run every time through the loop
-
-
-  /*reset_imu register*/
-  //Run the imu initialization code from Adafruit_BNO055 library to reset the IMU readings
-  if (registers.reg_map.reset_imu) {
-    if (!bno.begin()) { //This code will cause the bno to initialize. If it did not, it will print the error message
-      if (GENERAL_PRINT) {
-        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!"); //Should likely add some error handling code here. Nothing to protect for this occurence.
-      }
-    }
-    else {
-      if (GENERAL_PRINT) {
-        //Display the current IMU temperature
-        int8_t temp = bno.getTemp();
-        Serial.print("Current Temperature: ");
-        Serial.print(temp);
-        Serial.println(" C");
-        Serial.println("");
-        Serial.println("You may want to calibrate your bno055");
-      }
-    }
-    registers.reg_map.reset_imu = 0;//Clear the register so that reset code does not run continuously.
-  }
+/* WILL BE IN THE IMU TASK ONCE IT IS CREATED */
+//  /*reset_imu register*/
+//  //Run the imu initialization code from Adafruit_BNO055 library to reset the IMU readings
+//  if (registers.reg_map.reset_imu) {
+//    if (!bno.begin()) { //This code will cause the bno to initialize. If it did not, it will print the error message
+//      if (GENERAL_PRINT) {
+//        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!"); //Should likely add some error handling code here. Nothing to protect for this occurence.
+//      }
+//    }
+//    else {
+//      if (GENERAL_PRINT) {
+//        //Display the current IMU temperature
+//        int8_t temp = bno.getTemp();
+//        Serial.print("Current Temperature: ");
+//        Serial.print(temp);
+//        Serial.println(" C");
+//        Serial.println("");
+//        Serial.println("You may want to calibrate your bno055");
+//      }
+//    }
+//    registers.reg_map.reset_imu = 0;//Clear the register so that reset code does not run continuously.
+//  }
 
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
   /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array. This code will send the most recent actuation to the approprate peripheral*/
 
   //Write the servo value from servo_out register
-  writeServo(registers.reg_map.servo_out);
+  writeServo(SPI_actuations -> SPI_servo_out);
   
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
   /* UPDATE SENSOR READINGS. This code will grab the latest sensor values and store them in the registers. */
 
-  //Gather the IMU sensor data. These functions are from Adafruit_BNO055_ProgreSSIV.cpp
-
-  uint8_t bno_buffer[6]; //Used to store the I2C message containting the imu data
-
-  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6); //Send and I2C message to request the 6 bytes of EULER data
-
-  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-  registers.reg_map.euler_heading = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
-  registers.reg_map.euler_roll = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-  registers.reg_map.euler_pitch = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
-
-  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_ACCELEROMETER, bno_buffer, 6); //Send and I2C message to request the 6 bytes of ACCELEROMETER data
-
-  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-  registers.reg_map.accl_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
-  registers.reg_map.accl_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-  registers.reg_map.accl_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
-
-  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_GYROSCOPE, bno_buffer, 6); //Send and I2C message to request the 6 bytes of GYROSCOPE data
-
-  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
-  registers.reg_map.gyro_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
-  registers.reg_map.gyro_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
-  registers.reg_map.gyro_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
-
-  //Gather the steering and throttle inputs from the RADIO
-  registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
-  registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
+//THE IMU DATA GATHERING WILL BE IN IMU TASK AND THE STEERING AND THROTTLE COMMAND GATHERING WILL BE IN THE INPUT H
+//  //Gather the IMU sensor data. These functions are from Adafruit_BNO055_ProgreSSIV.cpp
+//
+//  uint8_t bno_buffer[6]; //Used to store the I2C message containting the imu data
+//
+//  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_EULER, bno_buffer, 6); //Send and I2C message to request the 6 bytes of EULER data
+//
+//  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
+//  registers.reg_map.euler_heading = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+//  registers.reg_map.euler_roll = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
+//  registers.reg_map.euler_pitch = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+//
+//  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_ACCELEROMETER, bno_buffer, 6); //Send and I2C message to request the 6 bytes of ACCELEROMETER data
+//
+//  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
+//  registers.reg_map.accl_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+//  registers.reg_map.accl_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
+//  registers.reg_map.accl_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+//
+//  bno.readLen((Adafruit_BNO055::adafruit_bno055_reg_t)Adafruit_BNO055::VECTOR_GYROSCOPE, bno_buffer, 6); //Send and I2C message to request the 6 bytes of GYROSCOPE data
+//
+//  //Load the registers with the I2C euler data (concatinate high and low byte before putting the value into the register)
+//  registers.reg_map.gyro_x = ((int16_t)bno_buffer[0]) | (((int16_t)bno_buffer[1]) << 8);
+//  registers.reg_map.gyro_y = ((int16_t)bno_buffer[2]) | (((int16_t)bno_buffer[3]) << 8);
+//  registers.reg_map.gyro_z = ((int16_t)bno_buffer[4]) | (((int16_t)bno_buffer[5]) << 8);
+//
+//  //Gather the steering and throttle inputs from the RADIO
+//  registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
+//  registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -601,9 +614,9 @@ void filter_SDO(CAN_message_t &msg){
 }
 
 void spi_transfer_complete_isr_wrapper(){
- SPI_task.spi_transfer_complete_isr();
+ SPI_task -> spi_transfer_complete_isr();
 }
 
 void spi0_isr(void){
- SPI_task.spi0_callback();
+ SPI_task -> spi0_callback();
 }

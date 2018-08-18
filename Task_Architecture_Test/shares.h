@@ -14,7 +14,7 @@
 typedef struct SPI_actuations { 
 
   int16_t SPI_torque_actuations[4];
-  int16_t SPI_steering_command;
+  int16_t SPI_servo_out;
   
 } SPI_actuations_t;
 
@@ -28,29 +28,31 @@ typedef struct SPI_commands {
 
 //Sensor readings are stored and updated in this struct
 typedef struct sensor_data{ 
-    volatile int16_t euler_heading;
-    volatile int16_t euler_roll;
-    volatile int16_t euler_pitch;
-    volatile int16_t accl_x;
-    volatile int16_t gyro_x;
-    volatile int16_t accl_y;
-    volatile int16_t gyro_y;
-    volatile int16_t accl_z;
-    volatile int16_t gyro_z;
-    volatile int16_t radio_throttle;
-    volatile int16_t radio_steering;
-    volatile int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
+  
+  volatile int16_t euler_heading;
+  volatile int16_t euler_roll;
+  volatile int16_t euler_pitch;
+  volatile int16_t accl_x;
+  volatile int16_t gyro_x;
+  volatile int16_t accl_y;
+  volatile int16_t gyro_y;
+  volatile int16_t accl_z;
+  volatile int16_t gyro_z;
+  volatile int16_t radio_throttle;
+  volatile int16_t radio_steering;
+  volatile int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
+  
 } SPI_sensor_data_t;
 
 //Motor Controller operation information is stored in this struct
 typedef struct node_info { 
 
-      uint8_t bootup_count; //Holds the number of NMT boot up confirmations received from the nodes
-      uint8_t op_mode_SDO_count; //Holds the number of operating mode set SDO message confirmations received from the nodes
-      uint8_t inhibit_time_SDO_count; //Holds the number of inhibit time set SDO message confirmations received from the nodes
-      uint16_t node_statuswords[4]; //Holds the satusword of each node
-      uint16_t node_errors[4]; //Holds the error state of each node
-      uint8_t mode_of_op_displays[4]; //Holds the mode of operation object value of each node
+  uint8_t bootup_count; //Holds the number of NMT boot up confirmations received from the nodes
+  uint8_t op_mode_SDO_count; //Holds the number of operating mode set SDO message confirmations received from the nodes
+  uint8_t inhibit_time_SDO_count; //Holds the number of inhibit time set SDO message confirmations received from the nodes
+  uint16_t node_statuswords[4]; //Holds the satusword of each node
+  uint16_t node_errors[4]; //Holds the error state of each node
+  uint8_t mode_of_op_displays[4]; //Holds the mode of operation object value of each node
   
 } node_info_t;
 

@@ -17,7 +17,7 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 #define SPI_GENERAL_PRINT 1
 
 
-SPI_task::SPI_task( SPI_actuations_t *SPI_actuations_struct, SPI_commands_t *SPI_commands_struct, SPI_sensor_data_t *SPI_sensor_data_struct, uint16_t *node_statuswords, uint16_t *node_errors ){
+SPI_task::SPI_task( SPI_actuations_t *SPI_actuations, SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, uint16_t *node_statuswords, uint16_t *node_errors ){
 
   /* Initialize member attribute pointers to shared structs */
 
@@ -234,8 +234,6 @@ void SPI_task::spi_transfer_complete_isr(void) {
   SPI0_PUSHR_SLAVE = Teensy_Status_Byte; //This loads the push register with the status byte. Currently status byte code is not implemented but perhaps it can be 8 bits that let the Master
   //know which sensors are currently on. There could be a task that sets the bits according to which peripheral-on flags are high or low.
 
-  registers = registers_buf; //Replace the entire registers union with the updated values that the spi0_isr was storing in the registers buffer. Now Teensy has updated actuations or commands if any were just sent. 
-
   message_cnt++; //For SPI Debugging Purposes. If SPI_DEBUG_PRINT is true, then the packet count will be displayed at the beginning of each spi message/packet
 
   /* Timing Calculations */
@@ -283,7 +281,7 @@ void SPI_task::spi_slave_init(void) {
 
   SPI0_MCR &= ~SPI_MCR_HALT & ~SPI_MCR_MDIS; //Resume spi functions
 
-  if (GENERAL_PRINT) {
+  if (SPI_GENERAL_PRINT) {
     Serial.println("Made it to end of spi_slave_init");
     delay(500);
     Serial << "SPI0_MCR: ";
@@ -298,7 +296,7 @@ void SPI_task::spi_registers_print(void) { //This prints the name and address of
   Serial.println();
   
   uint32_t first_pointer;
-  uint32_t next_pointer
+  uint32_t next_pointer;
   first_pointer = (uint32_t)&registers.reg_map;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
 
   next_pointer = (uint32_t)&registers.reg_map.init_motor_controllers - first_pointer;
