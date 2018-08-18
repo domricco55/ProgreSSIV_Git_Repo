@@ -4,7 +4,7 @@ of the ProgreSSIV senior project team - Cal Poly San Luis Obispo  */
 /*********************************/
 
 #include "ProgreSSIV_MC_state_machine.h"
-#include "ProgreSSIV_CAN_driver.h"
+#include "ProgreSSIV_CAN_write_driver.h"
 
 /*General Debugging*/
 template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding streaming (insertion-style) Output" from playground.arduino.cc
@@ -12,8 +12,6 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
   obj.print(arg);
   return obj;
 }
-
-#define MC_STATE_MACHINE_PRINT 1  
 
 
 

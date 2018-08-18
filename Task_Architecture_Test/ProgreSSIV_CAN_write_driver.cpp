@@ -1,12 +1,12 @@
 /* CAN Firmware Functions made for Teensy 3.6 
-	by the uLaren Senior Project Team    */
+	by    */
 
 /*********************************/
 /* current functionality works but re-initialization does not work*/
 /*********************************/
 
 #include "flexCAN.h"
-#include "ProgreSSIV_CAN_Driver.h"
+#include "ProgreSSIV_CAN_write_driver.h"
 #include <string.h>
 #include "arduino.h"
 

@@ -37,7 +37,7 @@
 #include "imumaths.h"
 
 /* MAY CHANGE OVER TO TASK STRUCTURE LATER */
-#include "ProgreSSIV_CAN_driver.h"
+#include "ProgreSSIV_CAN_write_driver.h"
 #include "input_handler.h"
 #include "output_handler.h"
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -49,7 +49,6 @@ SPI_task *SPI_task_p;
 MC_state_machine *MC_state_machine_p;
 
 /* Shared data struct pointers declared in Static RAM */
-  //Shared variable struct instantiation
 SPI_actuations_t *SPI_actuations;
 SPI_commands_t *SPI_commands;
 SPI_sensor_data_t *SPI_sensor_data;
@@ -168,17 +167,17 @@ void setup() {
   }
 
   /*Task setup*/
-  //Shared variable struct initialization
+  //Shared variable struct initialization on the heap
   SPI_actuations = new SPI_actuations_t();
   SPI_commands = new SPI_commands_t();
   SPI_sensor_data = new SPI_sensor_data_t();
   node_info = new node_info_t();
   radio_struct = new radio_struct_t();
     
-  //SPI task initialization
+  //SPI task initialization on the heap
   SPI_task_p = new SPI_task(SPI_actuations, SPI_commands, SPI_sensor_data, node_info -> node_statuswords, node_info -> node_errors); //Create an instance of the SPI_task class on the heap. 
 
-  //MC state machine instantiation
+  //MC state machine initialization on the heap
   MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> SPI_torque_actuations, node_info, radio_struct); //Creat an instance of the MC_state_machine class on the heap
 }
 
@@ -312,17 +311,9 @@ void loop() {
 //  registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
 //  registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
 
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
-/* CAN message filtering and error requests*/
-
-  try_CAN_msg_filter();//Function in this script that checks for an available CAN message from the FlexCAN buffer and interprets it accordingly. Motor Controller wheel velocities, 
-                        //statuswords, error messages, boot up messages, and so on are gathered here. This function also sets flags used in Motor Controller related state machines.  
-
 }
 
 /* END OF MAIN LOOP*/
-
 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -340,11 +331,11 @@ void print_radio_data(void) {
   Serial.println();
 }
 
-
+//These wrapper functions are here so that the interrupt service routines can be members of class SPI_task but still be a callback function for an interrupt
 void spi_transfer_complete_isr_wrapper(){
- SPI_task -> spi_transfer_complete_isr();
+ SPI_task_p -> spi_transfer_complete_isr();
 }
 
 void spi0_isr(void){
- SPI_task -> spi0_callback();
+ SPI_task_p -> spi0_callback();
 }

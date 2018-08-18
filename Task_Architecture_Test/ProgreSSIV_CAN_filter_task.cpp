@@ -1,5 +1,17 @@
+/* Maxon EPOS4 Motor Controller CANopen filter designed by Dominic Riccoboni 
+of the ProgreSSIV senior project team - Cal Poly San Luis Obispo  */
 
+/*********************************/
 
+#include "ProgreSSIV_CAN_filter_task.h"
+#include "ProgreSSIV_CAN_write_driver.h"
+
+/*General Debugging*/
+template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding streaming (insertion-style) Output" from playground.arduino.cc
+  //Allows Serial << "This is an insertion-style message" type operation
+  obj.print(arg);
+  return obj;
+}
 
 CAN_filter_task::CAN_filter_task(node_info_t *node_info, int16_t *node_rpms){
 
@@ -100,7 +112,7 @@ void CAN_filter_task::filter_SDO(CAN_message_t &msg){
 
       if(command_specifier == 0x60){//If the SDO was an expedited write confirmation (command specifier of 0x60)
         
-        node_info -> op_mode_SDO_count = ++op_mode_SDO_count;
+        ++node_info -> op_mode_SDO_count;
         
         if(CAN_FILTER_PRINT){
           Serial.println("Recieved an SDO operating mode write confirmation");  
@@ -125,7 +137,7 @@ void CAN_filter_task::filter_SDO(CAN_message_t &msg){
 
       if((command_specifier == 0x60) && (msg.buf[3] == 0x03)){//If the SDO was an expedited write confirmation (command specifier of 0x60) AND the subindex was that of the inhibit time (3)
         
-        inhibit_time_SDO_count++;
+        ++node_info -> inhibit_time_SDO_count;
         
         if(CAN_FILTER_PRINT){
           
@@ -241,12 +253,12 @@ void CAN_filter_task::filter_PDO(CAN_message_t &msg){
   }
 }
 
-CAN_filter_task::filter_NMT(CAN_message_t &msg){
+void CAN_filter_task::filter_NMT(CAN_message_t &msg){
 
   //So far this is the only NMT message being filtered but other NMT messages can be added. For instance, heartbeating is currently active on the nodes and can be filtered as part of this function
   if(msg.buf[0] == 0 && msg.buf[1] == 0 && msg.buf[2] == 0 && msg.buf[3] == 0 && msg.buf[4] == 0 && msg.buf[5] == 0 &&msg.buf[6] == 0 &&msg.buf[7] == 0){ //If Network Management (NMT) Boot Up message
    
-    node_info -> bootup_count = ++bootup_count;
+    ++node_info -> bootup_count;
     
     if(CAN_FILTER_PRINT){
     Serial.println();

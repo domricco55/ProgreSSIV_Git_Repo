@@ -23,6 +23,8 @@
 #define DISABLE_VOLTAGE_COMMAND 0x0000 //Controlword for disable voltage. Takes the Device Control state machine from the "quick stop active" state to the "Switch on disabled" state
 
 
+#define MC_STATE_MACHINE_PRINT 0  
+
 class MC_state_machine
 {
   private:

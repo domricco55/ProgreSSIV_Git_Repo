@@ -8,7 +8,7 @@
 
 #define CAN_FILTER_PRINT 0
 
-class MC_state_machine
+class CAN_filter_task
 {
   
   private:
@@ -26,6 +26,6 @@ class MC_state_machine
     CAN_filter_task(node_info_t *node_info, int16_t *node_rpms);
     void try_CAN_msg_filter();
  
-}
+};
 
 #endif

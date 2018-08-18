@@ -1,5 +1,5 @@
-#ifndef __PROGRESSIV_CAN_DRIVER_H__
-#define __PROGRESSIV_CAN_DRIVER_H__
+#ifndef __PROGRESSIV_CAN_WRITE_DRIVER_H__
+#define __PROGRESSIV_CAN_WRITE_DRIVER_H__
 
 #include "FlexCAN.h"
 #include "arduino.h"
