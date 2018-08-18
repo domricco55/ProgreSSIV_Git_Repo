@@ -556,58 +556,6 @@ uint8_t request_statuswords()//This function requests the statusword of a node t
   
   return (4-error_count);
 }
-    
-
-/* This function will send out an SDO read request message to the "Error register" object of each node. The SDO confirmation from each node will have a command specifier of 0x4F (read dictionary object reply) 
- *  and an object index of 0x1001 (same as used in the request message below). In your main script there should be a function that checks for an SDO confirmation message and extracts the error message byte appropriately. 
- *  See EPOS4 Firmware Specification pgs 6-59 for information on the error register object.  
-*/
-//uint8_t request_error_registers() //Errors will actually be broadcast in EMCY objects if they occur. Don't need to request them via SDO
-//{
-//  CAN_message_t msg;
-//  uint8_t error_count = 0;
-//
-//  for(uint8_t node_id = 1; node_id <=4; node_id++)
-//  {
-//    
-//    msg.id = 0x600 + node_id;//SDO COB-id for the node
-//    msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
-//    msg.rtr = 0;//Remote Transmit Request bit is low
-//    msg.len = 8;
-//    msg.buf[0] = 0x40;//Command specifier for read dictionary object request
-//    msg.buf[2] = 0x10;//High byte of error register object index
-//    msg.buf[1] = 0x01;//Low byte of error register object index
-//    msg.buf[3] = 0;//No sub-index
-//    msg.buf[4] = 0;//MUST WRITE ZEROES HERE  
-//    msg.buf[5] = 0;//MUST WRITE ZEROES HERE  
-//    msg.buf[6] = 0;//MUST WRITE ZEROES HERE  
-//    msg.buf[7] = 0;//MUST WRITE ZEROES HERE  
-//    //Must send zeros on a read request 
-//    
-//   if (Can0.write(msg) == 0)// If the CAN write was unsuccessful, set return variable accordingly
-//    {
-//      error_count++;
-//      if (DYNAMIC_PRINT)
-//      {
-//          Serial.println();
-//          Serial.print("error CAN write during request_error_registers function call, node: ");
-//          Serial.println(node_id);
-//          Serial.println();
-//                
-//      } 
-//    }
-//  }
-//  if(error_count==0){
-//    if (DYNAMIC_PRINT)
-//    {
-//        Serial.println();
-//        Serial.println("All CAN writes were successful during the request_error_registers function call");
-//        Serial.println();
-//    }
-//  }
-//
-//  return (4 - error_count);
-//}
 
 /* ---------------------------------------------------------RECEIVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS------------------------------------------------------------------------------------------------------*/
 

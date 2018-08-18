@@ -27,20 +27,20 @@ typedef struct SPI_commands {
 } SPI_commands_t;
 
 //Sensor readings are stored and updated in this struct
-typedef struct sensor_data{ 
+typedef struct SPI_sensor_data{ 
   
-  volatile int16_t euler_heading;
-  volatile int16_t euler_roll;
-  volatile int16_t euler_pitch;
-  volatile int16_t accl_x;
-  volatile int16_t gyro_x;
-  volatile int16_t accl_y;
-  volatile int16_t gyro_y;
-  volatile int16_t accl_z;
-  volatile int16_t gyro_z;
-  volatile int16_t radio_throttle;
-  volatile int16_t radio_steering;
-  volatile int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
+  int16_t euler_heading;
+  int16_t euler_roll;
+  int16_t euler_pitch;
+  int16_t accl_x;
+  int16_t gyro_x;
+  int16_t accl_y;
+  int16_t gyro_y;
+  int16_t accl_z;
+  int16_t gyro_z;
+  int16_t radio_throttle;
+  int16_t radio_steering;
+  int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
   
 } SPI_sensor_data_t;
 

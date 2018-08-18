@@ -27,7 +27,6 @@ uint8_t enter_pre_operational();
 uint8_t SDO_set_operating_mode(uint8_t operating_mode);
 uint8_t set_TxPDO1_inhibit_time();
 uint8_t request_statuswords();
-uint8_t request_error_registers();
 /*RECIEVE PROCESS DATA OBJECT (RxPDO) FUNCTIONS*/
 uint8_t RxPDO1_controlword_write(uint16_t control_command);
 uint8_t RxPDO2_torque_write(int node_id,int32_t torque);

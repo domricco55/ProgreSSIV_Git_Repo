@@ -25,8 +25,8 @@
 
 class MC_state_machine
 {
- private:
-
+  private:
+  
   /*Class attributes*/
   
   //Give access to shared data via share structs defined in shared.h
@@ -34,14 +34,14 @@ class MC_state_machine
   int16_t *torque_actuations; 
   node_info_t *node_info; 
   radio_struct_t *radio_struct;
-
+  
   //For use by the state machine only, not shared with other tasks
   int32_t write_error_cnt; //Used for debugging CAN writes
   int32_t torque_write_attempts; //Used for debugging CAN writes
   unsigned long start_time_motors; //Used for motor update frequency
   int32_t saturated_casted_torques[4] = {0}; //Stores the torque actuation values from SPI task after saturating them and casting them into int32 types for use with CAN (the torque setpoint object of each node is 32 bit)
   
- 
+  
   /* State Machine state variable enum */
   enum MC_state{
   
@@ -58,14 +58,14 @@ class MC_state_machine
     MC_state_10,
     MC_state_11,
     MC_state_12
-    
+  
   } MC_state_var; //First state to be entered
   
- public:
- 
-   MC_state_machine(SPI_commands_t *SPI_commands, int16_t *SPI_torque_actuations, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor. It takes in an array of torque actuations from the SPI_actuations struct
-   void run_sm(); //Run the state machine
-   int16_t saturate_torque(int16_t torque_command); //Saturate the torque actuations to the max continuous torque for our motors
+  public:
+  
+  MC_state_machine(SPI_commands_t *SPI_commands, int16_t *SPI_torque_actuations, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor. It takes in an array of torque actuations from the SPI_actuations struct
+  void run_sm(); //Run the state machine
+  int16_t saturate_torque(int16_t torque_command); //Saturate the torque actuations to the max continuous torque for our motors
 }; 
 
 #endif
