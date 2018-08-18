@@ -12,20 +12,23 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
   obj.print(arg);
   return obj;
 }
+
 #define MC_STATE_MACHINE_PRINT 1  
 
 
 
-MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, int16_t *SPI_torque_actuations, node_info_t *CAN_read_struct ){
+MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, int16_t *SPI_torque_actuations, node_info_t *node_info_struct, radio_struct_t *radio_struct ){
 
-  /* Initialize member attribute pointers */
+  /* Initialize member attribute pointers to shared structs */
   SPI_commands_struct = SPI_commands_struct;
   int16_t *torque_actuations = SPI_torque_actuations;
-  CAN_read_struct = CAN_read_struct; //Contains statuswords, modes of operation displays, error messages, etc. Data read in CAN filter task is placed into this struct 
+  node_info_struct = node_info_struct; //Contains statuswords, modes of operation displays, error messages, etc. Data read in CAN filter task is placed into this struct 
+  radio_struct = radio_struct;
 
-  /* Initialize non-pointer member attributes */
+  /* Initialize other member attributes */
   int32_t write_error_cnt = 0;
   int32_t torque_write_attempts = 0;
+  unsigned long start_time_motors = millis();
   MC_state MC_state_var = MC_state_0; //First state to be entered - intitializing the state variable
 }
 
@@ -43,9 +46,9 @@ void MC_state_machine::run_sm(){
 
     case MC_state_0: //Init
 
-      CAN_read_struct -> bootup_count = 0; 
-      CAN_read_struct -> op_mode_SDO_count = 0;
-      CAN_read_struct -> inhibit_time_SDO_count = 0;
+      node_info_struct -> bootup_count = 0; 
+      node_info_struct -> op_mode_SDO_count = 0;
+      node_info_struct -> inhibit_time_SDO_count = 0;
       
       ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
   
@@ -67,9 +70,9 @@ void MC_state_machine::run_sm(){
 
     case MC_state_1: //Wait for init MCs flag - SPI task has access to this flag
 
-      if(CAN_read_struct -> bootup_count == 4){
+      if(node_info_struct -> bootup_count == 4){
 
-        CAN_read_struct -> bootup_count = 0; //Make sure this is cleared BEFORE sending reset_communications command
+        node_info_struct -> bootup_count = 0; //Make sure this is cleared BEFORE sending reset_communications command
         
         ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
         
@@ -92,9 +95,9 @@ void MC_state_machine::run_sm(){
 
     case MC_state_2: //Wait for reset node complete - A bootup confirmation should be received from each node 
     
-      if(SPI_commands_struct -> init_motor_controllers && CAN_read_struct -> bootup_count==4){
+      if(SPI_commands_struct -> init_motor_controllers && node_info_struct -> bootup_count==4){
         
-        CAN_read_struct -> bootup_count = 0; 
+        node_info_struct -> bootup_count = 0; 
         
         ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
         delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
@@ -134,7 +137,7 @@ void MC_state_machine::run_sm(){
 
     case MC_state_3: //Wait for set torque mode Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
 
-      if(CAN_read_struct -> op_mode_SDO_count == 4){
+      if(node_info_struct -> op_mode_SDO_count == 4){
         
         delayMicroseconds(10);
         ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
@@ -147,7 +150,7 @@ void MC_state_machine::run_sm(){
     
         }
 
-        CAN_read_struct -> op_mode_SDO_count = 0;
+        node_info_struct -> op_mode_SDO_count = 0;
         
         MC_state_var = MC_state_4;
 
@@ -162,7 +165,7 @@ void MC_state_machine::run_sm(){
 
     case MC_state_4: //Wait for set inhibit time Service Data Object confirmation - SDO confirmations should be picked up by the CAN filter task 
 
-      if(CAN_read_struct -> inhibit_time_SDO_count == 4){
+      if(node_info_struct -> inhibit_time_SDO_count == 4){
 
         delayMicroseconds(10);
         ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
@@ -185,7 +188,7 @@ void MC_state_machine::run_sm(){
     
         }
 
-        CAN_read_struct -> inhibit_time_SDO_count = 0;
+        node_info_struct -> inhibit_time_SDO_count = 0;
         
         MC_state_var = MC_state_5;
 
@@ -200,7 +203,7 @@ void MC_state_machine::run_sm(){
 
     case MC_state_5: //Wait for remote nodes startup confirmation - the Statuswords of each node should indicate "Switch on disabled" device control state 
 
-      if(CAN_read_struct -> node_statuswords[0] & CAN_read_struct -> node_statuswords[1]  & CAN_read_struct -> node_statuswords[2] & CAN_read_struct -> node_statuswords[3] & 0b01000000){
+      if(node_info_struct -> node_statuswords[0] & node_info_struct -> node_statuswords[1]  & node_info_struct -> node_statuswords[2] & node_info_struct -> node_statuswords[3] & 0b01000000){
         
         delayMicroseconds(10);
         ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND);
@@ -226,7 +229,7 @@ void MC_state_machine::run_sm(){
 
     case MC_state_6: //Wait for "Ready to switch on" device control state - the Statuswords of each node will indicate state 
 
-      if(CAN_read_struct -> node_statuswords[0] & CAN_read_struct -> node_statuswords[1]  & CAN_read_struct -> node_statuswords[2] & CAN_read_struct -> node_statuswords[3] & 0b00100001){
+      if(node_info_struct -> node_statuswords[0] & node_info_struct -> node_statuswords[1]  & node_info_struct -> node_statuswords[2] & node_info_struct -> node_statuswords[3] & 0b00100001){
 
         if(!SPI_commands_struct -> dead_switch){//If the dead switch feature is off
           
@@ -265,12 +268,12 @@ void MC_state_machine::run_sm(){
 
     case MC_state_7: //Wait for "Operation enabled" device control state = the Statuswords of each node will indicate state 
 
-      if(CAN_read_struct -> node_statuswords[0] & CAN_read_struct -> node_statuswords[1]  & CAN_read_struct -> node_statuswords[2] & CAN_read_struct -> node_statuswords[3] & 0b00100111 ){
+      if(node_info_struct -> node_statuswords[0] & node_info_struct -> node_statuswords[1]  & node_info_struct -> node_statuswords[2] & node_info_struct -> node_statuswords[3] & 0b00100111 ){
 
-        torque_actuate[0] = 0;
-        torque_actuate[1] = 0;
-        torque_actuate[2] = 0;
-        torque_actuate[3] = 0;
+        torque_actuations[0] = 0;
+        torque_actuations[1] = 0;
+        torque_actuations[2] = 0;
+        torque_actuations[3] = 0;
 
         MC_state_var = MC_state_9;
 
@@ -286,7 +289,7 @@ void MC_state_machine::run_sm(){
 
     case MC_state_8: //Wait for throttle - the dead switch flag is true and waiting for user to pull the throttle on the radio transeiver 
 
-      if( THR_in >= 200){
+      if( radio_struct -> THR_in >= 200){
         
         ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
         
@@ -315,14 +318,14 @@ void MC_state_machine::run_sm(){
       if ((current_time_motors - start_time_motors) >= 5555)  //5,555 microseconds => 180hz. Motor torque setpoints will update at this frequency (this frequency should prevent buffer overruns on the nodes
       {
         //Load the SPI task torque actuations into the local torque actuation array
-        torque_actuate[0] = (int32_t)(-saturate_torque(SPI_torques[0])); //Front right wheel
-        torque_actuate[1] = (int32_t)saturate_torque(SPI_torques[1]); //Front left wheel
-        torque_actuate[2] = (int32_t)(-saturate_torque(SPI_torques[2])); //Back right wheel
-        torque_actuate[3] = (int32_t)saturate_torque(SPI_torques[3]); //Back left wheel
+        saturated_casted_torques[0] = (int32_t)(-saturate_torque(torque_actuations[0])); //Front right wheel
+        saturated_casted_torques[1] = (int32_t)saturate_torque(torque_actuations[1]); //Front left wheel
+        saturated_casted_torques[2] = (int32_t)(-saturate_torque(torque_actuations[2])); //Back right wheel
+        saturated_casted_torques[3] = (int32_t)saturate_torque(torque_actuations[3]); //Back left wheel
 
         for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
           //Write saturated torque actuation values
-          ret = RxPDO2_torque_write(node_id,torque_actuate[node_id-1]);
+          ret = RxPDO2_torque_write(node_id,saturated_casted_torques[node_id-1]);
           
           if(!ret){
             write_error_cnt++;
@@ -335,8 +338,8 @@ void MC_state_machine::run_sm(){
       }
 
 
-      if(registers.reg_map.dead_switch){
-        if(THR_in < 200){
+      if(SPI_commands_struct -> dead_switch){
+        if(radio_struct -> THR_in < 200){
         //If conditions for quickstop have been met
 
           if (MC_STATE_MACHINE_PRINT){
@@ -392,7 +395,7 @@ void MC_state_machine::run_sm(){
 
     case MC_state_10: //Wait for Velocity Profile Mode confirmation - TxPDO3 Modes of Operation Display
       
-      if(mode_of_op_displays[0] & mode_of_op_displays[1] & mode_of_op_displays[2] & mode_of_op_displays[3] & PROFILE_VELOCITY_MODE ){
+      if(node_info_struct -> mode_of_op_displays[0] & node_info_struct -> mode_of_op_displays[1] & node_info_struct -> mode_of_op_displays[2] & node_info_struct -> mode_of_op_displays[3] & PROFILE_VELOCITY_MODE ){
       //If MCs are now in Profile Velocity Mode
           
           MC_state_var = MC_state_11;
@@ -408,7 +411,7 @@ void MC_state_machine::run_sm(){
 
     case MC_state_11: //Velocity Profile Mode Zero Velocity
       
-      if(THR_in >= 200){
+      if(radio_struct -> THR_in >= 200){
         
           //Write 4 RxPDO3's, one for each node telling to go to Torque Mode. The Target Velocity is irrelevant at this point but it's mapped to the PDO so we will just write a zero
           for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
@@ -442,7 +445,7 @@ void MC_state_machine::run_sm(){
     
     case MC_state_12: //Wait for Torque Mode confirmation - TxPDO3 Modes of Operation Display will update the mode_of_op_displays array. 
       
-      if(mode_of_op_displays[0] & mode_of_op_displays[1] & mode_of_op_displays[2] & mode_of_op_displays[3] & TORQUE_MODE ){
+      if(node_info_struct -> mode_of_op_displays[0] & node_info_struct -> mode_of_op_displays[1] & node_info_struct -> mode_of_op_displays[2] & node_info_struct -> mode_of_op_displays[3] & TORQUE_MODE ){
       //If MCs are now in Torque Mode
           
           MC_state_var = MC_state_9;
@@ -458,3 +461,18 @@ void MC_state_machine::run_sm(){
   }
 }
 
+int16_t MC_state_machine::saturate_torque(int16_t torque_command)
+{
+
+  if (torque_command > 1000){ //Torque command is in units of [MotorRatedTorque/1000] and we want the max user input torque to be the max continutous torque, i.e. the rated torque. 
+
+    torque_command = 1000; 
+    
+  }
+
+  if (torque_command < -1000){
+    torque_command = -1000;
+  }
+
+  return torque_command;
+}

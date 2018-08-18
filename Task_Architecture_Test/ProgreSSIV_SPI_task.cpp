@@ -1,23 +1,41 @@
-  
-  /*-----------------------------------ININTIALIZATION----------------------------------------------------------------------*/
+/* SPI slave interface for communication with Raspberry Pi running embedded Simulink files. Designed by Dominic Riccoboni 
+of the ProgreSSIV senior project team - Cal Poly San Luis Obispo  */
+
+/*********************************/
+
+#include "ProgreSSIV_SPI_task.h"
+
+/*General Debugging*/
+template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding streaming (insertion-style) Output" from playground.arduino.cc
+  //Allows Serial << "This is an insertion-style message" type operation
+  obj.print(arg);
+  return obj;
+}
+
+#define SPI_PRINT_REGISTERS 0
+#define SPI_DEBUG_PRINT 0 
+#define SPI_GENERAL_PRINT 1
 
 
+SPI_task::SPI_task( SPI_actuations_t *SPI_actuations_struct, SPI_commands_t *SPI_commands_struct, SPI_sensor_data_t *SPI_sensor_data_struct, uint16_t *node_statuswords, uint16_t *node_errors ){
+
+  /* Initialize member attribute pointers to shared structs */
+
+
+  /* Initialize other member attributes */
 
   /*Configure the Teensy for SPI Slave Mode, set some register map initial conditions, and initialize the interrupt service routines*/
   spi_slave_init();
-
-  //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
-  attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr, RISING);
-
-  if (GENERAL_PRINT) {
+  
+  if (SPI_GENERAL_PRINT) {
     //Print the registers at initialization
     spi_registers_print();
   }
+}
 
 
 
-
-  /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*SERIAL PERIPHERAL INTERFACE (SPI) INTERRUPT SERVICE ROUTINES*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -68,7 +86,7 @@
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /*Interrupt Service Routine to run the slave data transfer function call. Responds to the Master's request for a message*/
-void ProgreSSIV_SPI_task::spi0_isr(void) {
+void SPI_task::spi0_callback(void) {
 
   volatile uint8_t SPI0_POPR_buf = SPI0_POPR; //Use SPI0_POPR to read the R1 FIFO buffer value. This is the value that was just recieved in the spi shift register from Master.
 
@@ -78,7 +96,7 @@ void ProgreSSIV_SPI_task::spi0_isr(void) {
     first_interrupt_flag = false;
     isrStartTime = micros();
     messageStartTime = micros();
-    registers_buf = registers; //If this is a new message, copy the registers into the register buffer for temporary use in the isr
+    //registers_buf = registers; //If this is a new message, copy the registers into the register buffer for temporary use in the isr
     
     if (SPI_DEBUG_PRINT) {
       Serial.println();
@@ -96,7 +114,7 @@ void ProgreSSIV_SPI_task::spi0_isr(void) {
       Serial.print("\tAddr: ");
       Serial.println(spi_address_buf);
       Serial.print("\tReg: ");
-      Serial.println(registers_buf.bytes[spi_address_buf]);
+      Serial.println(registers.bytes[spi_address_buf]);
       spi_debug();
     }
 
@@ -106,10 +124,10 @@ void ProgreSSIV_SPI_task::spi0_isr(void) {
         Serial.print("\tAddr: ");
         Serial.println(spi_address_buf);
         Serial.print("\tReg: ");
-        Serial.println(registers_buf.bytes[spi_address_buf]);
+        Serial.println(registers.bytes[spi_address_buf]);
       }
 
-      SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf];//Place the read message byte into the push register to be immediately placed in the T1 FIFO register. By the next 
+      SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buf];//Place the read message byte into the push register to be immediately placed in the T1 FIFO register. By the next 
                                                               //interrupt this value will have been placed in the shift register and by the one after that, it will have been shifted
                                                               //out to the Master device. The message from slave to master lags by two frames.
 
@@ -127,25 +145,25 @@ void ProgreSSIV_SPI_task::spi0_isr(void) {
         Serial.print("\tAddr: ");
         Serial.println(spi_address_buf);
         Serial.print("\tReg: ");
-        Serial.println(registers_buf.bytes[spi_address_buf]);
+        Serial.println(registers.bytes[spi_address_buf]);
         spi_debug();
       }
 
-      SPI0_PUSHR_SLAVE = registers_buf.bytes[spi_address_buf]; //Place the read message byte into the push register to be immediately placed in the T1 FIFO register. By the next 
+      SPI0_PUSHR_SLAVE = registers.bytes[spi_address_buf]; //Place the read message byte into the push register to be immediately placed in the T1 FIFO register. By the next 
                                                                //interrupt this value will have been placed in the shift register and by the one after that, it will have been shifted
                                                                //out to the Master device. The message from slave to master lags by two frames.
 
     }
     else {//Message is a WRITE message
 
-      registers_buf.bytes[spi_address_buf] = SPI0_POPR_buf;
+      registers.bytes[spi_address_buf] = SPI0_POPR_buf;
       
       if (SPI_DEBUG_PRINT) {
         Serial.println("State 4:");
         Serial.print("\tAddr: ");
         Serial.println(spi_address_buf);
         Serial.print("\tReg: ");
-        Serial.println(registers_buf.bytes[spi_address_buf]);
+        Serial.println(registers.bytes[spi_address_buf]);
         spi_debug();
       }
 
@@ -173,7 +191,7 @@ void ProgreSSIV_SPI_task::spi0_isr(void) {
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Used to print some memory map information for debugging purposes. This was used to debug the behavior of the TX FIFO buffer and better understand how it is working. */
-void ProgreSSIV_SPI_task::spi_debug(void) {
+void SPI_task::spi_debug(void) {
   Serial.print("\tCTR: ");
   Serial.println((SPI0_SR & (0b1111 << 12)) >> 12); // CTR tells the number of entries in the TX FIFO register
   Serial.print("\tPTR: ");
@@ -194,7 +212,7 @@ void ProgreSSIV_SPI_task::spi_debug(void) {
 
 /*Interrupt service routine for the rising edge of the chip enable pin. This will occur at the end of every spi message. It resets flags, clears the microcontoller TX FIFO counter
   (by setting a bit in the SPI0_MCR register high) and loads the push register buffer with the Teensy status byte.   */
-void ProgreSSIV_SPI_task::spi_transfer_complete_isr(void) {
+void SPI_task::spi_transfer_complete_isr(void) {
 
   first_interrupt_flag = true;//Raises the new message flag so spi0_isr knows to take the initial interrupt service routine actions of copying the register buffer, extracting the address 
                               //and extracting the R/W bits
@@ -204,7 +222,7 @@ void ProgreSSIV_SPI_task::spi_transfer_complete_isr(void) {
     Serial.print("\tAddr: ");
     Serial.println(spi_address_buf);
     Serial.print("\tReg: ");
-    Serial.println(registers_buf.bytes[spi_address_buf]);
+    Serial.println(registers.bytes[spi_address_buf]);
     spi_debug();
   }
 
@@ -236,7 +254,7 @@ void ProgreSSIV_SPI_task::spi_transfer_complete_isr(void) {
 /*FUNCTIONS*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-void ProgreSSIV_SPI_task::spi_slave_init(void) {
+void SPI_task::spi_slave_init(void) {
 
   /*Configure SPI Memory Map*/
   SIM_SCGC6 |= SIM_SCGC6_SPI0;    // enable clock to SPI. THIS WAS MISSING PRIOR AND WOULD CAUSE CODE TO GET STUCK IN THIS FUNCTION
@@ -273,12 +291,14 @@ void ProgreSSIV_SPI_task::spi_slave_init(void) {
   }
 }
 
-void ProgreSSIV_SPI_task::spi_registers_print(void) { //This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
+void SPI_task::spi_registers_print(void) { //This prints the name and address of each of the items in the register map along with the data stored in each register MUST UPDATE AS REGISTERS ARE ADDED
   Serial.println();
   Serial << "Register Map of Teensy";
   Serial.println();
   Serial.println();
-
+  
+  uint32_t first_pointer;
+  uint32_t next_pointer
   first_pointer = (uint32_t)&registers.reg_map;//Grab the address of the first register in the register map. (uint32_t) is a cast used to get the address to the correct type
 
   next_pointer = (uint32_t)&registers.reg_map.init_motor_controllers - first_pointer;

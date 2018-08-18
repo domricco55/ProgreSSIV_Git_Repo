@@ -80,7 +80,7 @@ ProgreSSIV_SPI_task SPI_task; //Create an instance of the ProgreSSIV_SPI_task cl
 /* Timing/Frequency setup */
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-//bool timing_init_flag = true; //This flag allows the timing variables to be initialized only once in spi task.
+//bool timing_init_flag = true; //This flag allows the timing variables to be initialized only once
 //
 ////These will act as the previous clock value for which to compare the current value to. These are used to let code run at specified frequencies.
 //unsigned long start_time_print;
@@ -327,21 +327,6 @@ void print_radio_data(void) {
   Serial.println();
 }
 
-int16_t saturate_torque(int16_t torque_command)
-{
-
-  if (torque_command > 1000){ //Torque command is in units of [MotorRatedTorque/1000] and we want the max user input torque to be the max continutous torque, i.e. the rated torque. 
-
-    torque_command = 1000; 
-    
-  }
-
-  if (torque_command < -1000){
-    torque_command = -1000;
-  }
-
-  return torque_command;
-}
 
 void try_CAN_msg_filter()
 {
@@ -620,5 +605,5 @@ void spi_transfer_complete_isr_wrapper(){
 }
 
 void spi0_isr(void){
- SPI_task.spi0_isr();
+ SPI_task.spi0_callback();
 }

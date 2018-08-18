@@ -8,6 +8,7 @@
 #include "flexCAN.h"
 #include "ProgreSSIV_CAN_Driver.h"
 #include <string.h>
+#include "arduino.h"
 
 #define CONFIGURATION_PRINT 1
 #define DYNAMIC_PRINT 0

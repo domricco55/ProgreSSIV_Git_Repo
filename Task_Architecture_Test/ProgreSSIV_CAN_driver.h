@@ -2,6 +2,7 @@
 #define __PROGRESSIV_CAN_DRIVER_H__
 
 #include "FlexCAN.h"
+#include "arduino.h"
 
 ///* Nodes 1 through 4 indicate which motor driver the firmware is talking to, CAN NODES*/
 #define NODE_1 1
