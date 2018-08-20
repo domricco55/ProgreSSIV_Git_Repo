@@ -55,42 +55,52 @@ typedef union __attribute__ ((__packed__)) reg_union {
 
 } reg_union_t;
 
+/* CLASS DEFINITION */
 class SPI_task
 {
  private:
 
+  /*Shared variable structs*/
+  SPI_actuations_t *SPI_actuations;
+  SPI_commands_t *SPI_commands;
+  SPI_sensor_data_t *SPI_sensor_data;
+  node_info_t *node_info;
+  radio_struct_t *radio_struct;
 
-  /*Class attributes*/ 
-  reg_union_t registers;
+  /*Registers union*/
+  static reg_union_t registers;
+
+  /*Spi Task/isr Flags*/
+  bool first_interrupt_flag = true;
+  bool updating_write_only;
   /*
-  can access exact same data like this:
-    registers.bytes[1]
-  OR like this:
-    registers.reg_map.init_motor_controllers
-  */
+   *  can access exact same data like this:
+   *    registers.bytes[1]
+   *  OR like this:
+   *    registers.reg_map.init_motor_controllers
+   */
   
   /* spi0_isr buffer related */
   volatile uint8_t spi_address_buf;//The address byte sent at the beginning of every spi message contains a 7 bit address and a single read/write bit, the MSB.
   volatile uint8_t spi_rw_bit;//stores the information of whether the master is sending a read or write message
   #define RW_MASK 0b10000000
   #define ADDRESS_MASK 0b01111111
+  static reg_union_t registers_buf; //Prevents sensor data from updating the registers while an SPI read from master is occuring
+
   
-  /*Spi Task/isr Flags */
-  bool first_interrupt_flag = true;
-  
-  /* Teensy Status Byte */
+  /* Teensy Status Byte */ 
   volatile uint8_t Teensy_Status_Byte = 25;//NOT YET IMPLEMENTED CODE TO HANDLE A TEENSY STATUS BYTE.
 
   /*SPI Debugging Setup*/
   
-  // SPI Printing Related
+  /* SPI Printing Related*/
   uint8_t message_cnt = 0x01;
   
-  //These are used to tell how much time the isr is taking to run
+  /*These are used to tell how much time the isr is taking to run*/
   volatile long isrStartTime;
   volatile long isrEndTime;
   
-  //These are used to tell how much time is elapsing between messages
+  /*These are used to tell how much time is elapsing between messages*/
   volatile long messageStartTime = 0;
   volatile long message_delta_t = 0;
 
@@ -102,7 +112,7 @@ class SPI_task
  public:
 
   /*Public Function Prototypes*/
-  SPI_task( SPI_actuations_t *SPI_actuations, SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, uint16_t *node_statuswords, uint16_t *node_errors ); //Prototype of the constructor
+  SPI_task(SPI_actuations_t *SPI_actuations, SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor
   void spi0_callback(void);
   void spi_transfer_complete_isr(void);
   void handle_registers(); //The register struct is being accessed by the spi0_isr, handle its data

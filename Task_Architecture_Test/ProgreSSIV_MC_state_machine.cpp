@@ -15,11 +15,11 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 
 
 
-MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, int16_t *SPI_torque_actuations, node_info_t *node_info, radio_struct_t *radio_struct ){
+MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct ){
 
   /* Initialize member attribute pointers to shared structs */
   SPI_commands_struct = SPI_commands_struct;
-  int16_t *torque_actuations = SPI_torque_actuations;
+  node_torques = node_torques;
   node_info = node_info; //Contains statuswords, modes of operation displays, error messages, etc. Data read in CAN filter task is placed into this struct 
   radio_struct = radio_struct;
 
@@ -268,10 +268,10 @@ void MC_state_machine::run_sm(){
 
       if(node_info -> node_statuswords[0] & node_info -> node_statuswords[1]  & node_info -> node_statuswords[2] & node_info -> node_statuswords[3] & 0b00100111 ){
 
-        torque_actuations[0] = 0;
-        torque_actuations[1] = 0;
-        torque_actuations[2] = 0;
-        torque_actuations[3] = 0;
+        node_torques[0] = 0;
+        node_torques[1] = 0;
+        node_torques[2] = 0;
+        node_torques[3] = 0;
 
         MC_state_var = MC_state_9;
 
@@ -316,10 +316,10 @@ void MC_state_machine::run_sm(){
       if ((current_time_motors - start_time_motors) >= 5555)  //5,555 microseconds => 180hz. Motor torque setpoints will update at this frequency (this frequency should prevent buffer overruns on the nodes
       {
         //Load the SPI task torque actuations into the local torque actuation array
-        saturated_casted_torques[0] = (int32_t)(-saturate_torque(torque_actuations[0])); //Front right wheel
-        saturated_casted_torques[1] = (int32_t)saturate_torque(torque_actuations[1]); //Front left wheel
-        saturated_casted_torques[2] = (int32_t)(-saturate_torque(torque_actuations[2])); //Back right wheel
-        saturated_casted_torques[3] = (int32_t)saturate_torque(torque_actuations[3]); //Back left wheel
+        saturated_casted_torques[0] = (int32_t)(-saturate_torque(node_torques[0])); //Front right wheel
+        saturated_casted_torques[1] = (int32_t)saturate_torque(node_torques[1]); //Front left wheel
+        saturated_casted_torques[2] = (int32_t)(-saturate_torque(node_torques[2])); //Back right wheel
+        saturated_casted_torques[3] = (int32_t)saturate_torque(node_torques[3]); //Back left wheel
 
         for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
           //Write saturated torque actuation values

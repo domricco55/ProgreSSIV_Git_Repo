@@ -13,8 +13,8 @@
 //Actuations received from the SPI task from Master are stored here. They are accessed by tasks that output the actuations such as the motor controller state machine and the servo task. 
 typedef struct SPI_actuations { 
 
-  int16_t SPI_torque_actuations[4];
-  int16_t SPI_servo_out;
+  int16_t node_torques[4];
+  int16_t servo_out;
   
 } SPI_actuations_t;
 
@@ -38,8 +38,6 @@ typedef struct SPI_sensor_data{
   int16_t gyro_y;
   int16_t accl_z;
   int16_t gyro_z;
-  int16_t radio_throttle;
-  int16_t radio_steering;
   int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
   
 } SPI_sensor_data_t;

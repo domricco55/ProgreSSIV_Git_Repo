@@ -129,10 +129,10 @@ void setup() {
   radio_struct = new radio_struct_t();
     
   //SPI task initialization on the heap
-  SPI_task_p = new SPI_task(SPI_actuations, SPI_commands, SPI_sensor_data, node_info -> node_statuswords, node_info -> node_errors); //Create an instance of the SPI_task class on the heap. 
+  SPI_task_p = new SPI_task(SPI_actuations, SPI_commands, SPI_sensor_data, node_info, radio_struct); //Create an instance of the SPI_task class on the heap. 
 
   //MC state machine initialization on the heap
-  MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> SPI_torque_actuations, node_info, radio_struct); //Creat an instance of the MC_state_machine class on the heap
+  MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> node_torques, node_info, radio_struct); //Creat an instance of the MC_state_machine class on the heap
 
   /*Timinig Initialization*/
   start_time_print = new unsigned long(millis());
@@ -200,7 +200,7 @@ void loop() {
   /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array. This code will send the most recent actuation to the approprate peripheral*/
 
   //Write the servo value from servo_out register
-  writeServo(SPI_actuations -> SPI_servo_out);
+  writeServo(SPI_actuations -> servo_out);
   
   /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
