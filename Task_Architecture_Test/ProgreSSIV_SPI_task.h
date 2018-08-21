@@ -10,7 +10,7 @@
 #include "arduino.h"
 
 #define SPI_PRINT_REGISTERS 0
-#define SPI_DEBUG_PRINT 0
+#define SPI_DEBUG_PRINT 1
 #define SPI_GENERAL_PRINT 1
 
 typedef volatile struct __attribute__ ((__packed__)) reg_map_struct {

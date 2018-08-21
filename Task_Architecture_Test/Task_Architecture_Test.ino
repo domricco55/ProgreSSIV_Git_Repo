@@ -212,9 +212,9 @@ void loop() {
 //  }
 
   SPI_task_p -> handle_registers(); //Run one iteration of the SPI tasks register handling function
-  MC_state_machine_p -> run_sm(); //Run one iteration of the motor controllers state machine
-  IMU_task_p -> take_data(); //Run one iteration of the IMU tasks sensor data gathering function
-  CAN_filter_task_p -> try_CAN_msg_filter(); //Read and filter a CAN message from the CAN bus buffers if it is available
+//  MC_state_machine_p -> run_sm(); //Run one iteration of the motor controllers state machine
+//  IMU_task_p -> take_data(); //Run one iteration of the IMU tasks sensor data gathering function
+//  CAN_filter_task_p -> try_CAN_msg_filter(); //Read and filter a CAN message from the CAN bus buffers if it is available
 
 /* Havent made servo code compatible with the new task structure yet so this is a legacy of the old way of doing things...here for now */
   //Write the servo value from servo_out register
