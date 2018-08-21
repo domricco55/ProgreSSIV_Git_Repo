@@ -24,6 +24,8 @@
 /* Task File includes*/
 #include "ProgreSSIV_MC_state_machine.h"
 #include "ProgreSSIV_SPI_task.h"
+#include "ProgreSSIV_IMU_task.h"
+#include "ProgreSSIV_CAN_filter_task.h"
 #include "shares.h"
 
 /* Other includes */
@@ -44,6 +46,9 @@
 /* Task Object Pointers declared in Static RAM*/
 SPI_task *SPI_task_p;
 MC_state_machine *MC_state_machine_p;
+IMU_task *IMU_task_p;
+CAN_filter_task *CAN_filter_task_p;
+
 
 /* Shared data struct pointers declared in Static RAM */
 SPI_actuations_t *SPI_actuations;
@@ -51,6 +56,7 @@ SPI_commands_t *SPI_commands;
 SPI_sensor_data_t *SPI_sensor_data;
 node_info_t *node_info;
 radio_struct_t *radio_struct;
+flags_struct_t *flags_struct;
     
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Static RAM*/
@@ -83,7 +89,7 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 
 unsigned long *start_time_print;
 
-/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*
+/*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* The setup function runs all start up functions. Any functions that are run only once, always, and at startup should go here. */
 void setup() {
@@ -123,17 +129,29 @@ void setup() {
   /*Task setup*/
   //Shared variable struct initialization on the heap
   SPI_actuations = new SPI_actuations_t();
+  
   SPI_commands = new SPI_commands_t();
+  
   SPI_sensor_data = new SPI_sensor_data_t();
   node_info = new node_info_t();
   radio_struct = new radio_struct_t();
+  flags_struct = new flags_struct_t();
     
   //SPI task initialization on the heap
-  SPI_task_p = new SPI_task(SPI_actuations, SPI_commands, SPI_sensor_data, node_info, radio_struct); //Create an instance of the SPI_task class on the heap. 
+  SPI_task_p = new SPI_task(SPI_actuations, SPI_commands, SPI_sensor_data, node_info, radio_struct, flags_struct); //Create an instance of the SPI_task class on the heap. 
+  SPI_task_p -> spi_slave_init();
 
   //MC state machine initialization on the heap
   MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> node_torques, node_info, radio_struct); //Creat an instance of the MC_state_machine class on the heap
 
+  //IMU task initialization on the heap
+  IMU_task_p = new IMU_task(SPI_commands, SPI_sensor_data, flags_struct);
+
+  //CAN filter task initialization on the heap
+  CAN_filter_task_p = new CAN_filter_task(node_info, SPI_sensor_data -> node_rpms);
+
+  
+  
   /*Timinig Initialization*/
   start_time_print = new unsigned long(millis());
   
@@ -142,9 +160,7 @@ void setup() {
 /* Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Do not use delays in the loop
 as dynamic tasks are executing and their timing is reliant upon cooperative multitasking.*/
 void loop() {
-
-  /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
+  
 //  /* CANT QUITE DECIDE IF I WANT THE PRINTING DONE IN MAIN OR IN EACH TASK...BETER FOR ORGANIZING FLOW OF INFORMATION*/
 //  unsigned long start_time_print = start_time_print;
 //  unsigned long current_time_print = millis();
@@ -195,20 +211,18 @@ void loop() {
 //    start_time_print = current_time_print;
 //  }
 
-  /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+  SPI_task_p -> handle_registers(); //Run one iteration of the SPI tasks register handling function
+  MC_state_machine_p -> run_sm(); //Run one iteration of the motor controllers state machine
+  IMU_task_p -> take_data(); //Run one iteration of the IMU tasks sensor data gathering function
+  CAN_filter_task_p -> try_CAN_msg_filter(); //Read and filter a CAN message from the CAN bus buffers if it is available
 
-  /* OUTPUT ACTUATIONS. The actuation value from Master is located in the data bytes of spi_register_array. This code will send the most recent actuation to the approprate peripheral*/
-
+/* Havent made servo code compatible with the new task structure yet so this is a legacy of the old way of doing things...here for now */
   //Write the servo value from servo_out register
   writeServo(SPI_actuations -> servo_out);
   
-  /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
-  /* UPDATE SENSOR READINGS. This code will grab the latest sensor values and store them in the registers. */
-//
-//  //Gather the steering and throttle inputs from the RADIO
-//  registers.reg_map.radio_steering = ST_in; //This value is an extern declared in input_handler.h
-//  registers.reg_map.radio_throttle = THR_in; //This value is an extern declared in input_handler.h
+  //Gather the steering and throttle inputs from the RADIO
+  radio_struct -> ST_in = ST_in; //This value is an extern declared in input_handler.h
+  radio_struct -> THR_in = THR_in; //This value is an extern declared in input_handler.h
 
 }
 
@@ -231,10 +245,12 @@ void print_radio_data(void) {
 }
 
 //These wrapper functions are here so that the interrupt service routines can be members of class SPI_task but still be a callback function for an interrupt
-void spi_transfer_complete_isr_wrapper(){
+void spi_transfer_complete_isr_wrapper(void){
+ Serial.println("Got to spi_transfer_complete_isr_wrapper");
  SPI_task_p -> spi_transfer_complete_isr();
 }
 
 void spi0_isr(void){
+ Serial.println("Got to spio_isr");
  SPI_task_p -> spi0_callback();
 }

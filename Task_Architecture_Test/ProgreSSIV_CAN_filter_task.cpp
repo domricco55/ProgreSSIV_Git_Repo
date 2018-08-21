@@ -13,10 +13,11 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
   return obj;
 }
 
-CAN_filter_task::CAN_filter_task(node_info_t *node_info, int16_t *node_rpms){
+CAN_filter_task::CAN_filter_task(node_info_t *node_info, volatile int16_t *node_rpms):
 
-  node_info = node_info;
-  node_rpms = node_rpms;
+  node_info(node_info),
+  node_rpms(node_rpms)//Initializer list 
+  {
   
 }
 
@@ -269,7 +270,7 @@ void CAN_filter_task::filter_NMT(CAN_message_t &msg){
   }
 }
 
-void filter_EMCY(CAN_message_t &msg){
+void CAN_filter_task::filter_EMCY(CAN_message_t &msg){
 
   //NOT YET IMPLEMENTED BUT SHOULD BE, EMCY OBJECTS WILL CONTAIN ERROR MESSAGES FROM NODES THAT GO INTO FAULT STATES
   

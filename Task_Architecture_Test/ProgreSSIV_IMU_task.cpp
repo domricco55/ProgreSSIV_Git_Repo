@@ -13,10 +13,12 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
   return obj;
 }
 
-IMU_task::IMU_task(SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data){
-  
-  SPI_commands = SPI_commands;
-  SPI_sensor_data = SPI_sensor_data;
+IMU_task::IMU_task(SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, flags_struct_t *flags_struct):
+
+  SPI_commands(SPI_commands),
+  SPI_sensor_data(SPI_sensor_data),
+  flags_struct(flags_struct)//Initializer list  
+  {
   
   bno = Adafruit_BNO055(); 
   
@@ -72,6 +74,7 @@ void IMU_task::take_data(){
  if (SPI_commands -> reset_imu){
   reset_imu();
   SPI_commands -> reset_imu = 0;
+  flags_struct -> reset_imu_flag = true;
  }
 
 } 

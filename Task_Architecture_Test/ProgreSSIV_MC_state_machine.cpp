@@ -15,19 +15,19 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 
 
 
-MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct ){
+MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, volatile int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct ):
 
-  /* Initialize member attribute pointers to shared structs */
-  SPI_commands_struct = SPI_commands_struct;
-  node_torques = node_torques;
-  node_info = node_info; //Contains statuswords, modes of operation displays, error messages, etc. Data read in CAN filter task is placed into this struct 
-  radio_struct = radio_struct;
+  SPI_commands_struct(SPI_commands_struct),
+  node_torques(node_torques),
+  node_info(node_info), //Contains statuswords, modes of operation displays, error messages, etc. Data read in CAN filter task is placed into this struct 
+  radio_struct(radio_struct)//Initializer list 
+  {
 
   /* Initialize other member attributes */
-  int32_t write_error_cnt = 0;
-  int32_t torque_write_attempts = 0;
-  unsigned long start_time_motors = millis();
-  MC_state MC_state_var = MC_state_0; //First state to be entered - intitializing the state variable
+  write_error_cnt = 0;
+  torque_write_attempts = 0;
+  start_time_motors = millis();
+  MC_state_var = MC_state_0; //First state to be entered - intitializing the state variable
 }
 
 
@@ -457,6 +457,7 @@ void MC_state_machine::run_sm(){
 
     break;
   }
+  return;
 }
 
 int16_t MC_state_machine::saturate_torque(int16_t torque_command)

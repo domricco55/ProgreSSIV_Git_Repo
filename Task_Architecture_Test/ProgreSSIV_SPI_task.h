@@ -9,9 +9,14 @@
 #include "shares.h"
 #include "arduino.h"
 
-/* Spi Register Setup*/
-//Create register structs to define data that will be read from, and written to over SPI. Write values are volatile because they can be written to in an interrupt service routine
-typedef struct __attribute__ ((__packed__)) reg_struct_read {
+#define SPI_PRINT_REGISTERS 0
+#define SPI_DEBUG_PRINT 0
+#define SPI_GENERAL_PRINT 1
+
+typedef volatile struct __attribute__ ((__packed__)) reg_map_struct {
+  uint8_t init_motor_controllers;
+  uint8_t reset_imu;//Will re-run the bno055 initialization code...the intitial conditions of the euler angle readings will change when you reset...may want to integrate this into the dead switch logic
+  uint8_t dead_switch;
   // IMU
   int16_t euler_heading;
   int16_t euler_roll;
@@ -25,32 +30,28 @@ typedef struct __attribute__ ((__packed__)) reg_struct_read {
   //Servo and Radio
   int16_t radio_throttle;
   int16_t radio_steering;
+  // Output/Actuation Registers
+  int16_t node_torques[4]; //Array of node torque actuations. 0 - torque front right, 1 - torque front left, 2 - torque back right, 3 - torque back left
+  int16_t servo_out;
   //Velocity Units are in RPM and the data comes in from the MC's as 32 bit integers. This can be truncated to 16 bits because there is no way our motors will be spinning more than 32,768 rpm
   int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
+  //CAN Motor Controller Commands
+  uint8_t shutdown_MCs;//Not yet implemented but will need to be at some point.
+  //CAN Error Code Registers
   uint8_t node_errors[4];//Array of node error messages
   //CAN Statusword Registers 
   uint8_t node_statuswords[4];//Array of node statuswords
-} reg_read_struct_t;
+} reg_map_struct_t ;
 
-typedef struct __attribute__ ((__packed__)) reg_struct_write {
-  volatile uint8_t init_motor_controllers;
-  volatile uint8_t reset_imu;//Will re-run the bno055 initialization code...the intitial conditions of the euler angle readings will change when you reset...may want to integrate this into the dead switch logic
-  volatile uint8_t dead_switch;
-  volatile int16_t node_torques[4]; //Array of node torque actuations. 0 - torque front right, 1 - torque front left, 2 - torque back right, 3 - torque back left
-  volatile int16_t servo_out;
-  volatile uint8_t shutdown_MCs;//Not yet implemented but will need to be at some point.
-} reg_write_struct_t;
-
-//Union type definition linking the above struct types to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above struct types define names and types
-//of variables that will be stored in the memory, or the "registers". The registers will be 128 bytes of memory that can be accessed in two different ways, one through the names as defined in the structs and
-//another by indexing an array
+//Union type definition linking the above reg_struct type to a 128 byte array. This will allow the same memory to be accessed by both the struct and the array. The above reg_struct_t defines names and types
+//of variables that will be stored in the memory, or the "registers". The registers will be 128 bytes of memory that can be accessed in two different ways, one through the name as defined in the struct and
+//another by simply indexing an array
 typedef union __attribute__ ((__packed__)) reg_union {
 
   volatile uint8_t bytes[128];//Allocate 128 bytes of memory. The registers ARE these bytes.
 
-  reg_read_struct_t reg_map_read; //Maps the read registers to data names and types as defined in the reg_struct above.
-  reg_write_struct_t reg_map_write; //Maps the write registers to data names and types as defined in the reg_struct above.
-  
+  reg_map_struct_t reg_map; //Maps the 128 registers to data names and types as defined in the reg_struct above.
+
 } reg_union_t;
 
 /* CLASS DEFINITION */
@@ -64,6 +65,7 @@ class SPI_task
   SPI_sensor_data_t *SPI_sensor_data;
   node_info_t *node_info;
   radio_struct_t *radio_struct;
+  flags_struct_t *flags_struct;
 
   /*Registers union*/
   reg_union_t *registers;
@@ -83,7 +85,6 @@ class SPI_task
   volatile uint8_t spi_rw_bit;//stores the information of whether the master is sending a read or write message
   #define RW_MASK 0b10000000
   #define ADDRESS_MASK 0b01111111
-  reg_union_t *registers_buf; 
 
   
   /* Teensy Status Byte */ 
@@ -103,22 +104,25 @@ class SPI_task
   volatile long message_delta_t = 0;
 
   /*Private Function Prototypes*/
-  void spi_slave_init(void);
   void spi_debug(void);
 
+  unsigned long start_time_SPI_task;
   
  public:
 
   /*Public Function Prototypes*/
-  SPI_task(SPI_actuations_t *SPI_actuations, SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor
+  SPI_task(SPI_actuations_t *SPI_actuations, SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, node_info_t *node_info, radio_struct_t *radio_struct, flags_struct_t *flags_struct); //Prototype of the constructor
   void spi0_callback(void);
   void spi_transfer_complete_isr(void);
   void handle_registers(); //The register struct is being accessed by the spi0_isr, handle its data
   void spi_registers_print(void);
+  void spi_slave_init(void);
 
 };  
 
 #endif
+
+
 
 
 

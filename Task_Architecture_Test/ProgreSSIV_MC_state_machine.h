@@ -19,7 +19,7 @@
 #define DISABLE_VOLTAGE_COMMAND 0x0000 //Controlword for disable voltage. Takes the Device Control state machine from the "quick stop active" state to the "Switch on disabled" state
 
 
-#define MC_STATE_MACHINE_PRINT 0  
+#define MC_STATE_MACHINE_PRINT 1 
 
 class MC_state_machine
 {
@@ -29,7 +29,7 @@ class MC_state_machine
   
   //Give access to shared data via structs defined in shared.h
   SPI_commands_t *SPI_commands_struct;
-  int16_t *node_torques; 
+  volatile int16_t *node_torques; 
   node_info_t *node_info; 
   radio_struct_t *radio_struct;
   
@@ -58,12 +58,14 @@ class MC_state_machine
     MC_state_12
   
   } MC_state_var; //First state to be entered
+
+  int16_t saturate_torque(int16_t torque_command); //Saturate the torque actuations to the max continuous torque for our motors
   
   public:
   
-  MC_state_machine(SPI_commands_t *SPI_commands, int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor. 
+  MC_state_machine(SPI_commands_t *SPI_commands, volatile int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor. 
   void run_sm(); //Run the state machine
-  int16_t saturate_torque(int16_t torque_command); //Saturate the torque actuations to the max continuous torque for our motors
+
 }; 
 
 #endif

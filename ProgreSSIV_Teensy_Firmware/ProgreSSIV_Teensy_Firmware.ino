@@ -560,7 +560,7 @@ void spi0_isr(void) {
   //NOW NOT ON THE FIRST INTERRUPT ANYMORE. This is the code that will run for all subsequent interrupts of a single spi message.
   else {
 
-    if (spi_rw_bit & RW_MASK) { //Message is a READ message
+    if (spi_rw_bit) { //Message is a READ message
       if (SPI_DEBUG_PRINT) {
         Serial.println("State 3:");
         Serial.print("\tAddr: ");

@@ -17,6 +17,7 @@ class IMU_task
     /*Give access to shared data via structs defined in shared.h*/
     SPI_sensor_data_t *SPI_sensor_data;
     SPI_commands_t *SPI_commands;
+    flags_struct_t *flags_struct;
   
     /*Local use only*/
     // Declare an Adafruit_BNO055 object.
@@ -27,7 +28,7 @@ class IMU_task
     
   public:
   
-    IMU_task(SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data); 
+    IMU_task(SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, flags_struct_t *flags_struct); 
     void take_data(); //normal operation - takes sensor data and calls reset_imu function if the flag is non-zero
 
 }; 

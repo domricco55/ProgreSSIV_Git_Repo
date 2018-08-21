@@ -11,14 +11,14 @@
  */
 
 //Actuations received from the SPI task from Master are stored here. They are accessed by tasks that output the actuations such as the motor controller state machine and the servo task. 
-typedef struct SPI_actuations { 
+typedef volatile struct SPI_actuations { 
 
   int16_t node_torques[4];
   int16_t servo_out;
   
 } SPI_actuations_t;
 
-typedef struct SPI_commands {
+typedef volatile struct SPI_commands {
 
   uint8_t init_motor_controllers;
   uint8_t dead_switch;
@@ -27,7 +27,7 @@ typedef struct SPI_commands {
 } SPI_commands_t;
 
 //Sensor readings are stored and updated in this struct
-typedef struct SPI_sensor_data{ 
+typedef volatile struct SPI_sensor_data{ 
   
   int16_t euler_heading;
   int16_t euler_roll;
@@ -43,7 +43,7 @@ typedef struct SPI_sensor_data{
 } SPI_sensor_data_t;
 
 //Motor Controller operation information is stored in this struct
-typedef struct node_info { 
+typedef volatile struct node_info { 
 
   uint8_t bootup_count; //Holds the number of NMT boot up confirmations received from the nodes
   uint8_t op_mode_SDO_count; //Holds the number of operating mode set SDO message confirmations received from the nodes
@@ -55,7 +55,7 @@ typedef struct node_info {
 } node_info_t;
 
 //Radio transeiver throttle and steering readings are stored in this struct
-typedef struct radio_struct { 
+typedef volatile struct radio_struct { 
   
   // throttle input value (ranges from ~-500 to 500) / defined in main
   int16_t THR_in;
@@ -64,5 +64,11 @@ typedef struct radio_struct {
   
 } radio_struct_t;
 
+//Struct of flags that allow tasks to prompt other tasks to perform certain operations
+typedef volatile struct flag_struct { 
+  
+  bool reset_imu_flag; //Allows IMU task to prompt SPI task to clear the imu_reset register
+  
+} flags_struct_t;
 
 #endif
