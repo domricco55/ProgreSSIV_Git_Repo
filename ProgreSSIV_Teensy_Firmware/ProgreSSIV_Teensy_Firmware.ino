@@ -138,6 +138,8 @@ void setup() {
   //SPI task initialization on the heap
   SPI_task_p = new SPI_task(SPI_actuations, SPI_commands, SPI_sensor_data, node_info, radio_struct, flags_struct); //Create an instance of the SPI_task class on the heap. 
 
+  pinMode(23,OUTPUT);
+  
   //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr_wrapper, RISING);
   
@@ -244,9 +246,15 @@ void print_radio_data(void) {
 
 //These wrapper functions are here so that the interrupt service routines can be members of class SPI_task but still be a callback function for an interrupt
 void spi_transfer_complete_isr_wrapper(void){
- SPI_task_p -> spi_transfer_complete_isr();
+  
+  SPI_task_p -> spi_transfer_complete_isr();
+  
 }
 
 void spi0_isr(void){
+  
+ digitalWrite(23, HIGH); 
  SPI_task_p -> spi0_callback();
+ digitalWrite(23,LOW);
+ 
 }
