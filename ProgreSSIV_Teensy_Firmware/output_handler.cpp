@@ -29,10 +29,6 @@ void writeServo(int16_t pos){
   analogWrite(servo_out_pin, map(pos,-500,500,1639,3279));
 }
 
-// maps -500 to 500 to the appropriate pwm out for 1ms pulse to 2ms pulse
-void writetempMotor(int16_t pos){
-  analogWrite(motor_out_pin, map(pos,-1500,1000,0,4096));
-}
 //-------------------------------------------------------------------------------------------------------------------------------
 
 
