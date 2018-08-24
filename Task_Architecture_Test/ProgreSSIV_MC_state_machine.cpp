@@ -84,7 +84,7 @@ void MC_state_machine::run_sm(){
         MC_state_var = MC_state_2;
         if(MC_STATE_MACHINE_PRINT){
           Serial.println();
-          Serial.println("Transitioning to MC_state2");
+          Serial.println("Transitioning to MC_state_2");
           Serial.println();
         }
       }
@@ -323,7 +323,7 @@ void MC_state_machine::run_sm(){
 
         for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
           //Write saturated torque actuation values
-          ret = RxPDO2_torque_write(node_id,saturated_casted_torques[node_id-1]);
+          ret = RxPDO2_torque_write(node_id, saturated_casted_torques[node_id-1]);
           
           if(!ret){
             write_error_cnt++;

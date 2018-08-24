@@ -6,7 +6,7 @@
 #include "flexCAN.h"
 //#include "arduino.h"
 
-#define CAN_FILTER_PRINT 0
+#define CAN_FILTER_PRINT 1
 
 class CAN_filter_task
 {

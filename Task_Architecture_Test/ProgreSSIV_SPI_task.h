@@ -10,7 +10,7 @@
 #include "arduino.h"
 
 #define SPI_PRINT_REGISTERS 0
-#define SPI_DEBUG_PRINT 1
+#define SPI_DEBUG_PRINT 0
 #define SPI_GENERAL_PRINT 1
 
 typedef volatile struct __attribute__ ((__packed__)) reg_map_struct {
@@ -69,6 +69,7 @@ class SPI_task
 
   /*Registers union*/
   reg_union_t *registers;
+  reg_union_t *reg_write_buf;
 
   /*Spi Task/isr Flags*/
   bool first_interrupt_flag = true;
@@ -105,7 +106,8 @@ class SPI_task
 
   /*Private Function Prototypes*/
   void spi_debug(void);
-
+  void spi_slave_init(void);
+  
   unsigned long start_time_SPI_task;
   
  public:
@@ -116,7 +118,7 @@ class SPI_task
   void spi_transfer_complete_isr(void);
   void handle_registers(); //The register struct is being accessed by the spi0_isr, handle its data
   void spi_registers_print(void);
-  void spi_slave_init(void);
+
 
 };  
 

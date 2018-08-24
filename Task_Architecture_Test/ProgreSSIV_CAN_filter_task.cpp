@@ -28,49 +28,47 @@ void CAN_filter_task::try_CAN_msg_filter()
   CAN_message_t msg;// Struct defined in FlexCAN 
   if(Can0.read(msg))//If there was something to read, this will be true and msg will be filled with CAN data from the most recent read buffer value (FlexCAN function)
   {
-    if(CAN_FILTER_PRINT){
-      Serial.print("TRY_CAN_MSG_FILTER READ OCCURED, the id was: ");
-      Serial.println(msg.id, HEX);
-    }
-    
+
     switch(msg.id){
+
+      case 0x701: case 0x702: case 0x703: case 0x704: //if the message was an NMT related message
       
-      
+        filter_NMT(msg);
+     
+
+      break;
+
+      case 0x581: case 0x582: case 0x583: case 0x0584: //If the message was a Service Data Object from one of the nodes
+
+        filter_SDO(msg);
+    
+
+      break;
+
       case 0x1A1: case 0x1A2: case 0x1A3: case 0x1A4: case 0x2A1: case 0x2A2: case 0x2A3: case 0x2A4: case 0x3A1: case 0x3A2: case 0x3A3: case 0x3A4: //If the message was a process data object from one of the nodes
         
         filter_PDO(msg);
         
       break;
 
-      case 0x581: case 0x582: case 0x583: case 0x0584: //If the message was a Service Data Object from one of the nodes
 
-        filter_SDO(msg);
-
-      break;
-
-      case 0x701: case 0x702: case 0x703: case 0x704: //if the message was an NMT related message
-      
-        filter_NMT(msg);
-          
-
-      break;
-      
+//      case 0x81: case 0x82: case 0x83: case 0x084: //If the message was and EMCY object from one of the nodes
+//
+//        filter_EMCY(msg); 
+//
+//      break;
       default:
-
-      if(CAN_FILTER_PRINT){
-        Serial.println();
-        Serial.print("A message was received during the try_CAN_msg_filter() function call that was not accounted for: ");
-        Serial.println();
-        print_CAN_message(msg);
-      }
+  
+        if(CAN_FILTER_PRINT){
+          Serial.println();
+          Serial.print("A message was received during the try_CAN_msg_filter() function call that was not accounted for: ");
+          Serial.println();
+          print_CAN_message(msg);
+        }
       
       break;
       
-      case 0x81: case 0x82: case 0x83: case 0x084: //If the message was and EMCY object from one of the nodes
 
-        filter_EMCY(msg); 
-
-      break;
     }
   } 
 }
@@ -270,9 +268,9 @@ void CAN_filter_task::filter_NMT(CAN_message_t &msg){
   }
 }
 
-void CAN_filter_task::filter_EMCY(CAN_message_t &msg){
-
-  //NOT YET IMPLEMENTED BUT SHOULD BE, EMCY OBJECTS WILL CONTAIN ERROR MESSAGES FROM NODES THAT GO INTO FAULT STATES
-  
-}
+//void CAN_filter_task::filter_EMCY(CAN_message_t &msg){
+//
+//  //NOT YET IMPLEMENTED BUT SHOULD BE, EMCY OBJECTS WILL CONTAIN ERROR MESSAGES FROM NODES THAT GO INTO FAULT STATES
+//  
+//}
 

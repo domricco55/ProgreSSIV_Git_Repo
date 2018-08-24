@@ -24,12 +24,16 @@ SPI_task::SPI_task( SPI_actuations_t *SPI_actuations, SPI_commands_t *SPI_comman
   {
 
   /* Initialize other member attributes */;
-  registers = new reg_union_t(); //initialize the SPI registers on the heap   
+  registers = new reg_union_t(); //initialize the SPI registers on the heap
+  reg_write_buf = new reg_union_t(); //initialize the SPI write register buffer on the heap  
 
 //  registers -> reg_map.init_motor_controllers = 1;
 //  registers -> reg_map.dead_switch = 1;
   
   start_time_SPI_task = micros();
+
+  //Configure the SPI memory map and pins
+  spi_slave_init();
   
   if (SPI_GENERAL_PRINT) {
     //Print the registers at initialization
@@ -72,6 +76,12 @@ void SPI_task::handle_registers(){
     registers -> reg_map.node_rpms[2] = SPI_sensor_data -> node_rpms[2];
     registers -> reg_map.node_rpms[3] = SPI_sensor_data -> node_rpms[3];
 
+    //Low byte of each nodes statusword
+    registers -> reg_map.node_statuswords[0] = (uint8_t)((node_info -> node_statuswords[0] & 0x00FF));
+    registers -> reg_map.node_statuswords[1] = (uint8_t)((node_info -> node_statuswords[1] & 0x00FF));
+    registers -> reg_map.node_statuswords[2] = (uint8_t)((node_info -> node_statuswords[2] & 0x00FF));
+    registers -> reg_map.node_statuswords[3] = (uint8_t)((node_info -> node_statuswords[3] & 0x00FF));
+    
     /* Offload the SPI write registers into the actuation and command structs*/
 
     //Command registers     
@@ -161,7 +171,6 @@ void SPI_task::handle_registers(){
 
 /*Interrupt Service Routine to run the slave data transfer function call. Responds to the Master's request for a message*/
 void SPI_task::spi0_callback(void) {
-
   volatile uint8_t SPI0_POPR_buf = SPI0_POPR; //Use SPI0_POPR to read the R1 FIFO buffer value. This is the value that was just recieved in the spi shift register from Master.
 
   //If this is a new message, also decode the R/W bit and grab the address of the register to be accesses. These are both done with bit masks on the first byte of a message.
@@ -207,6 +216,12 @@ void SPI_task::spi0_callback(void) {
       spi_address_buf++; //Increment the address so the next byte sent will be the next byte in the spi register
 
     }
+
+    else{ //The message is a write message, load the register values into the register write buffer
+
+      reg_write_buf = registers;
+      
+    }
   }
 
   //NOW NOT ON THE FIRST INTERRUPT ANYMORE. This is the code that will run for all subsequent interrupts of a single spi message.
@@ -229,17 +244,16 @@ void SPI_task::spi0_callback(void) {
     }
     else {//Message is a WRITE message
 
-      registers -> bytes[spi_address_buf] = SPI0_POPR_buf;
+      reg_write_buf -> bytes[spi_address_buf] = SPI0_POPR_buf;
       
       if (SPI_DEBUG_PRINT) {
         Serial.println("State 4:");
         Serial.print("\tAddr: ");
         Serial.println(spi_address_buf);
         Serial.print("\tReg: ");
-        Serial.println(registers -> bytes[spi_address_buf]);
+        Serial.println(reg_write_buf -> bytes[spi_address_buf]);
         spi_debug();
       }
-
     }
     
     spi_address_buf++; //Increment the address so the next byte sent will be the next byte in the spi register
@@ -256,7 +270,7 @@ void SPI_task::spi0_callback(void) {
 
   SPI0_SR |= SPI_SR_RFDF; //Setting the RFDF or "Recieve FIFO Drain Flag" bit in the SPI0_SR register low (this is cleared by writing a 1 to it) to let the SPI0 module know that all entries have
                           //been removed from the RXFIFO register. Not sure exactly why this needs to be done or if it is absolutely necessary. 
-  return;
+
 }
 
 /* End spi0_isr */
@@ -286,7 +300,7 @@ void SPI_task::spi_debug(void) {
 /*Interrupt service routine for the rising edge of the chip enable pin. This will occur at the end of every spi message. It resets flags, clears the microcontoller TX FIFO counter
   (by setting a bit in the SPI0_MCR register high) and loads the push register buffer with the Teensy status byte.   */
 void SPI_task::spi_transfer_complete_isr(void) {
-  Serial.println("got to Trans Complete");
+
   first_interrupt_flag = true;//Raises the new message flag so spi0_isr knows to take the initial interrupt service routine actions of copying the register buffer, extracting the address 
                               //and extracting the R/W bits
 
@@ -306,6 +320,15 @@ void SPI_task::spi_transfer_complete_isr(void) {
 
   SPI0_PUSHR_SLAVE = Teensy_Status_Byte; //This loads the push register with the status byte. Currently status byte code is not implemented but perhaps it can be 8 bits that let the Master
   //know which sensors are currently on. There could be a task that sets the bits according to which peripheral-on flags are high or low.
+
+  if(!spi_rw_bit){ //If the message was a write, offload the write values from the registers buffer. 
+    registers -> reg_map.node_torques[0] = reg_write_buf -> reg_map.node_torques[0];
+    registers -> reg_map.node_torques[1] = reg_write_buf -> reg_map.node_torques[1];
+    registers -> reg_map.node_torques[0] = reg_write_buf -> reg_map.node_torques[2];
+    registers -> reg_map.node_torques[3] = reg_write_buf -> reg_map.node_torques[3];
+    registers -> reg_map.servo_out = reg_write_buf -> reg_map.servo_out;
+    
+  }
 
   message_cnt++; //For SPI Debugging Purposes. If SPI_DEBUG_PRINT is true, then the packet count will be displayed at the beginning of each spi message/packet
 
@@ -663,33 +686,33 @@ void SPI_task::spi_registers_print(void) { //This prints the name and address of
 
 
   //REFERENCE!! REPLACE EVERY TIME SOMETHING IS ADDED TO THE REGISTER MAP
-//  volatile uint8_t init_motor_controllers;
-//  volatile uint8_t reset_imu;//Will re-run the bno055 initialization code...the intitial conditions of the euler angle readings will change when you reset...may want to integrate this into the dead switch logic
-//  volatile uint8_t dead_switch;
+//  uint8_t init_motor_controllers;
+//  uint8_t reset_imu;//Will re-run the bno055 initialization code...the intitial conditions of the euler angle readings will change when you reset...may want to integrate this into the dead switch logic
+//  uint8_t dead_switch;
 //  // IMU
-//  volatile int16_t euler_heading;
-//  volatile int16_t euler_roll;
-//  volatile int16_t euler_pitch;
-//  volatile int16_t accl_x;
-//  volatile int16_t gyro_x;
-//  volatile int16_t accl_y;
-//  volatile int16_t gyro_y;
-//  volatile int16_t accl_z;
-//  volatile int16_t gyro_z;
+//  int16_t euler_heading;
+//  int16_t euler_roll;
+//  int16_t euler_pitch;
+//  int16_t accl_x;
+//  int16_t gyro_x;
+//  int16_t accl_y;
+//  int16_t gyro_y;
+//  int16_t accl_z;
+//  int16_t gyro_z;
 //  //Servo and Radio
-//  volatile int16_t radio_throttle;
-//  volatile int16_t radio_steering;
+//  int16_t radio_throttle;
+//  int16_t radio_steering;
 //  // Output/Actuation Registers
-//  volatile int16_t node_torques[4]; //Array of node torque actuations. 0 - torque front right, 1 - torque front left, 2 - torque back right, 3 - torque back left
-//  volatile int16_t servo_out;
+//  int16_t node_torques[4]; //Array of node torque actuations. 0 - torque front right, 1 - torque front left, 2 - torque back right, 3 - torque back left
+//  int16_t servo_out;
 //  //Velocity Units are in RPM and the data comes in from the MC's as 32 bit integers. This can be truncated to 16 bits because there is no way our motors will be spinning more than 32,768 rpm
-//  volatile int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
+//  int16_t node_rpms[4]; //Array of node rpm readings. 0 - rpm front right, 1 - rpm front left, 2 - rpm back right, 3 - rpm back left
 //  //CAN Motor Controller Commands
-//  volatile uint8_t shutdown_MCs;//Not yet implemented but will need to be at some point.
+//  uint8_t shutdown_MCs;//Not yet implemented but will need to be at some point.
 //  //CAN Error Code Registers
-//  volatile uint8_t node_errors[4];//Array of node error messages
+//  uint8_t node_errors[4];//Array of node error messages
 //  //CAN Statusword Registers 
-//  volatile uint8_t node_statuswords[4];//Array of node statuswords
+//  uint8_t node_statuswords[4];//Array of node statuswordswords
 
 }
 

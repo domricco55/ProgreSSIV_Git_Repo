@@ -1025,27 +1025,27 @@
 	
 	  ;% kmoqdzazlbs.kk1vunc5vt.LoggedData
 	  section.data(10).logicalSrcIdx = 19;
-	  section.data(10).dtTransOffset = 17;
+	  section.data(10).dtTransOffset = 11;
 	
 	  ;% kmoqdzazlbs.cccf0t0za1.LoggedData
 	  section.data(11).logicalSrcIdx = 20;
-	  section.data(11).dtTransOffset = 21;
+	  section.data(11).dtTransOffset = 15;
 	
 	  ;% kmoqdzazlbs.ns0tvfazpg.LoggedData
 	  section.data(12).logicalSrcIdx = 21;
-	  section.data(12).dtTransOffset = 24;
+	  section.data(12).dtTransOffset = 18;
 	
 	  ;% kmoqdzazlbs.mpw52uizsr.LoggedData
 	  section.data(13).logicalSrcIdx = 22;
-	  section.data(13).dtTransOffset = 26;
+	  section.data(13).dtTransOffset = 20;
 	
 	  ;% kmoqdzazlbs.fxvn4qyb0h.LoggedData
 	  section.data(14).logicalSrcIdx = 23;
-	  section.data(14).dtTransOffset = 28;
+	  section.data(14).dtTransOffset = 22;
 	
 	  ;% kmoqdzazlbs.myf2l5zu42.LoggedData
 	  section.data(15).logicalSrcIdx = 24;
-	  section.data(15).dtTransOffset = 30;
+	  section.data(15).dtTransOffset = 24;
 	
       nTotData = nTotData + section.nData;
       dworkMap.sections(3) = section;
@@ -1147,8 +1147,8 @@
   ;%
 
 
-  targMap.checksum0 = 2870663641;
-  targMap.checksum1 = 1091508684;
-  targMap.checksum2 = 3829986392;
-  targMap.checksum3 = 1914656988;
+  targMap.checksum0 = 3874450190;
+  targMap.checksum1 = 2125461502;
+  targMap.checksum2 = 192069519;
+  targMap.checksum3 = 1620201653;
 

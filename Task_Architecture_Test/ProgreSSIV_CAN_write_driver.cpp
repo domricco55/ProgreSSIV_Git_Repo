@@ -672,7 +672,7 @@ uint8_t RxPDO3_mode_and_TV_write(int node_id, uint8_t mode, int32_t target_veloc
   msg.id = 0x400 + node_id; //COB-id of RxPDO 2 for this specific node
   msg.ext = 0;//Signifies wether the COB-id is 11 bit or 29 bit. Here it is an 11 bit identifier. 
   msg.rtr = 0;//Remote Transmit Request bit is low
-  msg.len = 1;
+  msg.len = 5;
   msg.buf[0] = mode;
   msg.buf[4] = (uint8_t)((target_velocity & 0xFF000000) >> 24);
   msg.buf[3] = (uint8_t)((target_velocity & 0x00FF0000) >> 16);  

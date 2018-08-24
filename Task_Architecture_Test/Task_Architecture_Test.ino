@@ -111,8 +111,6 @@ void setup() {
   //Enable the spi0_isr interrupt
   NVIC_ENABLE_IRQ(IRQ_SPI0);
   
-  //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
-  attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr_wrapper, RISING);
 
   /*Startup CAN network (this is a FlexCAN function)*/
   Can0.begin(1000000); //void FlexCAN::begin (uint32_t baud, const CAN_filter_t &mask, uint8_t txAlt, uint8_t rxAlt)
@@ -139,8 +137,10 @@ void setup() {
     
   //SPI task initialization on the heap
   SPI_task_p = new SPI_task(SPI_actuations, SPI_commands, SPI_sensor_data, node_info, radio_struct, flags_struct); //Create an instance of the SPI_task class on the heap. 
-  SPI_task_p -> spi_slave_init();
 
+  //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
+  attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr_wrapper, RISING);
+  
   //MC state machine initialization on the heap
   MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> node_torques, node_info, radio_struct); //Creat an instance of the MC_state_machine class on the heap
 
@@ -149,8 +149,6 @@ void setup() {
 
   //CAN filter task initialization on the heap
   CAN_filter_task_p = new CAN_filter_task(node_info, SPI_sensor_data -> node_rpms);
-
-  
   
   /*Timinig Initialization*/
   start_time_print = new unsigned long(millis());
@@ -212,9 +210,9 @@ void loop() {
 //  }
 
   SPI_task_p -> handle_registers(); //Run one iteration of the SPI tasks register handling function
-//  MC_state_machine_p -> run_sm(); //Run one iteration of the motor controllers state machine
-//  IMU_task_p -> take_data(); //Run one iteration of the IMU tasks sensor data gathering function
-//  CAN_filter_task_p -> try_CAN_msg_filter(); //Read and filter a CAN message from the CAN bus buffers if it is available
+  MC_state_machine_p -> run_sm(); //Run one iteration of the motor controllers state machine
+  IMU_task_p -> take_data(); //Run one iteration of the IMU tasks sensor data gathering function
+  CAN_filter_task_p -> try_CAN_msg_filter(); //Read and filter a CAN message from the CAN bus buffers if it is available
 
 /* Havent made servo code compatible with the new task structure yet so this is a legacy of the old way of doing things...here for now */
   //Write the servo value from servo_out register
@@ -246,11 +244,9 @@ void print_radio_data(void) {
 
 //These wrapper functions are here so that the interrupt service routines can be members of class SPI_task but still be a callback function for an interrupt
 void spi_transfer_complete_isr_wrapper(void){
- Serial.println("Got to spi_transfer_complete_isr_wrapper");
  SPI_task_p -> spi_transfer_complete_isr();
 }
 
 void spi0_isr(void){
- Serial.println("Got to spio_isr");
  SPI_task_p -> spi0_callback();
 }
