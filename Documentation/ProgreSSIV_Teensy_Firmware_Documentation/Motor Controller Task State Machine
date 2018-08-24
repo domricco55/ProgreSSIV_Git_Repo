@@ -1,0 +1,49 @@
+digraph MC_state_machine {
+	
+	//rankdir = LR;
+	nodesep = 2;
+	splines = spline;
+
+
+	start [label = "Start", shape = "plaintext"] ;
+	S0  [ label = "State 0: \nInit" ];
+	S1  [ label = "State 1: \nWait for reset \nnode complete" ];	
+	S2  [ label = "State 2: \nWait for reset \ncommunication complete" ];	
+	S3  [ label = "State 3: \nWait for torque \nmode SDO confirmation" ];	
+	S4  [ label = "State 4: \nWait for inhibit \ntime SDO confirmation" ];
+	S5  [ label = "State 5: \nWait for remote\nnodes start" ];
+	S6  [ label = "State 6: \nWait for ready to\nswitch on state" ];
+	S7  [ label = "State 7: \nWait for operation\nenabled state" ];
+	S8  [ label = "State 8: \nWait for throttle" ];
+	S9 [ label = "State 9: \nOperation enabled \nactuate torque" ];
+	S10  [ label = "State 10: \nWait for Profile - \nVelocity Mode" ];
+	S11  [ label = "State 11: \nProfile Velocity Mode \nzero velocity" ];
+	S12  [ label = "State 12: \nWait for Torque Mode" ];
+
+	start -> S0  
+	S0 -> S1 [label = " [ Always/ \n op_mode_SDO_count = 0, \nbootup_count = 0, \ninhibit_time_SDO_count = 0, \nsend reset nodes msg] " ]
+	S1 -> S2 [ label = " [ bootup_count == 4 / \nbootup_count = 0, \nsend reset communication msg] "]
+	S2 -> S3 [ label = " [bootup_count ==4 && init_MCs / \ninit_MCs = 0, \nsend enter pre operational msg, \nsend set torque op mode msg]"]
+	S3 -> S4 [ label = " [ op_mode_SDO_count == 4 / \nsend set inhibit time msg, \nop_mode_SDO_count = 0]"]
+	S4 -> S5 [ label = " [ inhibit_time_SDO_count == 4 / \nsend start remote nodes msg, \ninhibit_time_SDO_count = 0]"]
+	S5 -> S6 [ label = " [ statuswords[] & 0b01000000/ \nRxPDO1 Shutdown Command]"]
+	S6 -> S7 [ label = " [ statuswords[] & 0b00100001, \n!dead_switch / \nRxPDO1 Enable Op Command]"]
+	S6 -> S8 [ label = " [ statuswords[] & 0b00100001, \ndead_switch ]"]
+	S8 -> S7 [ label = " [ THR_in >= 200 / \nRxPDO1 Enable Op Command]"]
+	S7 -> S9 [ label = " [ statuswords[] & 0b00100111 / \nlocal torque actuations zeroed ]"]
+	S9 -> S10 [ label = " [ THR_in <200 && dead_switch / \nRxPDO2 write zero torque \nRxPDO3 Set PVM ]"]  //PVM means Profile Velocity Mode. RxPDO3 will write to the modes of operation object in each nodes object dictionairy
+	S10 -> S11 [ label = " [ TxPDO3 Modes of Op display == PVM ]"]
+	S11 -> S12 [ label = " [ THR_in >= 200 / \nRxPDO3 Set TM]"] //TM means Torque Mode. RxPDO3 will write to the modes of operation object in each nodes object dictionairy
+	S12 -> S9 [ label = " [ TxPDO3 Modes of Op display == TM ]"]
+
+	//S9 -> S0 [ label = " [ watchdog_flag / shutdown command ] " ] 
+
+
+//maybe this should be from ANY state, same as the faults and heartbeating. OR it could JUST be from the two states involving the trigger during dead switch on (any state that is inevitable after holding the trigger down for a long time or inevitable after releasing it for a long time) and the state that is inevitable after a long time when the dead switch is off (operation enabled actuate torque...this state is shared with the dead switch on case). Should the end result of a fault be the same as the end result of the watchdog counter? Perhaps not because if Simulink is still running you may want to resume operation after a fault. If the watchdog counter is reached, theoretically, Simulink is no longer running...for now maybe I shouldnt think about falling back down from an operational condition...let the state machine hit a dead stop in that quick stop loop...that may be just fine in the time I have.
+
+// A watchdog feature could reset the inti_motor_controllers flag but a fault could not...it could have some other conditions that need to be met before allowing the motor controller to go back into operation enabled state or wait for trigger state or not. The conditon could be that the wheel be turned to a certain angle or something...this is where error message printing to the LCD screen would be helpful. In this case, state 1 would not clear the init_MCs flag, that flag would only be lowered by the watchdog feature. A watchdog timeout condition would cause the motor controllers to be shut off. 
+
+//I think I should get rid of the IMU and radio and all that jazz command registers and just initialize those every time. Also the print registers are just unnessecary, idk why I thought to use them...you need to be in the arduino IDE to view the print statements anyway...can just make them pound defines and have the print frequency set to something constant
+	
+
+}

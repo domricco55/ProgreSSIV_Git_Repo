@@ -1,0 +1,232 @@
+html, body {
+    height: 100%;
+    background-color: #FFFFFF;
+}
+
+.document {
+    height: auto;
+    min-height: 100%;
+    position: relative;
+    padding-bottom: 4em;
+}
+
+.sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: block;
+    background-color: #ededed;
+    color: #444444;
+    border-left: 1px solid #cfcfcf;
+}
+
+.sidebar {
+    padding: 0;
+}
+
+.nav-sidebar>li {
+    border-bottom: 1px solid #CFCFCF;
+}
+
+.nav-sidebar>li.active {
+    background-color: #f7f7f7;
+    color: #444444;
+}
+
+.nav-sidebar>li>a {
+    font-size: 24px;
+    font-weight: bold;
+    color: black;
+    line-height: 1.0;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 6px;
+    padding-right: 6px;
+
+    /* portrait phone display has tendency to have sidebar titles expand a
+       bit too far right; fixing it with font-size is too fiddly */
+    overflow-x: hidden;
+}
+
+/* portrait phone display ends up with sidebar titles too big; shrink
+   them on smallest displays */
+@media (max-width: 767px) {
+    .nav-sidebar>li>a {
+	font-size: 18px;
+    }
+}
+
+.nav-sidebar>li>a>p {
+    line-height: 1.2;
+    margin-top: 0.1em;
+    margin-bottom: 0;
+    font-size: 12px;
+    font-weight: normal;
+    color: #505050;
+}
+
+.nav-sidebar>li>a:hover {
+    background-color: #366;
+}
+
+.nav-sidebar>li>a:active {
+    background-color: #588;
+}
+
+#content h1,
+#content h2,
+#content h3,
+#content h4,
+#content h5,
+#content h6
+{
+    background-color: #efefef;
+    border-left: 1px solid #C3C3C3;
+    border-top: 1px solid #C3C3C3;
+    border-bottom: 1px solid #C3C3C3;
+
+    /* hate magic bootstrap */
+    margin-left: -15px;
+    margin-right: -15px;
+    margin-top: 0;
+
+    padding: 0.02em;
+    padding-left: 0.2em;
+}
+
+/* undo above colors for panels, crap */
+.panel-title {
+    background-color: inherit !important;
+    border-left: none !important;
+    border-top: none !important;
+    border-bottom: none !important;
+}
+
+#content h1 {
+    font-weight: bold;
+    border-left: none;
+    border-top: none;
+}
+
+#content {
+    padding-left: 36px
+}
+
+
+#content h1:first-child
+{
+  /* first header should touch left side */
+  margin-left: -36px;
+  /* cheezy way to make it reach all the way to sidebar */
+  padding-right: 36px;
+}
+
+
+h1 code,
+h2 code,
+h3 code,
+h4 code,
+h5 code,
+h code6 {
+    /* otherwise this bleeds over the bottom border */
+    padding-bottom: 0px;
+}
+
+.tags
+{
+  margin-top: 1px;
+  margin-bottom: 0px;
+  margin-left: 10px;
+  font-size: 75%;
+  text-decoration: none;
+  color: #303030;
+}
+
+.tags ul
+{
+  display: inline;
+  padding-left: 0;
+  margin-bottom: 0;
+}
+
+.tags li
+{
+  display: inline;
+}
+
+.timestamp
+{
+  margin-top: 0px;
+  margin-left: 10px;
+  font-style: italic;
+  font-size: 65%;
+  text-decoration: none;
+  color: #808080;
+  }
+
+.timestamp abbr
+{
+    text-decoration: none;
+    color: #808080;
+    /* undo bootstrap abbr defaults */
+    cursor: auto;
+    border-bottom: none;
+}
+
+.breather {
+    margin-left: 12px;
+    margin-right: 12px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.breather {
+    max-width: 40%;
+}
+
+.breather img {
+    max-width: 100%;
+}
+
+.stealthlink a {
+    color: #333;
+}
+.stealthlink a:hover,
+.stealthlink a:focus {
+    color: #2a6496;
+}
+
+/* allow line breaks inside `foo bar`, otherwise mobile layouts go way
+   off the screen */
+code {
+  white-space: normal;
+}
+
+/* undo bootstrap color settings for <code> */
+code {
+    color: inherit;
+    background-color: inherit;
+}
+
+/* last row of the content grid is just a <hr> that should reach all
+   the way to the sides */
+.separator {
+    padding: 0;
+}
+
+footer {
+    margin-top: 1em;
+}
+
+.feed {
+  font-size: 12px;
+  font-weight:bold;
+  text-decoration:none;
+  color: white;
+  background-color: #F60;
+  border:1px solid;
+  border-color: #FC9 #630 #330 #F96;
+  padding: 1px 4px 1px 4px;
+  margin: 10px;
+}

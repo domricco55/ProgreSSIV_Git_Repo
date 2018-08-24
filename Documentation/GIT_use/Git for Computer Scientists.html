@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<!-- saved from url=(0055)http://eagain.net/articles/git-for-computer-scientists/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="http://eagain.net/favicon.ico">
+    <title>Git for Computer Scientists</title>
+
+    <!-- TODO have this only in /go/ urls -->
+    <meta name="go-import" content="eagain.net/go/oppositus git https://github.com/tv42/oppositus">
+
+    <link href="./Git for Computer Scientists_files/bootstrap-3.3.4.min.css" rel="stylesheet">
+    <link href="./Git for Computer Scientists_files/eagain.css" rel="stylesheet">
+    <link href="./Git for Computer Scientists_files/pygments.css" rel="stylesheet">
+
+    <!--[if lt IE 9]>
+      <script src="/js/html5shiv-3.7.0.js"></script>
+      <script src="/js/respond-1.4.2.min.js"></script>
+    <![endif]-->
+
+  </head>
+  <body>
+    <div class="document">
+      <div class="container-fluid">
+	<div class="row">
+	  <div class="col-sm-2 col-xs-3 col-sm-push-10 col-xs-push-9 sidebar">
+	    <ul class="nav nav-sidebar">
+	      <li><a href="http://eagain.net/about/">About<p>About me and this site</p></a></li>
+	      <li><a href="http://eagain.net/blog/">Blog<p>A journal of my thoughts and things in my life</p></a></li>
+	      <li class="active"><a href="http://eagain.net/articles/">Articles<p>Collection of articles I've published</p></a></li>
+	      <li><a href="http://eagain.net/talks/">Talks<p>Presentations I have delivered recently</p></a></li>
+	      <li><a href="http://eagain.net/software/">Software<p>Software I have written</p></a></li>
+	      <li><a href="http://eagain.net/links/">Links<p>My link collection</p></a></li>
+	      <li><a href="http://eagain.net/cam/">Photos<p>My picture collection, featuring the cute little chihuahua Pico</p></a></li>
+	    </ul>
+	  </div>
+	  <div class="col-sm-10 col-xs-9" id="content"><h1>Git for Computer Scientists</h1>
+
+<!-- TODO kludge -->
+
+<p><style type="text/css">
+img {
+  display: block;
+  margin-left: 3em;
+  margin-top: 3em;
+  max-width: 90%;
+}
+code {
+  padding: 0;
+}
+</style></p>
+
+<h2 id="abstract">Abstract</h2>
+
+<p>Quick introduction to <a href="http://git.or.cz/">git</a> internals for people
+who are not scared by words like <a href="http://en.wikipedia.org/wiki/Directed_acyclic_graph">Directed Acyclic
+Graph</a>.</p>
+
+<h2 id="storage">Storage</h2>
+
+<p>In simplified form, git object storage is "just" a DAG of objects,
+with a handful of different types of objects. They are all stored
+compressed and identified by an SHA-1 hash (that, incidentally,
+<em>isn't</em> the SHA-1 of the contents of the file they represent, but
+of their representation in git).</p>
+
+<p><img src="./Git for Computer Scientists_files/git-storage.1.dot.svg" alt="blob"></p>
+
+<p><code>blob</code>: The simplest object, just a bunch of bytes. This is often
+   a file, but can be a symlink or pretty much anything else. The
+   object that points to the <code>blob</code> determines the semantics.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-storage.2.dot.svg" alt="tree"></p>
+
+<p><code>tree</code>: Directories are represented by <code>tree</code> object. They
+   refer to <code>blob</code>s that have the contents of files (filename,
+   access mode, etc is all stored in the <code>tree</code>), and to other
+   <code>tree</code>s for subdirectories.</p>
+
+<p>When a node points to another node in the DAG, it <em>depends</em> on the
+   other node: it cannot exist without it. Nodes that nothing points
+   to can be garbage collected with <code>git gc</code>, or rescued much like
+   filesystem inodes with no filenames pointing to them with <code>git
+   fsck --lost-found</code>.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-storage.3.dot.svg" alt="commit"></p>
+
+<p><code>commit</code>: A <code>commit</code> refers to a <code>tree</code> that represents the
+   state of the files at the time of the commit. It also refers to
+   0..<code>n</code> other <code>commit</code>s that are its parents. More than one
+   parent means the commit is a merge, no parents means it is an
+   initial commit, and interestingly there can be more than one
+   initial commit; this usually means two separate projects
+   merged. The body of the <code>commit</code> object is the commit message.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-storage.4.dot.svg" alt="refs"></p>
+
+<p><code>refs</code>: References, or heads or branches, are like post-it notes
+   slapped on a node in the DAG. Where as the DAG only gets added to
+   and existing nodes cannot be mutated, the post-its can be moved
+   around freely. They don't get stored in the history, and they
+   aren't directly transferred between repositories. They act as sort
+   of bookmarks, "I'm working here".</p>
+
+<p><code>git commit</code> adds a node to the DAG and moves the post-it note
+   for current branch to this new node.</p>
+
+<p>The <code>HEAD</code> ref is special in that it actually points to another
+   ref. It is a pointer to the currently active branch. Normal refs
+   are actually in a namespace <code>heads/XXX</code>, but you can often skip
+   the <code>heads/</code> part.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-storage.5.dot.svg" alt="remote refs"></p>
+
+<p><code>remote refs</code>: Remote references are post-it notes of a different
+   color. The difference to normal <code>refs</code> is the different namespace,
+   and the fact that remote refs are essentially controlled by the
+   remote server. <code>git fetch</code> updates them.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-storage.6.dot.svg" alt="tag"></p>
+
+<p><code>tag</code>: A <code>tag</code> is both a node in the DAG and a post-it note (of
+   yet another color). A <code>tag</code> points to a <code>commit</code>, and includes
+   an optional message and a GPG signature.</p>
+
+<p>The post-it is just a fast way to access the tag, and if lost can
+   be recovered from just the DAG with <code>git fsck --lost-found</code>.</p>
+
+<p>The nodes in the DAG can be moved from repository to repository, can
+be stored in more effective form (packs), and unused nodes can be
+garbage collected. But in the end, a <code>git</code> repository is always just
+a DAG and post-its.</p>
+
+<h2 id="history">History</h2>
+
+<p>So, armed with that knowledge on how <code>git</code> stores the version
+history, how do we visualize things like merges, and how does <code>git</code>
+differ from tools that try to manage history as linear changes per
+branch.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.1.dot.svg" alt="clone"></p>
+
+<p>This is the simplest repository. We have <code>clone</code>d a remote repository
+   with one commit in it.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.2.dot.svg" alt="fetch"></p>
+
+<p>Here we have <code>fetch</code>ed the remote and received one new commit
+   from the remote, but have not merged it yet.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.3.dot.svg" alt="merge"></p>
+
+<p>The situation after <code>git merge remotes/MYSERVER/master</code>. As the
+   merge was a <code>fast forward</code> (that is, we had no new commits in our
+   local branch), the only thing that happened was moving our post-it
+   note and changing the files in our working directory respectively.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.4.dot.svg" alt="commit"></p>
+
+<p>One local <code>git commit</code> and a <code>git fetch</code> later. We have both a
+   new local commit and a new remote commit. Clearly, a merge is
+   needed.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.5.dot.svg" alt="merge again"></p>
+
+<p>Results of <code>git merge remotes/MYSERVER/master</code>. Because we had
+   new local commits, this wasn't a <code>fast forward</code>, but an actual new
+   <code>commit</code> node was created in the DAG. Note how it has two parent
+   <code>commit</code>s.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.6.dot.svg" alt="more commits"></p>
+
+<p>Here's what the tree will look after a few commits on both branches
+   and another merge. See the "stitching" pattern emerge? The <code>git</code>
+   DAG records exactly what the history of actions taken was.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.7.dot.svg" alt="stitching"></p>
+
+<p>The "stitching" pattern is somewhat tedious to read. If you have not
+   yet published your branch, or have clearly communicated that others
+   should not base their work on it, you have an alternative. You can
+   <code>rebase</code> your branch, where instead of merging, your commit is
+   replaced by another commit with a different parent, and your branch
+   is moved there.</p>
+
+<p>Your old commit(s) will remain in the DAG until garbage collected.
+   Ignore them for now, but just know there's a way out if you screwed
+   up totally. If you have extra post-its pointing to your old commit,
+   they will remain pointing to it, and keep your old commit alive
+   indefinitely. That can be fairly confusing, though.</p>
+
+<p>Don't rebase branches that others have created new commits on top
+   of. It is possible to recover from that, it's not hard, but the
+   extra work needed can be frustrating.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.8.dot.svg" alt="garbage collect"></p>
+
+<p>The situation after garbage collecting (or just ignoring the
+   unreachable commit), and creating a new commit on top of your
+   <code>rebase</code>d branch.</p>
+
+<p><img src="./Git for Computer Scientists_files/git-history.9.dot.svg" alt="rebase"></p>
+
+<p><code>rebase</code> also knows how to rebase multiple commits with one
+   command.</p>
+
+<p>That's the end of our brief intro to <code>git</code> for people who are not
+intimidated by computer science. Hope it helped!</p>
+</div>
+	  <div class="col-sm-10 col-xs-9 separator"><hr></div>
+	</div>
+      </div>
+    </div>
+
+    <script src="./Git for Computer Scientists_files/jquery-2.1.3.min.js.download"></script>
+    <script src="./Git for Computer Scientists_files/bootstrap-3.3.4.min.js.download"></script>
+  
+
+</body></html>
