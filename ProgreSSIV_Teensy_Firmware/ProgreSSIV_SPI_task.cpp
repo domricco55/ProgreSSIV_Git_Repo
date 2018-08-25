@@ -81,7 +81,12 @@ void SPI_task::handle_registers(){
     registers -> reg_map.node_statuswords[1] = (uint8_t)((node_info -> node_statuswords[1] & 0x00FF));
     registers -> reg_map.node_statuswords[2] = (uint8_t)((node_info -> node_statuswords[2] & 0x00FF));
     registers -> reg_map.node_statuswords[3] = (uint8_t)((node_info -> node_statuswords[3] & 0x00FF));
-    
+
+    //Error register values of each node
+    registers -> reg_map.node_statuswords[0] = node_info -> node_errors[0];
+    registers -> reg_map.node_statuswords[1] = node_info -> node_errors[1];
+    registers -> reg_map.node_statuswords[2] = node_info -> node_errors[2];
+    registers -> reg_map.node_statuswords[3] = node_info -> node_errors[3];
     /* Offload the SPI write registers into the actuation and command structs*/
 
     //Command registers     

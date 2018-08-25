@@ -268,9 +268,45 @@ void CAN_filter_task::filter_NMT(CAN_message_t &msg){
   }
 }
 
-//void CAN_filter_task::filter_EMCY(CAN_message_t &msg){
-//
-//  //NOT YET IMPLEMENTED BUT SHOULD BE, EMCY OBJECTS WILL CONTAIN ERROR MESSAGES FROM NODES THAT GO INTO FAULT STATES
-//  
-//}
+void CAN_filter_task::filter_EMCY(CAN_message_t &msg){
+
+  uint8_t node_id = msg.id - 0x80; //The node id of an EMCY object is the object id minus 0x80
+  uint16_t error_code = (msg.buf[1] << 8 | msg.buf[0]); //The first two bytes of the message make up the Error code
+  uint8_t error_register = msg.buf[2]; //The third byte is the contents of the nodes error register object, the error cause. A single bit of this, the one associated with the error, cause will be set if an error occured.
+  
+  switch (node_id){
+        
+    if(CAN_FILTER_PRINT){
+      Serial.println();
+      Serial.println("Recieved an EMCY object: ");  
+      Serial.println();
+      print_CAN_message(msg);
+    }
+
+    case 1:
+
+      node_info -> node_errors[0] = error_register;
+
+    break;
+
+    case 2:
+
+      node_info -> node_errors[1] = error_register;
+
+    break;
+
+    case 3:
+
+      node_info -> node_errors[2] = error_register;
+
+    break;
+
+    case 4:
+
+      node_info -> node_errors[3] = error_register;
+
+    break;
+  }
+  
+}
 
