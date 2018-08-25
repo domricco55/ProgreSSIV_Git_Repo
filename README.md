@@ -2,7 +2,7 @@ This repository follows developement of the Cal Poly Small Scale Intelligent Veh
 
 The main elements of the repository are:
 
-# The ProgreSSIV_Teensy_Firmware arduino sketch 
+1. The ProgreSSIV_Teensy_Firmware arduino sketch 
 
 * Code that gets embedded on the teensy 3.6. 
 
@@ -10,19 +10,18 @@ The main elements of the repository are:
 
 * This code facilitates the SPI communication between Simulink running on the Raspberry Pi and the sensors, servo, and motor controllers (the SPI slave interface) in the ProgreSSIV_SPI_task file. The code gathers data from the Adafruit BNO055 Inertial Measurement Unit sensor via I2C in the ProgreSSIV_IMU_task file. The Maxon Motor controllers are being communicated via the CAN bus (CAN high and CAN low wires) and CAN interface code in the ProgreSSIV_CAN_write_driver, ProgreSSIV_CAN_filter_task, and ProgreSSIV_MC_state_machine cpp files. Radio receiver code and servo pwm actuation is taken care of in the input_handler and output_handler files respectively. 
 
-----------------
-| Col 1 | Col 2|
-----------------
-|blah   | blah |
-----------------
+ Col 1 | Col 2
+-------|------
+blah   | blah 
 
 
-# The RaspberryPi_Python_Firmware file
 
-# The Simulink_Files file
+1. The RaspberryPi_Python_Firmware file
 
-# The EPOS_Studio file
+1. The Simulink_Files file
 
-# The CAN_Test_Code file
+1. The EPOS_Studio file
 
-# The Documentation file. 
+1. The CAN_Test_Code file
+
+1. The Documentation file. 
