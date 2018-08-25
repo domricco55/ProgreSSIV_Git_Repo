@@ -1,1 +1,0 @@
-This would ideally be a readme file for this git repository.
