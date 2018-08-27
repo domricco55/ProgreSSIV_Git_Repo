@@ -4,7 +4,7 @@ of the ProgreSSIV senior project team - Cal Poly San Luis Obispo  */
 /*********************************/
 
 #include "ProgreSSIV_MC_state_machine.h"
-#include "ProgreSSIV_CAN_write_driver.h"
+
 
 /*General Debugging*/
 template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding streaming (insertion-style) Output" from playground.arduino.cc
@@ -15,12 +15,13 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 
 
 
-MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, volatile int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct ):
+MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, volatile int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct, CAN_msg_handler *CAN_msg_handler_p ):
 
   SPI_commands_struct(SPI_commands_struct),
   node_torques(node_torques),
   node_info(node_info), //Contains statuswords, modes of operation displays, error messages, etc. Data read in CAN filter task is placed into this struct 
-  radio_struct(radio_struct)//Initializer list 
+  radio_struct(radio_struct),
+  CAN_msg_handler_p(CAN_msg_handler_p)//Initializer list 
   {
 
   /* Initialize other member attributes */
@@ -48,7 +49,7 @@ void MC_state_machine::run_sm(){
       node_info -> op_mode_SDO_count = 0;
       node_info -> inhibit_time_SDO_count = 0;
       
-      ret = reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
+      ret = CAN_msg_handler_p -> reset_nodes();// Send the NMT CAN message for resetting all CAN nodes. This has same effect as turning the power off and then on again.
   
       if (MC_STATE_MACHINE_PRINT) {
         Serial.println();
@@ -72,7 +73,7 @@ void MC_state_machine::run_sm(){
 
         node_info -> bootup_count = 0; //Make sure this is cleared BEFORE sending reset_communications command
         
-        ret = reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+        ret = CAN_msg_handler_p -> reset_communications(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
         
         if (MC_STATE_MACHINE_PRINT) {
           Serial.println();
@@ -97,7 +98,7 @@ void MC_state_machine::run_sm(){
         
         node_info -> bootup_count = 0; 
         
-        ret = enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
+        ret = CAN_msg_handler_p -> enter_pre_operational(); // Send the NMT CAN message for resetting the communication. This calculates all the communication addresses and sets up the dynamic PDO mapping.
         delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
         
         if (MC_STATE_MACHINE_PRINT) {
@@ -109,7 +110,7 @@ void MC_state_machine::run_sm(){
         
         delay(1); //Just want to be sure that they have time to transition before sending set torque operating mode command (nothing can confirm this NMT command)
 
-        ret = SDO_set_operating_mode(TORQUE_MODE); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
+        ret = CAN_msg_handler_p -> SDO_set_operating_mode(TORQUE_MODE); // Configure all nodes for cyclic synchronous torque mode. This is an SDO to the operating mode object of the object dictionary. 
         
         if (MC_STATE_MACHINE_PRINT) {
           Serial.println();
@@ -138,7 +139,7 @@ void MC_state_machine::run_sm(){
       if(node_info -> op_mode_SDO_count == 4){
         
         delayMicroseconds(10);
-        ret = set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
+        ret = CAN_msg_handler_p -> set_TxPDO1_inhibit_time(); //Set the TxPDO1 inhibit time for all nodes
          
         if (MC_STATE_MACHINE_PRINT) {
           Serial.println();
@@ -166,18 +167,8 @@ void MC_state_machine::run_sm(){
       if(node_info -> inhibit_time_SDO_count == 4){
 
         delayMicroseconds(10);
-        ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
+        ret = CAN_msg_handler_p -> start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
  
-        if (MC_STATE_MACHINE_PRINT) {
-          Serial.println();
-          Serial <<"start_remote_nodes() function call successfully wrote this many NMT commands:  "  << ret;
-          Serial.println();
-          Serial.println();
-    
-        }
-
-        ret = start_remote_nodes(); // Send the NMT CAN message for starting all remote nodes. This will put each node into the NMT operational state and PDO exchange will begin. 
-        
         if (MC_STATE_MACHINE_PRINT) {
           Serial.println();
           Serial <<"start_remote_nodes() function call successfully wrote this many NMT commands:  "  << ret;
@@ -204,7 +195,7 @@ void MC_state_machine::run_sm(){
       if(node_info -> node_statuswords[0] & node_info -> node_statuswords[1]  & node_info -> node_statuswords[2] & node_info -> node_statuswords[3] & 0b01000000){
         
         delayMicroseconds(10);
-        ret = RxPDO1_controlword_write(SHUTDOWN_COMMAND);
+        ret = CAN_msg_handler_p -> RxPDO1_controlword_write(SHUTDOWN_COMMAND);
         
         if (MC_STATE_MACHINE_PRINT) {
           Serial.println();
@@ -231,7 +222,7 @@ void MC_state_machine::run_sm(){
 
         if(!SPI_commands_struct -> dead_switch){//If the dead switch feature is off
           
-          ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
+          ret = CAN_msg_handler_p -> RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
           
           if (MC_STATE_MACHINE_PRINT) {
             Serial.println();
@@ -289,7 +280,7 @@ void MC_state_machine::run_sm(){
 
       if( radio_struct -> THR_in >= 200){
         
-        ret = RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
+        ret = CAN_msg_handler_p -> RxPDO1_controlword_write(ENABLE_OP_COMMAND); 
         
         if (MC_STATE_MACHINE_PRINT) {
           Serial.println();
@@ -323,7 +314,7 @@ void MC_state_machine::run_sm(){
 
         for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
           //Write saturated torque actuation values
-          ret = RxPDO2_torque_write(node_id, saturated_casted_torques[node_id-1]);
+          ret = CAN_msg_handler_p -> RxPDO2_torque_write(node_id, saturated_casted_torques[node_id-1]);
           
           if(!ret){
             write_error_cnt++;
@@ -353,17 +344,17 @@ void MC_state_machine::run_sm(){
           torque_write_attempts = 0;
           
           //Write zero torque actuation values
-          RxPDO2_torque_write(NODE_1, 0);
-          RxPDO2_torque_write(NODE_2, 0);
-          RxPDO2_torque_write(NODE_3, 0);
-          RxPDO2_torque_write(NODE_4, 0);
+          CAN_msg_handler_p -> RxPDO2_torque_write(NODE_1, 0);
+          CAN_msg_handler_p -> RxPDO2_torque_write(NODE_2, 0);
+          CAN_msg_handler_p -> RxPDO2_torque_write(NODE_3, 0);
+          CAN_msg_handler_p -> RxPDO2_torque_write(NODE_4, 0);
           
           delayMicroseconds(10);
 
           //Write 4 RxPDO3's, one for each node telling to go to Profile Velocity Mode and set each's target velocity to zero
           for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
             //Write saturated torque actuation values
-            ret = RxPDO3_mode_and_TV_write(node_id, PROFILE_VELOCITY_MODE, 0 );
+            ret = CAN_msg_handler_p -> RxPDO3_mode_and_TV_write(node_id, PROFILE_VELOCITY_MODE, 0 );
             
             if(!ret){
               write_error_cnt++;
@@ -414,7 +405,7 @@ void MC_state_machine::run_sm(){
           //Write 4 RxPDO3's, one for each node telling to go to Torque Mode. The Target Velocity is irrelevant at this point but it's mapped to the PDO so we will just write a zero
           for( uint8_t node_id = 1; node_id <= 4; node_id++ ){
             //Write saturated torque actuation values
-            ret = RxPDO3_mode_and_TV_write(node_id, TORQUE_MODE, 0 );
+            ret = CAN_msg_handler_p -> RxPDO3_mode_and_TV_write(node_id, TORQUE_MODE, 0 );
             
             if(!ret){
               write_error_cnt++;

@@ -1,31 +1,22 @@
+/** @file ProgreSSIV_Teensy_Firmware.ino
+ *  @ brief Main Teensy Firmware script. 
+ *  
+ *  @details
+ *  Runs tasks sequentially in a loop using a cooperative multitasking approach.
+ *  
+ *  @copyright
+ *  
+ *  @mainpage mainpage content 
+ *  @brief
+ *  @details
+ */
 
-/**
-   Teensy_Firmware.ino
-
-
-   Description: This file is the firmware on the TEENSY for the CALPOLY SSIV
-
-   Date:                      May 29 2018
-   Last Edit by:              Dominic Riccoboni
-
-   Version Description:
-                              -
-
-   Errors:                    -
-
-   TO-DOs:
-                              -
-
-   Compiling[Y/N]:            
-
-
-*/
 
 /* Task File includes*/
-#include "ProgreSSIV_MC_state_machine.h"
+#include "ProgreSSIV_MC_state_machine.h"                                                                              
 #include "ProgreSSIV_SPI_task.h"
 #include "ProgreSSIV_IMU_task.h"
-#include "ProgreSSIV_CAN_filter_task.h"
+#include "ProgreSSIV_CAN_msg_handler.h"
 #include "shares.h"
 
 /* Other includes */
@@ -34,8 +25,8 @@
 #include "kinetis_flexcan.h"
 
 
-/* MAY CHANGE OVER TO TASK STRUCTURE LATER */
-#include "ProgreSSIV_CAN_write_driver.h"
+/* MAY CHANGE OVER TO TASK STRUCTURE LATER BUT FOR NOW THESE ARENT CLASSES */
+
 #include "input_handler.h"
 #include "output_handler.h"
 
@@ -44,27 +35,27 @@
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Task Object Pointers declared in Static RAM*/
-SPI_task *SPI_task_p;
-MC_state_machine *MC_state_machine_p;
-IMU_task *IMU_task_p;
-CAN_filter_task *CAN_filter_task_p;
+SPI_task *SPI_task_p;                                                                                                                   //!< brief
+MC_state_machine *MC_state_machine_p;                                                                                                   //!< brief
+IMU_task *IMU_task_p;                                                                                                                   //!< brief
+CAN_msg_handler *CAN_msg_handler_p;                                                                                                     //!< brief
 
 
 /* Shared data struct pointers declared in Static RAM */
-SPI_actuations_t *SPI_actuations;
-SPI_commands_t *SPI_commands;
-SPI_sensor_data_t *SPI_sensor_data;
-node_info_t *node_info;
-radio_struct_t *radio_struct;
-flags_struct_t *flags_struct;
+SPI_actuations_t *SPI_actuations;                                                                                                       //!< brief
+SPI_commands_t *SPI_commands;                                                                                                           //!< brief
+SPI_sensor_data_t *SPI_sensor_data;                                                                                                     //!< brief
+node_info_t *node_info;                                                                                                                 //!< brief
+radio_struct_t *radio_struct;                                                                                                           //!< brief
+flags_struct_t *flags_struct;                                                                                                           //!< brief
     
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*Radio Static RAM*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /* Steering and Throttle (both for the radio) variable instantiation. These are EXTERNS found in input_handler and are updated in an interrupt service routine in that code*/
-volatile int16_t THR_in; // instantiate variable for throttle input value (ranges from ~-500 to 500)
-volatile int16_t ST_in;  // instantiate variable for steering input value (ranges from ~-500 to 500)
+volatile int16_t THR_in; // instantiate variable for throttle input value (ranges from ~-500 to 500)                                    //!< brief
+volatile int16_t ST_in;  // instantiate variable for steering input value (ranges from ~-500 to 500)                                    //!< brief
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Debugging/Printing setup*/
@@ -77,11 +68,9 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
   return obj;
 }
 
-#define GENERAL_PRINT 1
-#define LOOP_PRINT_REGISTERS 0
-#define MC_CHECK_PRINT 0
-//#define PRINT_IMU 0
-//#define PRINT_RADIO 0
+#define GENERAL_PRINT 1                                                                                                                 //!< brief
+#define LOOP_PRINT_REGISTERS 0                                                                                                          //!< brief
+#define MC_CHECK_PRINT 0                                                                                                                //!< brief
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Frequency setup */
@@ -91,7 +80,13 @@ unsigned long *start_time_print;
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-/* The setup function runs all start up functions. Any functions that are run only once, always, and at startup should go here. */
+/** @brief Arduino setup function 
+ *  
+ *  The setup function contains all functions that are are to be run only once at startup. Task objects are instiantiated in
+ *  this function and the servo, IMU, and CAN bus startup functions are run here. The interrupt vectors for spi0_isr 
+ *  and spi_transfer_complete_isr_wrapper are attached here as well. 
+ *  
+ */
 void setup() {
 
   /*begin serial port operation*/
@@ -139,81 +134,38 @@ void setup() {
   
   //Initialize a pin change interrupt on the rising edge of the chip select (enable) pin for spi
   attachInterrupt(digitalPinToInterrupt(CS0), spi_transfer_complete_isr_wrapper, RISING);
+
+  //CAN filter task initialization on the heap
+  CAN_msg_handler_p = new CAN_msg_handler(node_info, SPI_sensor_data -> node_rpms);
   
   //MC state machine initialization on the heap
-  MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> node_torques, node_info, radio_struct); //Creat an instance of the MC_state_machine class on the heap
+  MC_state_machine_p = new MC_state_machine(SPI_commands, SPI_actuations -> node_torques, node_info, radio_struct, CAN_msg_handler_p); //Creat an instance of the MC_state_machine class on the heap
 
   //IMU task initialization on the heap
   IMU_task_p = new IMU_task(SPI_commands, SPI_sensor_data, flags_struct);
-
-  //CAN filter task initialization on the heap
-  CAN_filter_task_p = new CAN_filter_task(node_info, SPI_sensor_data -> node_rpms);
   
   /*Timinig Initialization*/
   start_time_print = new unsigned long(millis());
   
 }
 
-/* Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Do not use delays in the loop
-as dynamic tasks are executing and their timing is reliant upon cooperative multitasking.*/
+/** @brief Arduino loop function 
+ *  
+ *  Once setup has run its one time only code, loop() will begin executing. Loop should be run through continuously, with nothing halting its iterations indefinitely. Do not use delays in the loop
+ *  as dynamic tasks are executing and their timing is reliant upon cooperative multitasking.
+ *  
+ */
+ 
 void loop() {
-  
-//  /* CANT QUITE DECIDE IF I WANT THE PRINTING DONE IN MAIN OR IN EACH TASK...BETER FOR ORGANIZING FLOW OF INFORMATION*/
-//  unsigned long start_time_print = start_time_print;
-//  unsigned long current_time_print = millis();
-//  if ((current_time_print - start_time_print) >= 10000)  //2000ms => 1/2 hz. All printing will happen at this frequency.
-//  {
-////    //Print the entire register map at the print frequency
-////    if(LOOP_PRINT_REGISTERS){
-////      
-////      SPI_task_p -> spi_registers_print();
-////      
-////    }
-//    
-////    //Print the IMU values only at the print frequency
-////    if (PRINT_IMU) {
-////      print_imu_data();
-////    }
-//
-////    //Print only the registers associated with the radio athe the print frequency
-////    if (PRINT_RADIO) {
-////      print_radio_data();
-////    }
-//
-////    if(MC_CHECK_PRINT){
-////      Serial.println();
-////      Serial.print("Statusword 1 = 0x");
-////      Serial.println(node_info -> node_statuswords[0], HEX);
-////      Serial.print("Statusword 2 = 0x");
-////      Serial.println(node_info -> node_statuswords[1], HEX);
-////      Serial.print("Statusword 3 = 0x");
-////      Serial.println(node_info -> node_statuswords[2], HEX);
-////      Serial.print("Statusword 4 = 0x");
-////      Serial.println(node_info -> node_statuswords[3], HEX);
-////      Serial.println();
-//  
-////      Serial.println();
-////      Serial.print("Error 1 = 0x");
-////      Serial.println(registers.reg_map.node_errors[1], HEX);
-////      Serial.print("Error 2 = 0x");
-////      Serial.println(registers.reg_map.node_errors[2], HEX);
-////      Serial.print("Error 3 = 0x");
-////      Serial.println(registers.reg_map.node_errors[3], HEX);
-////      Serial.print("Error 4 = 0x");
-////      Serial.println(registers.reg_map.node_errors[4], HEX);
-////      Serial.println();
-//
-//      print_CAN_statistics();
-//    }
-//    start_time_print = current_time_print;
-//  }
 
+  //Run each task sequentially
   SPI_task_p -> handle_registers(); //Run one iteration of the SPI tasks register handling function
   MC_state_machine_p -> run_sm(); //Run one iteration of the motor controllers state machine
   IMU_task_p -> take_data(); //Run one iteration of the IMU tasks sensor data gathering function
-  CAN_filter_task_p -> try_CAN_msg_filter(); //Read and filter a CAN message from the CAN bus buffers if it is available
+  CAN_msg_handler_p-> try_CAN_msg_filter(); //Read and filter a CAN message from the CAN bus buffers if it is available
 
-/* Havent made servo code compatible with the new task structure yet so this is a legacy of the old way of doing things...here for now */
+  /* Havent made servo code compatible with the new task structure yet so this is a legacy of the old way of doing things...here for now */
+  
   //Write the servo value from servo_out register
   writeServo(SPI_actuations -> servo_out);
   
@@ -229,17 +181,10 @@ void loop() {
 /*FUNCTIONS*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-void print_radio_data(void) {
-
-  Serial << "radio_steering: " << ST_in;
-  Serial.println();
-  Serial.println();
-
-  Serial << "radio_throttle: " << THR_in;
-  Serial.println();
-  Serial.println();
-}
-
+/** @brief SPI channel 0 interrupt service routine wrapper
+ *  @details
+ *  This function links the spi_transfer_complete_isr member of the ProgreSSIV_SPI_task class to the the falling edge of the CS0 (chip select 0) line. 
+ */
 //These wrapper functions are here so that the interrupt service routines can be members of class SPI_task but still be a callback function for an interrupt
 void spi_transfer_complete_isr_wrapper(void){
   
@@ -247,6 +192,11 @@ void spi_transfer_complete_isr_wrapper(void){
   
 }
 
+
+/** @brief SPI channel 0 interrupt service routine wrapper
+ *  @details
+ *  This function links the spi0_isr_callback member of the ProgreSSIV_SPI_task class to the spi0 interrupt vector. 
+ */
 void spi0_isr(void){
  
  SPI_task_p -> spi0_callback();

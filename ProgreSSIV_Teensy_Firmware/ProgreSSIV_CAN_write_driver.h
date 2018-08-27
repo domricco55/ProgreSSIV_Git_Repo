@@ -1,8 +1,10 @@
+
+
 #ifndef __PROGRESSIV_CAN_WRITE_DRIVER_H__
 #define __PROGRESSIV_CAN_WRITE_DRIVER_H__
 
 #include "FlexCAN.h"
-#include "arduino.h"
+
 
 ///* Nodes 1 through 4 indicate which motor driver the firmware is talking to, CAN NODES*/
 #define NODE_1 1
@@ -14,8 +16,8 @@
 #define NOT_CORRECT 1
 
 /*Define the data bytes available for selecting the modes of operation*/
-#define PROFILE_VELOCITY_MODE 3
-#define TORQUE_MODE 10
+#define PROFILE_VELOCITY_MODE 3                                                                                     //!< Profile Velocity Mode pound define. 
+#define TORQUE_MODE 10                                                                                              //!< Torque mode pound define. 
 
 /*NETWORK MANAGEMENT (NMT) FUNCTIONS*/
 uint8_t reset_nodes();
@@ -32,7 +34,6 @@ uint8_t RxPDO1_controlword_write(uint16_t control_command);
 uint8_t RxPDO2_torque_write(int node_id,int32_t torque);
 uint8_t RxPDO3_mode_and_TV_write(int node_id, uint8_t mode, int32_t target_velocity);
 /*MISCELLANEOUS*/
-void read_available_message();
 void print_CAN_message(CAN_message_t msg);
 uint8_t CAN_read_wait(unsigned long int timeout_millis);
 uint8_t CAN_write_wait(uint16_t timeout_millis, CAN_message_t &msg);

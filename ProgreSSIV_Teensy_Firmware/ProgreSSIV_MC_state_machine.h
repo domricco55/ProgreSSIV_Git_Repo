@@ -3,14 +3,9 @@
 
 #include <stdint.h>
 #include "shares.h"
+#include "ProgreSSIV_CAN_msg_handler.h"
 
-/* Nodes 1 through 4 indicate which motor driver the firmware is talking to, CAN NODES*/
-#define NODE_1 1
-#define NODE_2 2
-#define NODE_3 3
-#define NODE_4 4
-
-/* Controlword values that drive the state transitions within the Device Control state machine. See EPOS4 Firmware Specification documentation for information on the controlword and state machine. */
+/* Controlword values that drive the state transitions within the Device Control state machine.*/
 #define SHUTDOWN_COMMAND 0x0006 //Controlword for shutdown. Takes the Device Control state machine from the "switch-on disabled" (post initialization state) to the "Ready to switch on" state. 
 #define ENABLE_OP_COMMAND 0x000F //Controlword for switch on and enable. Puts Device Control state machine into "Operation enabled state" under MOST conditions. 
 #define QUICKSTOP_COMMAND 0x000B //Controlword for Quick stop. Takes the Device Control state machine from the "Operation enabled" state to the "Quick stop active" state. The motors will decelerate to zero 
@@ -18,6 +13,11 @@
 #define RESET_FAULT_COMMAND 0x0080 //Controlword for reset fault. Takes the Device Control state machine from the "fault" state to the "Switch on disabled state"
 #define DISABLE_VOLTAGE_COMMAND 0x0000 //Controlword for disable voltage. Takes the Device Control state machine from the "quick stop active" state to the "Switch on disabled" state
 
+///* Nodes 1 through 4 indicate which motor driver the firmware is talking to, CAN NODES*/
+#define NODE_1 1
+#define NODE_2 2
+#define NODE_3 3
+#define NODE_4 4
 
 #define MC_STATE_MACHINE_PRINT 1 
 
@@ -32,6 +32,9 @@ class MC_state_machine
   volatile int16_t *node_torques; 
   node_info_t *node_info; 
   radio_struct_t *radio_struct;
+
+  //Gives access to a CAN_msg_handler object
+  CAN_msg_handler *CAN_msg_handler_p;
   
   //For use by the state machine only, not shared with other tasks
   int32_t write_error_cnt; //Used for debugging CAN writes
@@ -63,7 +66,7 @@ class MC_state_machine
   
   public:
   
-  MC_state_machine(SPI_commands_t *SPI_commands, volatile int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct); //Prototype of the constructor. 
+  MC_state_machine(SPI_commands_t *SPI_commands, volatile int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct, CAN_msg_handler *CAN_msg_handler_p); //Prototype of the constructor. 
   void run_sm(); //Run the state machine
 
 }; 
