@@ -1,5 +1,14 @@
-/* Maxon EPOS4 Motor Controller State machine designed by Dominic Riccoboni 
-of the ProgreSSIV senior project team - Cal Poly San Luis Obispo  */
+/** @file ProgreSSIV_MC_state_machine.cpp
+ *  
+ *  @brief Maxon EPOS4 Motor Controller State machine cpp file.
+ *  @details
+ *  
+ *   
+ *  @copyright
+ *  
+ *  
+ */
+
 
 /*********************************/
 
@@ -14,7 +23,12 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
 }
 
 
-
+/** @brief %MC_state_machine constructor
+ *  @details
+ *  
+ *  @param node_info 
+ *  @param node_rpms 
+ */
 MC_state_machine::MC_state_machine( SPI_commands_t *SPI_commands_struct, volatile int16_t *node_torques, node_info_t *node_info, radio_struct_t *radio_struct, CAN_msg_handler *CAN_msg_handler_p ):
 
   SPI_commands_struct(SPI_commands_struct),

@@ -1,3 +1,14 @@
+/** @file ProgreSSIV_MC_state_machine.h
+ *  
+ *  @brief Maxon EPOS4 Motor Controller State machine h file.
+ *  @details
+ *  
+ *   
+ *  @copyright
+ *  
+ *  @page MC_sm_task Motor Controller state machine task 
+ */
+
 #ifndef __PROGRESSIV_MC_STATE_MACHINE_H__
 #define __PROGRESSIV_MC_STATE_MACHINE_H__
 
@@ -21,6 +32,11 @@
 
 #define MC_STATE_MACHINE_PRINT 1 
 
+/** @brief Class for running the Motor Controller state machine. 
+ *  @details
+ *  
+ *  
+ */
 class MC_state_machine
 {
   private:

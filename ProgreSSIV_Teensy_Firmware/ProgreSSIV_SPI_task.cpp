@@ -1,5 +1,14 @@
-/* SPI slave interface for communication with Raspberry Pi running embedded Simulink files. Designed by Dominic Riccoboni 
-of the ProgreSSIV senior project team - Cal Poly San Luis Obispo  */
+/** @file ProgreSSIV_SPI_task.cpp
+ *  
+ *  @brief Serial Peripheral Interface task cpp file.  
+ *  @details
+ *  
+ *  SPI slave interface for communication with Raspberry Pi running embedded Simulink files.
+ *  
+ *  @copyright
+ *  
+ *  
+ */
 
 /*********************************/
 
@@ -12,7 +21,17 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
   return obj;
 }
 
-
+/** @brief %SPI_task constructor.
+ *  @details
+ *  
+ *  @param SPI_actuations Pointer to an SPI_actuations_t shared data struct. 
+ *  @param SPI_commands Pointer to an SPI_commands_t shared data struct. 
+ *  @param SPI_sensor_data Pointer to an SPI_sensor_data_t shared data struct. 
+ *  @param node_info Pointer to a node_info_t shared data struct. 
+ *  @param radio_struct Pointer to a radio_struct_t shared data struct. 
+ *  @param flags_struct Pointer to a flags_struct_t shared data struct. 
+ *  
+ */
 SPI_task::SPI_task( SPI_actuations_t *SPI_actuations, SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, node_info_t *node_info, radio_struct_t *radio_struct, flags_struct_t *flags_struct):
 
     SPI_actuations (SPI_actuations),

@@ -1,3 +1,14 @@
+/** @file ProgreSSIV_SPI_task.h
+ *  
+ *  @brief Serial Peripheral Interface task h file.  
+ *  @details
+ *  
+ *  
+ *  @copyright
+ *  
+ *  
+ */
+ 
 #ifndef __PROGRESSIV_SPI_TASK_H__
 #define __PROGRESSIV_SPI_TASK_H__
 
@@ -54,7 +65,11 @@ typedef union __attribute__ ((__packed__)) reg_union {
 
 } reg_union_t;
 
-/* CLASS DEFINITION */
+/** @brief %Class for running the SPI slave interface of the Teensy. Exchanges operational data with the SPI master, in our case the Raspberry Pi. 
+ *  @details
+ *  
+ *  
+ */
 class SPI_task
 {
  private:

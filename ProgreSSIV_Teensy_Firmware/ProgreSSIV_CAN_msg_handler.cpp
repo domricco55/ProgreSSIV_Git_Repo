@@ -1,26 +1,26 @@
 /** @file ProgreSSIV_CAN_msg_handler.cpp
  *  
- *  @brief Maxon EPOS4 Motor Controller CANopen read filter cpp file.  
+ *  @brief Maxon EPOS4 Motor Controller CANopen message handler cpp file.  
  *  @details
  *  
  *  @copyright
+ *  
+ *  
  */
-
-
 
 /*********************************/
 
 #include "ProgreSSIV_CAN_msg_handler.h"
 
 
-/*General Debugging*/
+//General Debugging
 template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding streaming (insertion-style) Output" from playground.arduino.cc
   //Allows Serial << "This is an insertion-style message" type operation
   obj.print(arg);
   return obj;
 }
 
-/** @brief
+/** @brief %CAN_msg_handler constructor.
  *  @details
  *  
  *  @param node_info 
@@ -34,12 +34,11 @@ CAN_msg_handler::CAN_msg_handler(node_info_t *node_info, volatile int16_t *node_
   
 }
 
-/** @brief CAN open read filter task 
+/** @brief CAN open message read filter 
  *  @details
  *  Runs the Can0.read(msg) function that will read from the CAN ring buffers of FlexCAN.cpp if a CAN read message is available. The message's COB-id is used to decide what to do with the message. 
- *  The first level of the filter is deciding the type of message object the read was, Network Management (NMT), Service Data Object (SDO), Process Data Object (PDO), or Emergency Object (EMCY). 
- *  This task should be run often to prevent read buffer overruns and lost data but the exact frequency will depend on your specific application and the CAN bus load. For more information on
- *  the different communication object types, see EPOS4 Communication Guide Section 3 CAN Communication and <http://www.canopensolutions.com/english/about_canopen/about_canopen.shtml>
+ *  The first level of the filter is deciding the type of message object the read was, @ref NMT, @ref SDO, @ref PDO, or @ref EMCY. 
+ *  This task should be run often to prevent read buffer overruns and lost data but the exact frequency will depend on your specific application and the CAN bus load. 
  *  
  */
 void CAN_msg_handler::try_CAN_msg_filter()
@@ -97,7 +96,7 @@ void CAN_msg_handler::try_CAN_msg_filter()
 
 /** @brief Filter a Service Data Object
  *  @details
- *  Further filters out the details of a received Service Data Object. The identifying elements of an SDO are the object index, the command specifier, and the node id. 
+ *  Further filters out the details of a received @ref SDO. The identifying elements of an SDO are the object index, the command specifier, and the node id. 
  *  The data is extracted and placed in the shared data structs defined in shares.h according to these elements. 
  *  
  *  @param msg CAN message object defined by the CAN_message_t struct definition that contains the CAN messages' extracted and grouped information. 
@@ -201,7 +200,7 @@ void CAN_msg_handler::filter_SDO(CAN_message_t &msg){
 
 /** @brief Filter a Process Data Object
  *  @details
- *  Further filters out the details of a received Process Data Object. The identifying element of a PDO is the message id. The data is extracted and placed in the shared data structs defined in shares.h according to this element. 
+ *  Further filters out the details of a received @ref PDO. The identifying element of a PDO is the message id. The data is extracted and placed in the shared data structs defined in shares.h according to this element. 
  *  
  *  @param msg CAN message object defined by the CAN_message_t struct definition that contains the CAN messages' extracted and grouped information. 
  */
@@ -287,11 +286,11 @@ void CAN_msg_handler::filter_PDO(CAN_message_t &msg){
   }
 }
 
-/** @brief Filter Netowrk Management message
+/** @brief Filter Network Management message
+ *  
  *  @details
- *  Further filters out the details of a received Network Management message. So far only a bootup confirmation is accounted for - an id of 700 + node id followed by zeros in the data buffer. 
+ *  Further filters out the details of a received @ref NMT. So far only a bootup confirmation is accounted for - an id of 700 + node id followed by zeros in the data buffer. 
  *  Further work should include heartbeat monitoring where a message containing each nodes NMT communication satus byte is recieved occassionally (0x00 - bootup, 0x04 stopped, 0x05 - operational, and 0x7F Pre-Operational).
- *  See EPOS4 Communication Guide section 3.3.3.5, NMT Services for NMT Slave state machine information.
  *  
  *  @param msg CAN message object defined by the CAN_message_t struct definition that contains the CAN messages' extracted and grouped information.  
  */
@@ -312,10 +311,12 @@ void CAN_msg_handler::filter_NMT(CAN_message_t &msg){
 }
 
 /** @brief Filter Emergency Message
+ *  
  *  @details
- *  Further filters out the details of a received Emergency Message. An Emergency message is broadcast from a node whenever a fault occurs and the node transitions into a device control state machine fault state. 
- *  The identifying elements of an EMCY message are the node id, the error code (detailed description of each can be found in the EPOS 4 firmware specification document section 7 Error handling), and the nodes error register value 
- *  (EPOS4 Firmware Specification section 6.2.2 Error Register object). 
+ *  Further filters out the details of a received @ref EMCY. An Emergency message is broadcast from a node whenever a fault occurs and the node transitions into a device control state machine fault state (see 
+ *  @ref DC_sm). 
+ *  The identifying elements of an EMCY message are the node id, the error code (found in [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specification-En.pdf) 
+ *  section 7 Error handling), and the nodes error register value (object found in [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specification-En.pdf) section 6.2.2). 
  *  
  *  @param msg CAN message object defined by the CAN_message_t struct definition that contains the CAN messages' extracted and grouped information. 
  */
@@ -365,9 +366,9 @@ void CAN_msg_handler::filter_EMCY(CAN_message_t &msg){
 /** @brief Reset Nodes Network Management message
  *  
  *  @details
- *  This function sends out a Netword Management (NMT) broadcast to all nodes signaling them to reset (same effect as turning on and off the supply voltage).
+ *  This function sends out a @ref NMT broadcast to all nodes signaling them to reset (same effect as turning on and off the supply voltage).
  *  After the message is sent out, each node will reboot and once a node has entered the Pre-Operational state of the NMT Slave state machine, it will send out a boot up message
- *  whose cob-id is 700 + node_id. These messages will be used as confirmations that the reset was successful. See @ref NMT. 
+ *  whose cob-id is 700 + node_id. These messages will be used as confirmations that the reset was successful.
  *  
  *  @return Returns the number of successful CAN writes.
 */
@@ -435,10 +436,9 @@ uint8_t CAN_msg_handler::reset_nodes()
 /** @brief Reset Communications Network Management message
  *  
  *  @details
- *  This function sends out a Netword Management (NMT) broadcast to all nodes signaling them to reset their communication parameters (cob-ids and such).
+ *  This function sends out a @ref NMT broadcast to all nodes signaling them to reset their communication parameters (cob-ids and such).
  *  After the message is sent out, each node will enter the Pre-Operational state of the NMT Slave state machine, it will also send out a boot up message
- *  whose cob-id is 700 + node_id. These messages will be used as confirmations that the communication reset was successful. 
- *  See @ref NMT. 
+ *  whose cob-id is 700 + node_id. These messages will be used as confirmations that the communication reset was successful.  
  *  
  *  @return Returns the number of successful CAN writes.
 */
@@ -508,9 +508,9 @@ uint8_t CAN_msg_handler::reset_communications()
 /** @brief Enter Pre Operational Network Management message
  *  
  * @details
- * This function sends the Network Management (NMT) message for "Enter Pre-Operational". It will send the message that signals every node to enter the Pre-Operational state (from either
- * the Operational or Stopped states) of the NMT Slave state machine. There will be no messages broadcast as a direct response to this command. In this state, SDO messages, Emergency objects, 
- * and NMT messages are permitted. See @ref NMT. 
+ * This function sends the @ref NMT message for "Enter Pre-Operational". It will send the message that signals every node to enter the Pre-Operational state (from either
+ * the Operational or Stopped states) of the NMT Slave state machine. There will be no messages broadcast from the nodes as a direct response to this command. In this state, SDO messages, EMCY objects, 
+ * and NMT messages are permitted. 
  * 
  *  @return Returns the number of successful CAN writes.
 */
@@ -576,11 +576,9 @@ uint8_t CAN_msg_handler::enter_pre_operational()
 /** @brief Start Remote Nodes Network Management message
  *  
  * @details
- * This function sends the Network Management (NMT) message for Starting Remote Nodes. It will send the message that signals every node to enter the Operational state of the NMT Slave state machine.
+ * This function sends the @ref NMT message for Starting Remote Nodes. It will send the message that signals every node to enter the Operational state of the NMT Slave state machine.
  * There will be no messages broadcast as a direct response to this command but bit 9 of the Statusword in each nodes object dictionary will have been set as a result. Can check the Statusword 
- * for confirmation. See [EPOS4 Communication guide](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Communication-Guide-En.pdf) "NMT Services" section 3.3.3.5 for NMT Slave state machine info.  
- * See [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specificatioin-En.pdf) "Statusword" section 6.2.73 and "Device Control" section 2.2 for more information
- * on the statusword.
+ * for confirmation. See [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specificatioin-En.pdf) "Statusword" section 6.2.73 and @ref DC_sm for more information.
  * 
  * @return Returns the number of successful CAN writes.
 */
@@ -646,11 +644,10 @@ uint8_t CAN_msg_handler::start_remote_nodes()
 /** @brief Stop Remote Nodes Network Management message
  *  
  * @details
- * This function sends the Network Management (NMT) message for "Stop Remote Nodes". It will send the message that signals every node to enter the Stopped state of the NMT Slave state machine.
+ * This function sends the Network Management (@ref NMT) message for "Stop Remote Nodes". It will send the message that signals every node to enter the Stopped state of the NMT Slave state machine.
  * There will be no messages broadcast as a direct response to this command but bit 9 of the Statusword in each nodes object dictionary will have been cleared as a result. Can check the Statusword 
- * for confirmation. In this state, only NMT, Heartbeating, and Layer setting service messages are permitted.  
- * See [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specificatioin-En.pdf) "Statusword" section 6.2.73 and "Device Control" section 2.2 for more information
- * on the statusword.
+ * for confirmation. In this state, only NMT, Heartbeating, and Layer setting service messages are permitted. See [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specificatioin-En.pdf) 
+ * "Statusword" section 6.2.73 and @ref DC_sm for more information.
  * 
  * @return Returns the number of successful CAN writes.
 */
@@ -718,11 +715,11 @@ uint8_t CAN_msg_handler::stop_remote_nodes()
 /** @brief Set Operating Mode Service Data Object
  *  
  * @details
- *  This function sends the Servide Data Object (SDO) message for accessing the "Modes of Operation" object in the object dictionary of all 4 nodes. It will send an expedited one byteIt will send 4 expedited one byte
- *  write request SDOs. Confirmation of a successful write should be received by CAN_filter_task. [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specificatioin-En.pdf)
+ *  This function sends the Servide Data Object (@ref SDO) message for accessing the "Modes of Operation" object in the object dictionary of all 4 nodes. It will send an expedited one byteIt will send 4 expedited one byte
+ *  write request SDOs. Confirmation of a successful write should be received by the @ref CAN_msg_handler::try_CAN_msg_filter() function. [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specificatioin-En.pdf)
  *  "Modes of Operation" section 6.2.78 for more information. 
  *  
- * @param operating_mode A one byte value signaling the operating mode the nodes are to be configured to. TORQUE_MODE (10) and PROFILE_VELOCITY_MODE (3) are the two options currently in use by the firmware. 
+ * @param operating_mode A one byte value signaling the operating mode the nodes are to be configured to. @ref TORQUE_MODE and @ref PROFILE_VELOCITY_MODE are the two options currently in use by the firmware. 
  *  
  * @return Returns the number of successful CAN writes.
 */
@@ -796,9 +793,13 @@ uint8_t CAN_msg_handler::SDO_set_operating_mode(uint8_t operating_mode)
 /** @brief Set TxPDO1 Inhibit Time Service Data Object
  *  
  * @details
- *  This function will send out an SDO write message to the "Transmit PDO 1 parameter" object of each node. It will send 4 expedited two byte
- *  write request SDOs. The inhibit time is the minimum time between broadcasts of this particular PDO on each node. It is being set to a maximum frequency of about 180 hz. See EPOS4 Firmware Specification 
- *  pgs 6-85/86. For more information on Process Data Objects and inhibit time, see http://www.canopensolutions.com/english/about_canopen/pdo.shtml CANopen Basics - Process Data Exchange. 
+ *  This function will send out a @ref SDO write message to index 3 "Inhibit time TxPDO1" of the "Transmit PDO 1 parameter" object of each node. It will send 4 expedited two byte
+ *  write request SDOs. The inhibit time is the minimum time between broadcasts of this particular @ref PDO on each node. It is being set to a maximum frequency of about 180 hz. 
+ *  See [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specificatioin-En.pdf) "Transmit PDO 1 Parameter" section 6.2.21 pg 6-85/86. 
+ *  Confirmation of a successful write should be received by the @ref CAN_msg_handler::try_CAN_msg_filter() function. Each time a confirmation is received, @ref inhibit_time_SDO_count is incremented. 
+ *  
+ * @return Returns the number of successful CAN writes. 
+ *  
 */
 uint8_t CAN_msg_handler::set_TxPDO1_inhibit_time()
 {

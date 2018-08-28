@@ -1,3 +1,13 @@
+/** @file ProgreSSIV_IMU_task.cpp
+ *  
+ *  @brief Adafruit BN055 data gathering task cpp file.  
+ *  @details
+ *  
+ *  @copyright
+ *  
+ *  
+ */
+
 /* Adafruint BNO055 sensor data gathering task designed by Dominic Riccoboni 
 of the ProgreSSIV senior project team - Cal Poly San Luis Obispo  */
 
@@ -13,6 +23,13 @@ template<class T> inline Print &operator <<(Print &obj, T arg) {  //"Adding stre
   return obj;
 }
 
+/** @brief %IMU_task constructor.
+ *  @details
+ *  
+ *  @param SPI_commands Pointer to an SPI_commands_t shared data struct. 
+ *  @param SPI_sensor_data Pointer to an SPI_sensor_data_t shared data struct.  
+ *  @param flags_struct Pointer to a flags_struct_t shared data struct. 
+ */
 IMU_task::IMU_task(SPI_commands_t *SPI_commands, SPI_sensor_data_t *SPI_sensor_data, flags_struct_t *flags_struct):
 
   SPI_commands(SPI_commands),

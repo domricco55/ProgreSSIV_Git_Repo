@@ -1,26 +1,45 @@
 /** @file ProgreSSIV_CAN_msg_handler.h
  *  
- *  @brief Maxon EPOS4 Motor Controller CANopen message handler.
+ *  @brief Maxon EPOS4 Motor Controller CANopen message handler h file.  
  *  @details
  *  
  *  @copyright
  *  
- *  @page ProgreSSIV CAN write driver
+ *  @page CAN0pen_and_MMC CANopen and Maxon Motor Controller Information
  *  
  *  This file contains the ... 
  *  
- *  @section CAN message objects utilized
+ *  @section CAN CAN communication objects utilized
  *  
- *  @subsection NMT Network Management Objects
+ *  @subsection NMT Network Management Object
  *  
  *  See [EPOS4 Communication Guide](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Communication-Guide-En.pdf) 
- *  "NMT Services" section 3.3.3.5 for NMT Slave state machine info.
+ *  "NMT Services" section 3.3.3.5.
  *  
- *  @subsection SDO Service Data Objects
+ *  @subsection SDO Service Data Object
  *  
- *  @subsection PDO Process Data Objects
+ *  See [EPOS4 Communication Guide](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Communication-Guide-En.pdf) 
+ *  "SDO Object" section 3.3.3.2.
  *  
- *  @subsection EMCY Emergency Objects
+ *  @subsection PDO Process Data Object
+ *  
+ *  See [EPOS4 Communication Guide](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Communication-Guide-En.pdf) 
+ *  "PDO Object" section 3.3.3.1.
+ *  
+ *  @subsection EMCY Emergency Object
+ *  
+ *  See [EPOS4 Communication Guide](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Communication-Guide-En.pdf) 
+ *  "EMCY Object" section 3.3.3.4.
+ *  
+ *  For further explanation of the different communication object types, see <http://www.canopensolutions.com/english/about_canopen/about_canopen.shtml>
+ *  
+ *  @section MMC_sm Maxon Motor Controllers state machines
+ *  
+ *  @subsection NMT_sm Network Management state machine
+ *  
+ *  @subsection DC_sm Device Control state machine
+ *  
+ *  See [EPOS4 Firmware Specification](..\Documentation\CAN_and_Motor_Controllers\EPOS4-Firmware-Specification-En.pdf) Device Control section 2.2. 
  */
 
 #ifndef __PROGRESSIV_CAN_MSG_HANDLER_H__
@@ -40,10 +59,10 @@
 #define NOT_CORRECT 1
 
 /*Define the data bytes available for selecting the modes of operation*/
-#define PROFILE_VELOCITY_MODE 3                                                                                     //!< Profile Velocity Mode pound define. 
-#define TORQUE_MODE 10    
+#define PROFILE_VELOCITY_MODE 3                                                                                     //!< Profile Velocity Mode value for writing to a motor controller's Modes of Operation object. 
+#define TORQUE_MODE 10                                                                                              //!< Torque Mode value for writing to a motor controller's Modes of Operation object.           
 
-/** @brief %CAN_filter_task class definition
+/** @brief %Class for broadcasting CAN messages to the bus and filtering received messages. 
  *  @details
  *  
  *  

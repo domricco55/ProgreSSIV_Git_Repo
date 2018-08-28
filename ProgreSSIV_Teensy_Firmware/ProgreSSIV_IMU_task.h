@@ -1,3 +1,13 @@
+/** @file ProgreSSIV_IMU_task.h
+ *  
+ *  @brief Adafruit BN055 data gathering task h file.  
+ *  @details
+ *  
+ *  @copyright
+ *  
+ *  
+ */
+
 #ifndef __PROGRESSIV_IMU_TASK_H__
 #define __PROGRESSIV_IMU_TASK_H__
 
@@ -10,6 +20,10 @@
 
 #define IMU_GENERAL_PRINT 0
 
+/** @brief %Class for gathering sensor data from the BNO055 Inertial Measurement Unit.
+ *  @details
+ *  
+ */
 class IMU_task
 {
   private:
