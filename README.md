@@ -15,7 +15,7 @@ The main elements of the repository are:
 
 2. The RaspberryPi_Python_Firmware file
 
-	*Test scripts utilized in early developement of the SPI interface between the Raspberry Pi and the Teensy. Was helpful in developing the SPI slave interface on the Teensy earlier in the project timeline. This is not utilized by the system in it's current state - the SPI Master interface running on the RPi is facilitated by the Simulink developement environment. 
+	* Test scripts utilized in early developement of the SPI interface between the Raspberry Pi and the Teensy. Was helpful in developing the SPI slave interface on the Teensy earlier in the project timeline. This is not utilized by the system in it's current state - the SPI Master interface running on the RPi is facilitated by the Simulink developement environment. 
 
 
 3. The Simulink_Files file
@@ -31,7 +31,7 @@ The main elements of the repository are:
 
 5. The CAN_Test_Code file
 
-	*Code utilized in developement of the CAN interface on the Teensy. Used to configure the Maxon motor controllers, interface with their onboard state machines, configure messages correctly, and determine which types of messages (Network Management, Service Data Objects, Process Data Objects, etc) need to be sent and when.
+	* Code utilized in developement of the CAN interface on the Teensy. Used to configure the Maxon motor controllers, interface with their onboard state machines, configure messages correctly, and determine which types of messages (Network Management, Service Data Objects, Process Data Objects, etc) need to be sent and when.
 
 6. The Documentation file. 
 
