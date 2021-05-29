@@ -21,11 +21,8 @@ The main elements of the repository are:
 3. The Simulink_Files file
 
 | Folder        | Description   |
-
 | ------------- | ------------- |
-
 | Adaptive Cruise Control Dominic Riccoboni  |  Files pertaining to the simulation and implementation of an adaptive cruise controller for the SSIV.  |
-
 | Testing  | Under "Blank Control System Developement Files" are the "black box" simulink models - these allow the user to route real signals from sensors and actuators to construct their control system. Under "Particular Test Cases" are some implementations of the developement environment produced by the ProgreSSIV senior project team. |
 
 4. The EPOS_Studio file
